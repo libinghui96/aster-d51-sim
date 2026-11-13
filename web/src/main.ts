@@ -4,7 +4,13 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import loadMujoco from "mujoco-js";
-import { AsterD51Thermo1D, CabControls, CylinderCalibration } from "./thermo1d";
+import {
+  AsterD51Thermo1D,
+  AutoFiremanAgent,
+  CabControls,
+  CylinderCalibration,
+  SmokeboxLutJson,
+} from "./thermo1d";
 import { LiveSteamParticles } from "./particles";
 
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
@@ -19,9 +25,28 @@ async function main() {
 
   const modelBase = `${import.meta.env.BASE_URL}models`;
   const manifestResp = await fetch(`${modelBase}/manifest.json`);
-  const manifest: { xmls: string[]; meshes: string[] } = await manifestResp.json();
+  const manifest: { xmls: string[]; meshes: string[]; configs?: string[] } = await manifestResp.json();
   const stlLoader = new STLLoader();
   const stlGeomMap = new Map<string, THREE.BufferGeometry>();
+
+  let smokeboxLut: SmokeboxLutJson | null = null;
+  let firemanPolicyJson: any = null;
+  const cfgList = manifest.configs || [];
+  if (cfgList.includes("smokebox_lut.json")) {
+    try {
+      smokeboxLut = await (await fetch(`${modelBase}/smokebox_lut.json`)).json();
+    } catch {
+      smokeboxLut = null;
+    }
+  }
+  if (cfgList.includes("auto_fireman_policy.json")) {
+    try {
+      firemanPolicyJson = await (await fetch(`${modelBase}/auto_fireman_policy.json`)).json();
+    } catch {
+      firemanPolicyJson = null;
+    }
+  }
+  const firemanAgent = new AutoFiremanAgent(firemanPolicyJson);
 
   for (const xmlName of manifest.xmls) {
     const txt = await (await fetch(`${modelBase}/${xmlName}`)).text();
@@ -65,6 +90,8 @@ async function main() {
   const rimLight = new THREE.DirectionalLight(0xc8dcff, 1.2);
   rimLight.position.set(-0.9, 1.1, 1.2);
   scene.add(rimLight);
+  const fireboxGlowLight = new THREE.PointLight(0xff4214, 0.0, 0.35);
+  scene.add(fireboxGlowLight);
   scene.add(new THREE.GridHelper(6, 60, 0x30363d, 0x1c2128).rotateX(Math.PI / 2));
 
   const steamParticles = new LiveSteamParticles();
@@ -75,18 +102,28 @@ async function main() {
   let thermo: AsterD51Thermo1D;
   let geomMeshes: THREE.Mesh[] = [];
   let cylHousingMeshes: THREE.Mesh[] = [];
+  let boilerShellMats: THREE.MeshStandardMaterial[] = [];
   let simGroup = new THREE.Group();
   scene.add(simGroup);
 
   const ctrl: CabControls = {
-    fuelValve: 1.0, burnerLit: true, chimneyFan: false,
-    blowerValve: 0.25, regulator: 0.0, reverser: 0.78,
-    drainCock: true, bypassValve: 0.40, thermalWarp: 1.0,
+    fuelValve: 1.0,
+    burnerLit: true,
+    chimneyFan: false,
+    blowerValve: 0.25,
+    regulator: 0.0,
+    reverser: 0.78,
+    drainCock: true,
+    bypassValve: 0.40,
+    thermalWarp: 1.0,
+    gradeDeg: 0.0,
   };
+  let autoFiremanEnabled = false;
 
   let idxMap: Record<string, number> = {};
   let isRollerMode = true;
   let tenderDryMass = 1.15;
+  let prevFwdVel = 0.0;
 
   function objId(objType: any, name: string): number {
     const t = typeof objType === "number" ? objType : objType.value;
@@ -94,7 +131,6 @@ async function main() {
   }
 
   function injectRollerFlywheelInertia() {
-    // [已同步修复] 根据 body_iquat 自动找出对应世界 Y 轴 (车轴旋转轴) 的主惯量分量，注入試運転用コロ滚子飞轮惯量
     const q = new THREE.Quaternion();
     const axisY = new THREE.Vector3(0, 1, 0);
     const localAxis = new THREE.Vector3();
@@ -119,6 +155,8 @@ async function main() {
     scene.add(simGroup);
     geomMeshes = [];
     cylHousingMeshes = [];
+    boilerShellMats = [];
+    prevFwdVel = 0.0;
 
     model = mujoco.MjModel.loadFromXML(`/working/${xmlFile}`);
     isRollerMode = xmlFile === "d51_full.xml";
@@ -137,6 +175,8 @@ async function main() {
 
     const jPL = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_piston_L");
     const jPR = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_piston_R");
+    const jValL = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_valve_L");
+    const jValR = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_valve_R");
     const jW3 = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_wheel_3");
     const jPump = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_pump_ram");
 
@@ -150,6 +190,8 @@ async function main() {
       actRev,
       qvelW3: model.jnt_dofadr[jW3],
       qvelPump: model.jnt_dofadr[jPump],
+      qvelValL: model.jnt_dofadr[jValL],
+      qvelValR: model.jnt_dofadr[jValR],
       locoBody: objId(mujoco.mjtObj.mjOBJ_BODY, "loco_frame"),
       tenderBody: objId(mujoco.mjtObj.mjOBJ_BODY, "tender_body"),
     };
@@ -158,7 +200,6 @@ async function main() {
       tenderDryMass = Math.max(0.6, model.body_mass[idxMap.tenderBody] - 0.422);
     }
 
-    // [已同步修复] 对齐 sim/run_cosim.py: 临时屏蔽接触与重力做 5000 步架空慢转标定 + steamLap = 0.45 * leadAmp
     const savedDisable = model.opt.disableflags;
     const bitVal = (b: any) => (typeof b === "number" ? b : b.value);
     model.opt.disableflags =
@@ -196,7 +237,7 @@ async function main() {
 
     data = new mujoco.MjData(model);
     mujoco.mj_forward(model, data);
-    thermo = new AsterD51Thermo1D(calib);
+    thermo = new AsterD51Thermo1D(calib, smokeboxLut);
 
     const matIron = new THREE.MeshStandardMaterial({ color: 0x282c34, metalness: 0.58, roughness: 0.38 });
     const matSteel = new THREE.MeshStandardMaterial({ color: 0xd8dee9, metalness: 0.88, roughness: 0.22 });
@@ -223,8 +264,6 @@ async function main() {
         const mjMeshName: string = mujoco.mj_id2name(model, meshObjType, dataId) || "";
         meshKey = mjMeshName ? mjMeshName.replace(/^m_/, "") : (meshIdToKey[dataId] || "");
 
-        // [关键坐标对齐] MuJoCo 编译 STL 时会将顶点平移 -mesh_pos 并旋转 inv(mesh_quat) 至主惯量系，
-        // 且把该变换烘焙进 data.geom_xpos / data.geom_xmat；Three.js 原始 STL 几何必须同步施加同一逆变换！
         if (alignedMeshCache.has(dataId)) {
           threeGeom = alignedMeshCache.get(dataId)!;
         } else {
@@ -255,6 +294,10 @@ async function main() {
           mat = matBrass;
         } else if (meshKey.includes("cylinder_block")) {
           mat = matIron.clone();
+        } else if (meshKey.includes("boiler")) {
+          const bMat = matIron.clone();
+          boilerShellMats.push(bMat);
+          mat = bMat;
         }
       } else if (grp < 3 && rgbaA > 0.05 && gType !== 0) {
         const sx = model.geom_size[3 * g];
@@ -288,6 +331,29 @@ async function main() {
   loadSimulationScene("d51_full.xml");
   overlay.style.display = "none";
 
+  const elReg = document.getElementById("rng-regulator") as HTMLInputElement;
+  const elRev = document.getElementById("rng-reverser") as HTMLInputElement;
+  const elBlw = document.getElementById("rng-blower") as HTMLInputElement;
+  const elByp = document.getElementById("rng-bypass") as HTMLInputElement;
+  const btnBurner = document.getElementById("btn-burner")!;
+  const btnFan = document.getElementById("btn-fan")!;
+  const btnDrain = document.getElementById("btn-drain")!;
+  const btnAuto = document.getElementById("btn-autofireman")!;
+
+  const syncDomFromControls = () => {
+    elReg.value = ctrl.regulator.toFixed(2);
+    document.getElementById("val-regulator")!.textContent = `${Math.round(ctrl.regulator * 100)}%`;
+    elRev.value = ctrl.reverser.toFixed(2);
+    document.getElementById("val-reverser")!.textContent = `${ctrl.reverser >= 0 ? "+" : ""}${Math.round(ctrl.reverser * 100)}%`;
+    elBlw.value = ctrl.blowerValve.toFixed(2);
+    document.getElementById("val-blower")!.textContent = `${Math.round(ctrl.blowerValve * 100)}%`;
+    elByp.value = ctrl.bypassValve.toFixed(2);
+    document.getElementById("val-bypass")!.textContent = `${Math.round(ctrl.bypassValve * 100)}%`;
+    btnBurner.classList.toggle("active", ctrl.burnerLit);
+    btnFan.classList.toggle("active", ctrl.chimneyFan);
+    btnDrain.classList.toggle("active", ctrl.drainCock);
+  };
+
   const bindRange = (id: string, valId: string, fmt: (v: number) => string, cb: (v: number) => void) => {
     const el = document.getElementById(id) as HTMLInputElement;
     const txt = document.getElementById(valId)!;
@@ -297,6 +363,7 @@ async function main() {
   bindRange("rng-reverser", "val-reverser", (v) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`, (v) => (ctrl.reverser = v));
   bindRange("rng-blower", "val-blower", (v) => `${Math.round(v * 100)}%`, (v) => (ctrl.blowerValve = v));
   bindRange("rng-bypass", "val-bypass", (v) => `${Math.round(v * 100)}%`, (v) => (ctrl.bypassValve = v));
+  bindRange("rng-grade", "val-grade", (v) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}°`, (v) => (ctrl.gradeDeg = v));
 
   const toggleBtn = (id: string, cb: () => boolean) => {
     const b = document.getElementById(id)!;
@@ -306,6 +373,15 @@ async function main() {
   toggleBtn("btn-fan", () => (ctrl.chimneyFan = !ctrl.chimneyFan));
   toggleBtn("btn-drain", () => (ctrl.drainCock = !ctrl.drainCock));
   toggleBtn("btn-warp", () => { ctrl.thermalWarp = ctrl.thermalWarp > 2 ? 1.0 : 15.0; return ctrl.thermalWarp > 2; });
+
+  btnAuto.addEventListener("click", () => {
+    autoFiremanEnabled = !autoFiremanEnabled;
+    btnAuto.classList.toggle("ai-active", autoFiremanEnabled);
+    if (autoFiremanEnabled) {
+      firemanAgent.reset(ctrl.reverser >= 0 ? 1.0 : -1.0);
+    }
+  });
+
   document.getElementById("btn-handpump")!.addEventListener("click", () => thermo.triggerHandPump(5));
   document.getElementById("btn-hot-preset")!.addEventListener("click", () => thermo.resetHotReady());
   document.getElementById("btn-cold-reset")!.addEventListener("click", () => {
@@ -316,7 +392,7 @@ async function main() {
 
   const selScene = document.getElementById("select-scene") as HTMLSelectElement;
   const selCam = document.getElementById("select-cam") as HTMLSelectElement;
-  const applyXrayMode = () => {
+  const applyVisualMode = () => {
     const xray = selCam.value === "xray";
     for (const m of cylHousingMeshes) {
       const mat = m.material as THREE.MeshStandardMaterial;
@@ -329,6 +405,9 @@ async function main() {
   const locoMat4 = new THREE.Matrix4();
   const tmpQuat = new THREE.Quaternion();
   const prevLocoPos = new THREE.Vector3();
+  const chaseCamLocal = new THREE.Vector3(0.28, -0.34, 0.14);
+  const chaseTargetLocal = new THREE.Vector3(-0.04, 0.0, 0.055);
+  const fireboxLocal = new THREE.Vector3(-0.085, 0.0, 0.038);
 
   selScene.addEventListener("change", () => {
     loadSimulationScene(selScene.value);
@@ -340,9 +419,9 @@ async function main() {
       camera.position.set(0.26, -0.46, 0.22);
       orbit.target.set(0.0, 0.0, 0.07);
     }
-    applyXrayMode();
+    applyVisualMode();
   });
-  selCam.addEventListener("change", applyXrayMode);
+  selCam.addEventListener("change", applyVisualMode);
 
   window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -354,19 +433,36 @@ async function main() {
     requestAnimationFrame(animate);
     const dt = model.opt.timestep;
     let out: ReturnType<AsterD51Thermo1D["step"]> | null = null;
+    const lb = idxMap.locoBody;
 
     for (let s = 0; s < 33; s++) {
       const sd = data.sensordata;
       const w3 = sd[idxMap.sW3];
+      const vVL = data.qvel[idxMap.qvelValL];
+      const vVR = data.qvel[idxMap.qvelValR];
+
+      let pitchRad = 0.0;
+      let accelX = 0.0;
+      if (!isRollerMode && lb >= 0) {
+        const r20 = Math.max(-0.35, Math.min(0.35, data.xmat[9 * lb + 6]));
+        pitchRad = Math.asin(r20);
+        const fwdVel = w3 * 0.0219;
+        accelX = (fwdVel - prevFwdVel) / Math.max(1e-6, dt);
+        prevFwdVel = fwdVel;
+      }
+
       out = thermo.step(
         dt,
         sd[idxMap.sPL], sd[idxMap.sVL], sd[idxMap.sValL],
         sd[idxMap.sPR], sd[idxMap.sVR], sd[idxMap.sValR],
-        w3, sd[idxMap.sPump], ctrl
+        w3, sd[idxMap.sPump], ctrl,
+        vVL, vVR, pitchRad, accelX
       );
       data.ctrl[idxMap.actFL] = out.forceL;
       data.ctrl[idxMap.actFR] = out.forceR;
       data.ctrl[idxMap.actRev] = ctrl.reverser * 1.25;
+      data.qfrc_applied[idxMap.qvelValL] = out.valveFrictionL;
+      data.qfrc_applied[idxMap.qvelValR] = out.valveFrictionR;
       data.qfrc_applied[idxMap.qvelPump] = out.forcePump;
       if (isRollerMode) {
         data.qfrc_applied[idxMap.qvelW3] = -0.0022 * w3 - 0.00012 * w3 * Math.abs(w3);
@@ -377,6 +473,11 @@ async function main() {
         }
       }
       mujoco.mj_step(model, data);
+    }
+
+    if (autoFiremanEnabled && out) {
+      firemanAgent.update(33 * dt, out, ctrl);
+      syncDomFromControls();
     }
 
     for (let g = 0; g < geomMeshes.length; g++) {
@@ -393,12 +494,17 @@ async function main() {
       mesh.quaternion.setFromRotationMatrix(locoMat4);
     }
 
-    const lb = idxMap.locoBody;
     const lx = data.xpos[3 * lb], ly = data.xpos[3 * lb + 1], lz = data.xpos[3 * lb + 2];
     tmpQuat.set(data.xquat[4 * lb + 1], data.xquat[4 * lb + 2], data.xquat[4 * lb + 3], data.xquat[4 * lb]);
     locoMat4.compose(new THREE.Vector3(lx, ly, lz), tmpQuat, new THREE.Vector3(1, 1, 1));
 
-    if (!isRollerMode) {
+    if (selCam.value === "chase") {
+      const desiredCam = chaseCamLocal.clone().applyMatrix4(locoMat4);
+      const desiredTgt = chaseTargetLocal.clone().applyMatrix4(locoMat4);
+      camera.position.lerp(desiredCam, 0.14);
+      orbit.target.lerp(desiredTgt, 0.22);
+      prevLocoPos.set(lx, ly, lz + 0.035);
+    } else if (!isRollerMode) {
       const curPos = new THREE.Vector3(lx, ly, lz + 0.035);
       if (prevLocoPos.lengthSq() > 0) {
         camera.position.add(curPos.clone().sub(prevLocoPos));
@@ -412,19 +518,47 @@ async function main() {
     if (out) {
       steamParticles.update(1 / 60, locoMat4, out.exhaustPlume, out.safetyPlume, out.drainPlume);
 
+      // 锅炉紫铜火室空焚き红热发光反馈 (O4-2)
+      const hotRatio = Math.max(0.0, Math.min(1.0, (out.crownTempC - 240.0) / 300.0));
+      fireboxGlowLight.position.copy(fireboxLocal).applyMatrix4(locoMat4);
+      fireboxGlowLight.intensity = ctrl.burnerLit ? 0.25 + 3.2 * hotRatio : 2.8 * hotRatio;
+      for (const bMat of boilerShellMats) {
+        bMat.emissive.setRGB(0.55 * hotRatio, 0.09 * hotRatio, 0.02 * hotRatio);
+      }
+
+      document.getElementById("badge-cfd")!.textContent = out.lutActive ? "RTX 5080 CFD" : "1D ANALYTIC";
       document.getElementById("txt-pressure")!.textContent = `${out.boilerPressureKgf.toFixed(2)} / 4.00 kgf/cm²`;
       (document.getElementById("bar-pressure") as HTMLElement).style.width = `${Math.min(100, (out.boilerPressureKgf / 4.5) * 100)}%`;
-      document.getElementById("txt-water")!.textContent = `${out.waterLevelPct.toFixed(1)} %`;
+
+      const lvlDiff = Math.abs(out.waterLevelPct - out.trueWaterLevelPct);
+      document.getElementById("txt-water")!.textContent =
+        lvlDiff > 0.6
+          ? `${out.waterLevelPct.toFixed(1)}% (実${out.trueWaterLevelPct.toFixed(0)}%)`
+          : `${out.waterLevelPct.toFixed(1)} %`;
       (document.getElementById("bar-water") as HTMLElement).style.width = `${out.waterLevelPct}%`;
+
       document.getElementById("txt-steam")!.textContent = `${out.steamChestKgf.toFixed(2)} kgf | ${out.superheatTempC.toFixed(0)}°C`;
+
+      const crownEl = document.getElementById("txt-crown")!;
+      crownEl.textContent = `${out.crownTempC.toFixed(0)}°C | ${(out.sealHealth * 100).toFixed(0)}%`;
+      crownEl.classList.toggle("val-hot", out.crownTempC >= 240.0);
+
+      document.getElementById("txt-smokebox")!.textContent = `-${out.smokeboxVacuumPa.toFixed(0)} Pa | ${out.cylWallTempC.toFixed(0)}°C`;
       document.getElementById("txt-speed")!.textContent = `${out.wheelRpm.toFixed(0)} RPM | ${out.scaleSpeedKmh.toFixed(1)} km/h`;
       document.getElementById("txt-tanks")!.textContent = `${out.alcoholMl.toFixed(0)} ml | ${out.tenderWaterMl.toFixed(0)} ml`;
       document.getElementById("txt-forces")!.textContent = `L: ${out.forceL.toFixed(1)}N | R: ${out.forceR.toFixed(1)}N`;
-      document.getElementById("txt-alarm")!.textContent = out.safetyValveOpen
-        ? "安全弁噴出中 (4.0 kgf/cm²)"
-        : out.dryFireAlarm
-        ? "警告: 低水位 (空焚き注意!)"
-        : "";
+
+      let alarmMsg = "";
+      if (out.hydrolockL || out.hydrolockR) {
+        alarmMsg = "HYDROLOCK! 冷気筒水撃ロック発生 — 直ちにドレン弁を開放せよ!";
+      } else if (out.flashSteamSpike) {
+        alarmMsg = "FLASH SPIKE! 高温空焚き火室への急冷給水フラッシュ超圧!";
+      } else if (out.dryFireAlarm) {
+        alarmMsg = `空焚き赤熱警告! 銅火室頂板 ${out.crownTempC.toFixed(0)}°C (退火損傷 ${(out.copperAnnealDamage * 100).toFixed(1)}%)`;
+      } else if (out.safetyValveOpen) {
+        alarmMsg = "安全弁噴出中 (4.00 kgf/cm²)";
+      }
+      document.getElementById("txt-alarm")!.textContent = alarmMsg;
     }
 
     orbit.update();

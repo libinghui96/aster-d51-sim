@@ -38,21 +38,29 @@
 ---
 
 ## 4. 常用开发与验证命令
-- 重新提取正交图纸与几何配置：`python scripts/01_extract_pdf_dims.py --pdf data/raw_pdfs/d51_illustrations.pdf --export-default`
+- 重新提取正交图纸与无头像素标定：`python scripts/01_extract_pdf_dims.py --pdf data/raw_pdfs/d51_illustrations.pdf --auto-calibrate`
 - 交互式鼠标点选校准华氏连杆孔距：`python scripts/01_extract_pdf_dims.py --pdf data/raw_pdfs/d51_illustrations.pdf --interactive`
-- 重新编译全车 MJCF（滚轮台模式 / 轨道模式）：`python scripts/03_generate_mjcf.py --mode roller` （或 `--mode track`）
+- 重新构建 20 件 CAD 网格与材料惯量库：`python scripts/02_build_cad_meshes.py`
+- 重新编译全车 MJCF（滚轮台 / R2m 弯道）：`python scripts/03_generate_mjcf.py --mode roller` （或 `--mode curve_r2m --out models/d51_r2m.xml`）
+- R2m vs R3m 先导支点过弯脱线分析：`python scripts/04_analyze_r2m_derailment.py`
+- RTX 5080 烟室 3D CFD 标定查找表生成：`python scripts/06_gpu_smokebox_cfd.py`
+- RTX 5080 并行参数辨识与自动司炉寻优：`python scripts/07_gpu_fireman_opt.py`
 - 启动 3D 交互热机联调（热炉即发）：`python -m sim.run_cosim --xml models/d51_full.xml --preset hot`
 - 无 GUI 自动化全流程试车验收与绘图：`python -m sim.run_cosim --xml models/d51_full.xml --headless-demo`
+- 同步资产并构建 Web 3D 实时交互前端：`python scripts/05_sync_web_assets.py && npm --prefix web run build`
 
 ---
 
-## 5. 进阶精度升级契约（材料惯量、热损伤与 GPU 标定）
-- **禁止统一空壳质量兜底**：所有运动刚体（含平面滑阀 `1-6`+`1-22`、十字头 `1-31`、月牙滑块 `2-3`、逆转横轴 `4-12`、动轮/煤水车轴箱 `5-9`/`31-22`）均须由 `02_build_cad_meshes.py` 按原厂金属密度（黄铜 `8500 kg/m³`、不锈钢 `7930 kg/m³`、铸铁 `7350 kg/m³`）积分体积、偏心质心与惯量张量，输出至 `configs/d51_mass_props.json` 供 `03_generate_mjcf.py` 注入 `<inertial>`。
-- **机构与极限工况扩展契约**：
-  - 月牙槽滑块采用 `R = radius_rod_length` 圆弧等效铰接，确保死点恒定先导量；
-  - 动轮垂向悬挂通过 `<tendon>` 耦合模拟 `イラスト 3` 跷跷板均衡梁（Equalizer）；
-  - `thermo_1d.py` 维护铜火室壁温 `T_crown_c`、密封完好度与气缸液态积水体积，支持空焚き（干烧软化/闪蒸）与冷缸水锤（Hydrolock）判定；
-  - 若 `configs/smokebox_lut.json` 存在，优先通过双线性插值读取 RTX 5080 Warp 3D CFD 标定的烟室引风与火管换热功率。
+## 5. 进阶精度升级契约（材料惯量、机构升级、极限热物理与 GPU 标定）
+完整分阶段路线图详见 `docs/DEVELOPMENT_PLAN.md`：
+- **O1 图纸无头像素标定**：支持在不依赖 X11 弹窗的远程环境下，从 `イラスト 9`、`Template 6` 及实车正交底/侧视图自动标定比例尺并交叉核验孔距/轴距（输出 `configs/d51_calibration_report.json`）。
+- **O2 材料密度积分惯量（禁止空壳兜底）**：所有运动刚体（含平面滑阀 `1-6`+`1-22`、十字头 `1-31`、月牙滑块 `2-3`、逆转横轴 `4-12`、动轮/煤水车轴箱 `5-9`/`31-22`）均须由 `02_build_cad_meshes.py` 按原厂金属密度（黄铜 `8500 kg/m³`、不锈钢 `7930 kg/m³`、铸铁 `7350 kg/m³`）积分体积、偏心质心与惯量张量，输出至 `configs/d51_mass_props.json` 供 `03_generate_mjcf.py` 注入 `<inertial>`。
+- **O3 机械机构三大硬精度升级**：
+  1. **圆弧月牙槽**：月牙槽滑块采用 `R = radius_rod_length` 圆弧等效铰接，确保前/后死点切换正反转时保持恒定先导量（Constant Lead）；
+  2. **滑阀背压摩擦**：根据蒸汽室表压压紧外进气平面 D 型滑阀的法向载荷与注油润滑状态，实时计算滑动摩擦反力回写 `j_valve_L` / `j_valve_R`；
+  3. **动轮跷跷板均衡梁**：动轮垂向悬挂 `j_susp_z1..4` 通过 `<tendon>` 耦合模拟 `イラスト 3` 跷跷板均衡梁（Equalizer）。
+- **O4 锅炉热损伤、坡道假水位与冷缸水锤**：`thermo_1d.py` 维护分层紫铜火室顶板壁温 `T_crown_c`、坡道/加减速表观假水位、密封圈热退化完好度 `seal_health` 及左右气缸前/后腔液态冷凝水体积，支持空焚き（干烧退火软化 + 高温补水闪蒸压力尖峰）与未开排液阀时的冷缸不可压缩水锤（Hydrolock）冲击锁死判定。
+- **O5 & O6 RTX 5080 GPU 烟室 CFD 与自动司炉 Agent**：若 `configs/smokebox_lut.json` 存在，优先通过双线性插值读取 RTX 5080 GPU 3D CFD 标定的烟室文丘里引风与火管换热功率；支持基于 GPU 并行轨迹寻优的 `AutoFiremanAgent`（`sim/auto_fireman.py` & `configs/auto_fireman_policy.json`），且所有后端新特性须与 `web/` 前端保持同步。
 
 ---
 

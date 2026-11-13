@@ -41,7 +41,7 @@
       <geom name="boiler_Super_vis" type="mesh" mesh="m_boiler_superstructure" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <body name="axlebox_1" pos="0.093000 0 0">
         <inertial pos="-0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 1.470645827e-23 6.375997060e-24 -6.284514739e-23"/>
-        <joint name="j_susp_z1" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="2000" damping="28"/>
+        <joint name="j_susp_z1" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="950" damping="14"/>
         <joint name="j_lat_y1" type="slide" axis="0 1 0" limited="true" range="-0.001200 0.001200" stiffness="85" damping="3.5"/>
         <geom name="abox_vis_1" type="mesh" mesh="m_driving_axlebox" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
         <body name="wheelset_1" pos="0 0 0">
@@ -62,7 +62,7 @@
       </body>
       <body name="axlebox_2" pos="0.046500 0 0">
         <inertial pos="-0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 1.470645827e-23 6.375997060e-24 -6.284514739e-23"/>
-        <joint name="j_susp_z2" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="2000" damping="28"/>
+        <joint name="j_susp_z2" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="950" damping="14"/>
         <joint name="j_lat_y2" type="slide" axis="0 1 0" limited="true" range="-0.000300 0.000300" stiffness="85" damping="3.5"/>
         <geom name="abox_vis_2" type="mesh" mesh="m_driving_axlebox" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
         <body name="wheelset_2" pos="0 0 0">
@@ -83,7 +83,7 @@
       </body>
       <body name="axlebox_3" pos="0.000000 0 0">
         <inertial pos="-0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 1.470645827e-23 6.375997060e-24 -6.284514739e-23"/>
-        <joint name="j_susp_z3" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="2000" damping="28"/>
+        <joint name="j_susp_z3" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="950" damping="14"/>
         <joint name="j_lat_y3" type="slide" axis="0 1 0" limited="true" range="-0.000200 0.000200" stiffness="85" damping="3.5"/>
         <geom name="abox_vis_3" type="mesh" mesh="m_driving_axlebox" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
         <body name="wheelset_3" pos="0 0 0">
@@ -171,7 +171,7 @@
       </body>
       <body name="axlebox_4" pos="-0.046500 0 0">
         <inertial pos="-0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 1.470645827e-23 6.375997060e-24 -6.284514739e-23"/>
-        <joint name="j_susp_z4" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="2000" damping="28"/>
+        <joint name="j_susp_z4" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="950" damping="14"/>
         <joint name="j_lat_y4" type="slide" axis="0 1 0" limited="true" range="-0.000400 0.000400" stiffness="85" damping="3.5"/>
         <geom name="abox_vis_4" type="mesh" mesh="m_driving_axlebox" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
         <body name="wheelset_4" pos="0 0 0">
@@ -274,7 +274,7 @@
         <site name="s_exp_tail_L" pos="0.000646 0 -0.013485"/>
         <body name="die_block_L" pos="0 0 0">
           <inertial pos="-0.000000 0.000000 -0.000000" mass="0.000343" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 -1.156399760e-26 6.433914554e-27 3.444241927e-26"/>
-          <joint name="j_die_shift_L" type="slide" axis="0.067552 0 0.997716" limited="true" range="-0.006500 0.006500" damping="0.08"/>
+          <joint name="j_die_shift_L" type="hinge" axis="0 1 0" pos="0.063975 0 -0.001799" limited="true" range="-0.101738 0.101738" damping="0.00035"/>
           <geom name="die_vis_L" type="mesh" mesh="m_die_block" material="mat_brass" euler="0 -0.047851 0" contype="0" conaffinity="0" mass="0"/>
           <body name="radius_rod_L" pos="0 0 0">
             <joint name="j_radius_L" type="hinge" axis="0 1 0"/>
@@ -314,7 +314,7 @@
         <site name="s_exp_tail_R" pos="-0.005608 0 -0.012280"/>
         <body name="die_block_R" pos="0 0 0">
           <inertial pos="-0.000000 0.000000 0.000000" mass="0.000343" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 5.513038081e-27 3.113609596e-26 3.591117788e-26"/>
-          <joint name="j_die_shift_R" type="slide" axis="0.517439 0 0.855720" limited="true" range="-0.006500 0.006500" damping="0.08"/>
+          <joint name="j_die_shift_R" type="hinge" axis="0 1 0" pos="0.056031 0 -0.030928" limited="true" range="-0.101738 0.101738" damping="0.00035"/>
           <geom name="die_vis_R" type="mesh" mesh="m_die_block" material="mat_brass" euler="0 0.428401 0" contype="0" conaffinity="0" mass="0"/>
           <body name="radius_rod_R" pos="0 0 0">
             <joint name="j_radius_R" type="hinge" axis="0 1 0"/>
@@ -345,6 +345,16 @@
     <connect name="loop_radius_R" site1="s_rad_front_R" site2="s_comb_radius_R"/>
     <connect name="loop_reverser_R" site1="s_lift_bot_R" site2="s_rad_lift_R"/>
   </equality>
+  <tendon>
+    <fixed name="tendon_eq_front" stiffness="2100" damping="28" springlength="0">
+      <joint joint="j_susp_z1" coef="0.5"/>
+      <joint joint="j_susp_z2" coef="0.5"/>
+    </fixed>
+    <fixed name="tendon_eq_rear" stiffness="2100" damping="28" springlength="0">
+      <joint joint="j_susp_z3" coef="0.5"/>
+      <joint joint="j_susp_z4" coef="0.5"/>
+    </fixed>
+  </tendon>
   <actuator>
     <general name="steam_force_L" joint="j_piston_L" gainprm="1"/>
     <general name="steam_force_R" joint="j_piston_R" gainprm="1"/>

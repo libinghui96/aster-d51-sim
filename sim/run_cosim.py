@@ -21,6 +21,7 @@ from typing import List
 import mujoco
 import numpy as np
 
+from sim.auto_fireman import AutoFiremanAgent
 from sim.thermo_1d import AsterD51Thermo1D, CabControls, CylinderCalibration, ThermoTelemetry
 
 # GLFW 按键编码 (已避开 MuJoCo Viewer 内置渲染快捷键)
@@ -37,6 +38,7 @@ KEY_X = ord("X")    # ドレン弁 开/关
 KEY_COMMA = ord(",")   # バイパス弁 关小 (增加入锅给水量)
 KEY_PERIOD = ord(".")  # バイパス弁 开大 (回流煤水车)
 KEY_Y = ord("Y")    # 手動給水ポンプ 摇动 5 次
+KEY_A = ord("A")    # AI 自動司炉 (Auto-Fireman) ON/OFF
 KEY_9 = ord("9")    # 切换 1x / 15x 热力烧水加速
 KEY_7 = ord("7")    # 重置为冷炉状态 (試運転 ①)
 KEY_8 = ord("8")    # 一键切换至 3.8 kgf/cm² 热炉待发状态
@@ -118,12 +120,13 @@ def bar_gauge(val: float, vmin: float, vmax: float, width: int = 20) -> str:
     return "[" + "#" * filled + "-" * (width - filled) + "]"
 
 
-def render_dashboard(tel: ThermoTelemetry, ctrl: CabControls) -> str:
+def render_dashboard(tel: ThermoTelemetry, ctrl: CabControls, auto_fireman_on: bool = False) -> str:
     """生成 ANSI 终端实时驾驶台仪表盘"""
     sv_tag = "!! POPPING !!" if tel.safety_valve_open else "CLOSED       "
     burner_tag = "LIT (燃焼中)" if ctrl.burner_lit else "OFF (消火)  "
     fan_tag = "ON " if ctrl.chimney_fan else "OFF"
     drain_tag = "OPEN (排液)" if ctrl.drain_cock else "CLOSED     "
+    af_tag = "ON (AI巡航)" if auto_fireman_on else "OFF        "
     rev_mode = "NEUTRAL (N)" if abs(ctrl.reverser) < 0.05 else (
         f"FWD +{ctrl.reverser*100:3.0f}%" if ctrl.reverser > 0 else f"REV {ctrl.reverser*100:4.0f}%"
     )
@@ -133,19 +136,23 @@ def render_dashboard(tel: ThermoTelemetry, ctrl: CabControls) -> str:
         f"  ASTER HOBBY JNR D51 LIVE STEAM COSIMULATOR  |  Sim Time: {tel.sim_time:6.1f} s  (Warp: {ctrl.thermal_warp:.0f}x)",
         "=" * 76,
         f"  圧力計 (PG-ø20) : {bar_gauge(tel.boiler_pressure_kgf, 0, 5.0)} {tel.boiler_pressure_kgf:4.2f} / 5.00 kgf/cm² [SV: {sv_tag}]",
-        f"  水面計 (11-7)   : {bar_gauge(tel.water_level_pct, 0, 100)} {tel.water_level_pct:4.1f} %  (適正水位: 50%)",
-        f"  蒸気室 / 過熱器 : {tel.steam_chest_kgf:4.2f} kgf/cm²  |  T_boil: {tel.boiler_temp_c:5.1f}°C  |  T_sh: {tel.superheat_temp_c:5.1f}°C",
-        f"  燃料アルコール  : {tel.alcohol_ml:5.1f} / 130 ml |  炭水車水槽: {tel.tender_water_ml:5.1f} ml | 油タンク: {tel.lubricator_oil_pct:4.1f}%",
-        f"  シリンダ状態    : 壁温 {tel.cyl_wall_temp_c:5.1f}°C | 凝結水 {tel.condensate_g:4.2f} g | F_L={tel.force_L:+5.1f}N  F_R={tel.force_R:+5.1f}N",
+        f"  水面計 (11-7)   : {bar_gauge(tel.water_level_pct, 0, 100)} {tel.water_level_pct:4.1f} %  (実水位:{tel.true_water_level_pct:4.1f}% | 頂板水深:{tel.crown_submerged_mm:+5.1f}mm)",
+        f"  蒸気室 / 銅火室 : {tel.steam_chest_kgf:4.2f} kgf/cm²  |  T_boil: {tel.boiler_temp_c:5.1f}°C  |  T_crown: {tel.crown_temp_c:5.1f}°C  |  T_sh: {tel.superheat_temp_c:5.1f}°C",
+        f"  燃料アルコール  : {tel.alcohol_ml:5.1f} / 130 ml |  炭水車水槽: {tel.tender_water_ml:5.1f} ml | 油:{tel.lubricator_oil_pct:4.1f}% | シール:{tel.seal_health*100:3.0f}%",
+        f"  シリンダ・煙室  : 壁温 {tel.cyl_wall_temp_c:5.1f}°C | 凝結水 {tel.condensate_g:4.2f}g | 煙室負圧 {tel.smokebox_vacuum_pa:4.0f}Pa | F_L={tel.force_L:+5.1f}N F_R={tel.force_R:+5.1f}N",
         f"  走行・給水収支  : 動輪 {tel.wheel_rpm:+6.1f} RPM ({tel.scale_speed_kmh:5.1f} km/h) | 蒸発 {tel.steam_gen_g_s:4.2f} g/s | 給水 {tel.feedwater_g_s:4.2f} g/s",
         "-" * 76,
         f"  [I]着火:{burner_tag}  [O]燃料弁:{ctrl.fuel_valve*100:3.0f}%   [B]通風機:{fan_tag}    [K/L]通風弁:{ctrl.blower_valve*100:3.0f}%",
         f"  [↑/↓]加減弁:{ctrl.regulator*100:3.0f}%    [←/→]逆転機:{rev_mode}  [X]ドレン:{drain_tag} [,/ .]バイパス:{ctrl.bypass_valve*100:3.0f}%",
-        "  [Y]手動給水ポンプ(+5回)   [9]15倍速沸騰切替   [7]冷機リセット   [8]3.8kg/cm²即発車プリセット",
+        f"  [A]AI司炉:{af_tag} [Y]手動ポンプ(+5) [9]15x加速 [7]冷機リセット [8]3.8kg即発車",
         "=" * 76,
     ]
+    if tel.hydrolock_L or tel.hydrolock_R:
+        lines.append("  [HYDROLOCK!] 冷気筒ウォーターハンマー発生! 直ちに [X] ドレン弁を開いて排水して下さい!")
+    if tel.flash_steam_spike:
+        lines.append("  [FLASH SPIKE!] 高温空焚き火室への急冷給水により急激蒸発スパイク発生!")
     if tel.dry_fire_alarm:
-        lines.append("  [WARNING] ボイラ低水位 (空焚き危険)! [Y]手動ポンプ または [,]バイパス弁を閉じて給水して下さい!")
+        lines.append(f"  [WARNING] ボイラ低水位/空焚き危険 (銅火室頂板 {tel.crown_temp_c:.0f}°C, 損傷 {tel.copper_anneal_damage*100:.1f}%)!")
     if tel.emergency_overpressure:
         lines.append("  [EMERGENCY] 圧力 5.0 kgf/cm² 超過! 直ちに [I] 消火して下さい!")
     return "\n".join(lines)
@@ -177,7 +184,11 @@ class CoSimRunner:
 
         self.qvel_w3 = self.model.joint("j_wheel_3").dofadr[0]
         self.qvel_pump = self.model.joint("j_pump_ram").dofadr[0]
+        self.qvel_valL = self.model.joint("j_valve_L").dofadr[0]
+        self.qvel_valR = self.model.joint("j_valve_R").dofadr[0]
+        self.loco_bid = self.model.body("loco_frame").id
         self.is_roller_mode = self.model.jnt_type[0] != mujoco.mjtJoint.mjJNT_FREE
+        self._prev_fwd_vel = 0.0
 
         if preset == "hot":
             self.apply_hot_preset()
@@ -194,9 +205,23 @@ class CoSimRunner:
 
     def step_once(self) -> ThermoTelemetry:
         sd = self.data.sensordata
+        dt = float(self.model.opt.timestep)
         omega_3 = float(sd[self.s_w3])
+        v_vL = float(self.data.qvel[self.qvel_valL])
+        v_vR = float(self.data.qvel[self.qvel_valR])
+
+        # 提取车体上坡俯仰角与纵向加速度 (用于 O4-1 坡道假水位与顶板浸没判定)
+        pitch_rad = 0.0
+        accel_x = 0.0
+        if not self.is_roller_mode:
+            r20 = float(self.data.xmat[self.loco_bid, 6])
+            pitch_rad = math.asin(max(-0.35, min(0.35, r20)))
+            fwd_vel = omega_3 * 0.0219
+            accel_x = (fwd_vel - self._prev_fwd_vel) / max(1e-6, dt)
+            self._prev_fwd_vel = fwd_vel
+
         F_L, F_R, F_pump, tel = self.thermo.step(
-            dt=self.model.opt.timestep,
+            dt=dt,
             q_pL=float(sd[self.s_pL]),
             v_pL=float(sd[self.s_vL]),
             q_vL=float(sd[self.s_valL]),
@@ -207,13 +232,19 @@ class CoSimRunner:
             v_pump_ram=float(sd[self.s_pump]),
             ctrl=self.ctrl,
             sim_time=float(self.data.time),
+            v_vL=v_vL,
+            v_vR=v_vR,
+            pitch_rad=pitch_rad,
+            accel_x=accel_x,
         )
 
         self.data.ctrl[self.act_fL] = F_L
         self.data.ctrl[self.act_fR] = F_R
         self.data.ctrl[self.act_rev] = self.ctrl.reverser * 1.25
 
-        # 施加轴动给水泵液压负载与滚轮台/实轨列车编组运行阻力
+        # 施加平面滑阀背压摩擦反力 (O3-2)、给水泵液压负载与列车运行阻力
+        self.data.qfrc_applied[self.qvel_valL] = tel.valve_friction_L
+        self.data.qfrc_applied[self.qvel_valR] = tel.valve_friction_R
         self.data.qfrc_applied[self.qvel_pump] = F_pump
         if self.is_roller_mode:
             self.data.qfrc_applied[self.qvel_w3] = -0.0022 * omega_3 - 0.00012 * omega_3 * abs(omega_3)
@@ -224,13 +255,16 @@ class CoSimRunner:
         return tel
 
 
-def run_interactive(xml_path: Path, preset: str) -> None:
+def run_interactive(xml_path: Path, preset: str, auto_fireman: bool = False) -> None:
     import mujoco.viewer
 
     runner = CoSimRunner(xml_path, preset=preset)
-    ctrl = runner.ctrl
+    af_agent = AutoFiremanAgent()
+    af_enabled = auto_fireman
 
     def on_key(keycode: int) -> None:
+        nonlocal af_enabled
+        ctrl = runner.ctrl
         if keycode == KEY_UP:
             ctrl.regulator = min(1.0, ctrl.regulator + 0.05)
         elif keycode == KEY_DOWN:
@@ -262,6 +296,10 @@ def run_interactive(xml_path: Path, preset: str) -> None:
             ctrl.bypass_valve = min(1.0, ctrl.bypass_valve + 0.05)
         elif keycode == KEY_Y:
             runner.thermo.trigger_hand_pump(strokes=5)
+        elif keycode == KEY_A:
+            af_enabled = not af_enabled
+            if af_enabled:
+                af_agent.reset(direction=1.0 if ctrl.reverser >= 0.0 else -1.0)
         elif keycode == KEY_9:
             ctrl.thermal_warp = 15.0 if ctrl.thermal_warp < 2.0 else 1.0
         elif keycode == KEY_7:
@@ -286,11 +324,13 @@ def run_interactive(xml_path: Path, preset: str) -> None:
             tel = None
             for _ in range(steps_per_frame):
                 tel = runner.step_once()
+            if af_enabled and tel is not None:
+                af_agent.update(steps_per_frame * dt, tel, runner.ctrl)
             viewer.sync()
 
             now = time.perf_counter()
             if tel is not None and (now - last_print) >= 0.10:
-                sys.stdout.write(render_dashboard(tel, runner.ctrl) + "\n")
+                sys.stdout.write(render_dashboard(tel, runner.ctrl, auto_fireman_on=af_enabled) + "\n")
                 sys.stdout.flush()
                 last_print = now
 
@@ -399,6 +439,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Aster D51 1D-3D 实时热机联合仿真器")
     parser.add_argument("--xml", type=Path, default=Path("models/d51_full.xml"))
     parser.add_argument("--preset", choices=["cold", "hot"], default="cold")
+    parser.add_argument("--auto-fireman", action="store_true", help="启动时默认开启 RTX 5080 标定 AI 自动司炉巡航")
     parser.add_argument("--headless-demo", action="store_true", help="无 GUI 自动运行标准试车流程并输出曲线图")
     parser.add_argument("--out-plot", type=Path, default=Path("logs/d51_telemetry.png"))
     args = parser.parse_args()
@@ -409,7 +450,7 @@ def main() -> None:
     if args.headless_demo:
         run_headless_demo(args.xml, args.out_plot)
     else:
-        run_interactive(args.xml, args.preset)
+        run_interactive(args.xml, args.preset, auto_fireman=args.auto_fireman)
 
 
 if __name__ == "__main__":

@@ -15,32 +15,35 @@
       z-index: 100; gap: 12px; font-size: 15px;
     }
     .hud-panel {
-      position: fixed; background: rgba(18, 22, 28, 0.85); backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 14px 16px;
+      position: fixed; background: rgba(18, 22, 28, 0.86); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 13px 15px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.45);
     }
-    #top-gauges { top: 16px; left: 16px; width: 345px; display: flex; flex-direction: column; gap: 10px; }
-    #cab-controls { bottom: 16px; right: 16px; width: 365px; display: flex; flex-direction: column; gap: 9px; }
-    #scene-toolbar { top: 16px; right: 16px; display: flex; gap: 8px; }
+    #top-gauges { top: 16px; left: 16px; width: 372px; display: flex; flex-direction: column; gap: 8px; }
+    #cab-controls { bottom: 16px; right: 16px; width: 382px; display: flex; flex-direction: column; gap: 8px; }
+    #scene-toolbar { top: 16px; right: 16px; display: flex; gap: 8px; flex-wrap: wrap; max-width: calc(100vw - 420px); }
 
-    h2 { font-size: 12.5px; letter-spacing: 0.6px; color: #9da7b3; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 6px; }
-    .gauge-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    h2 { font-size: 12px; letter-spacing: 0.6px; color: #9da7b3; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+    .lut-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: rgba(46, 160, 67, 0.22); color: #56d364; border: 1px solid rgba(86, 211, 100, 0.35); }
+    .gauge-row { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; }
     .val-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; color: #58a6ff; }
+    .val-hot { color: #ff6b61 !important; text-shadow: 0 0 8px rgba(255, 80, 60, 0.55); }
     .bar-bg { width: 100%; height: 8px; background: #21262d; border-radius: 4px; overflow: hidden; position: relative; }
     .bar-fill { height: 100%; transition: width 0.08s linear; background: linear-gradient(90deg, #2ea043, #d29922, #f85149); }
     .water-fill { height: 100%; transition: width 0.08s linear; background: #388bfd; }
     .mid-mark { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #fff; opacity: 0.85; }
 
-    .ctrl-row { display: grid; grid-template-columns: 116px 1fr 48px; align-items: center; gap: 8px; font-size: 12.5px; }
+    .ctrl-row { display: grid; grid-template-columns: 122px 1fr 52px; align-items: center; gap: 8px; font-size: 12.5px; }
     input[type="range"] { width: 100%; accent-color: #d29922; cursor: pointer; }
-    .btn-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
     button, select {
       background: #21262d; color: #e6edf3; border: 1px solid rgba(255,255,255,0.16);
       padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; transition: 0.15s;
     }
     button:hover, select:hover { background: #30363d; }
     button.active { background: #b85c00; border-color: #ffa657; color: #fff; }
-    .badge-warn { color: #ff7b72; font-weight: 700; font-size: 12px; min-height: 16px; }
+    button.ai-active { background: #1f6feb; border-color: #79c0ff; color: #fff; box-shadow: 0 0 10px rgba(56, 139, 253, 0.45); }
+    .badge-warn { color: #ff7b72; font-weight: 700; font-size: 12px; min-height: 17px; line-height: 1.35; }
   </style>
 </head>
 <body>
@@ -58,13 +61,17 @@
     <select id="select-cam">
       <option value="normal">标准金属外观</option>
       <option value="xray">气缸与蒸汽室半透明透视 (X-Ray)</option>
+      <option value="chase">R2m 整列侧前动态追车视角</option>
     </select>
     <button id="btn-hot-preset" class="active">3.8kg/cm² 热炉即发</button>
     <button id="btn-cold-reset">冷炉整备重置</button>
   </div>
 
   <div id="top-gauges" class="hud-panel">
-    <h2>Aster D51 Live Steam Telemetry</h2>
+    <h2>
+      <span>Aster D51 Live Steam Telemetry</span>
+      <span id="badge-cfd" class="lut-badge">RTX 5080 CFD</span>
+    </h2>
     <div class="gauge-row">
       <span>ボイラ圧力 (PG-ø20)</span>
       <span id="txt-pressure" class="val-mono">0.00 / 4.00 kgf/cm²</span>
@@ -80,7 +87,9 @@
       <div class="mid-mark" title="適正水位 50%"></div>
     </div>
 
-    <div class="gauge-row"><span>蒸気室 / 過熱蒸気温度</span><span id="txt-steam" class="val-mono">0.00 kgf | 25°C</span></div>
+    <div class="gauge-row"><span>蒸気室 / 過熱蒸気温度</span><span id="txt-steam" class="val-mono">0.00 kgf | 165°C</span></div>
+    <div class="gauge-row"><span>銅火室頂板 / シール健全度</span><span id="txt-crown" class="val-mono">156°C | 100%</span></div>
+    <div class="gauge-row"><span>煙室負圧 / シリンダ壁温</span><span id="txt-smokebox" class="val-mono">-7 Pa | 132°C</span></div>
     <div class="gauge-row"><span>動輪回転 / 1:32 換算車速</span><span id="txt-speed" class="val-mono">0 RPM | 0.0 km/h</span></div>
     <div class="gauge-row"><span>燃料アルコール / 炭水車水</span><span id="txt-tanks" class="val-mono">130 ml | 320 ml</span></div>
     <div class="gauge-row"><span>左右ピストン有効推力</span><span id="txt-forces" class="val-mono">L: 0.0N | R: 0.0N</span></div>
@@ -109,7 +118,13 @@
       <input id="rng-bypass" type="range" min="0" max="1" step="0.05" value="0.40" />
       <span id="val-bypass" class="val-mono">40%</span>
     </div>
+    <div class="ctrl-row">
+      <label>勾配模擬 (Grade)</label>
+      <input id="rng-grade" type="range" min="-5" max="5" step="0.5" value="0" />
+      <span id="val-grade" class="val-mono">0.0°</span>
+    </div>
     <div class="btn-row">
+      <button id="btn-autofireman">AI 自動司炉</button>
       <button id="btn-burner" class="active">バーナー点火</button>
       <button id="btn-fan">煙突通風機</button>
       <button id="btn-drain" class="active">ドレン弁 (排液)</button>

@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "generator": "scripts/07_gpu_fireman_opt.py",
+    "gpu_device": "NVIDIA GeForce RTX 5080",
+    "parallel_trajectories_evaluated": 114688,
+    "simulated_locomotive_hours": 1911.5,
+    "compute_time_s": 47.347,
+    "best_objective_cost": 809.063
+  },
+  "optimal_policy": {
+    "target_speed_kmh": 52.0,
+    "p_target_kgf": 3.86,
+    "cutoff_start": 0.85,
+    "cutoff_cruise": 0.55858,
+    "cutoff_speed_span_kmh": 42.0,
+    "kp_reg": 0.02917,
+    "ki_reg": 0.00759,
+    "kp_blower": 0.79333,
+    "kp_bypass": 0.025,
+    "ff_bypass_base": 0.68,
+    "warmup_wall_temp_c": 102.0
+  }
+}

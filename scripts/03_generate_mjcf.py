@@ -160,9 +160,9 @@ def exp_link_slot_tilt(theta_rad: float, cfg: Dict) -> float:
         )
         return math.atan2(e[1] - trun[1], e[0] - trun[0])
 
-    swing = [tail_angle(2.0 * math.pi * i / 720) for i in range(720)]
-    mid = 0.5 * (max(swing) + min(swing))
-    return mid - tail_angle(theta_rad + math.radians(vg_cfg["return_crank_phase_deg"]))
+    th_fdc = math.radians(vg_cfg["return_crank_phase_deg"])
+    mid = 0.5 * (tail_angle(th_fdc) + tail_angle(th_fdc + math.pi))
+    return mid - tail_angle(theta_rad + th_fdc)
 
 
 def add_rail_wheel_colliders(
@@ -356,10 +356,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     )
 
     equality = ET.SubElement(mj, "equality")
+    tendon = ET.SubElement(mj, "tendon")
     actuator = ET.SubElement(mj, "actuator")
     sensor = ET.SubElement(mj, "sensor")
 
-    # 1. 四对 Boxpok 驱动动轮 (含 5-9 黄铜轴箱精确质量 + 左右动轮月牙配重块真实偏心惯量合成)
+    # 1. 四对 Boxpok 驱动动轮 (含 5-9 黄铜轴箱精确质量 + イラスト 3 跷跷板均衡梁 <tendon> 耦合)
     axle_xs = [
         (1, w_cfg["axle_x"]["drive_1"] * s, w_cfg["axle_lateral_play_half"]["drive_1"] * s),
         (2, w_cfg["axle_x"]["drive_2"] * s, w_cfg["axle_lateral_play_half"]["drive_2"] * s),
@@ -378,7 +379,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         ET.SubElement(
             abox, "joint", name=f"j_susp_z{idx}", type="slide", axis="0 0 1",
             springref="-0.0017" if on_rails else "0",
-            limited="true", range="-0.0035 0.0035", stiffness="2000", damping="28"
+            limited="true", range="-0.0035 0.0035", stiffness="950", damping="14"
         )
         ET.SubElement(
             abox, "joint", name=f"j_lat_y{idx}", type="slide", axis="0 1 0",
@@ -412,6 +413,15 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
                 pos=f"0 {sgn * y_w_off:.6f} 0", contype="0", conaffinity="0", mass="0"
             )
         wheel_bodies[idx] = wbody
+
+    # O3-3: イラスト 3 前后两组动轮跷跷板均衡梁 (Equalizer <tendon>): 同向沉浮总刚度保持 2000 N/m，反向翘曲刚度降至 950 N/m 自动均载
+    eq_springlen = "-0.0017" if on_rails else "0"
+    for eq_name, j_a, j_b in [("tendon_eq_front", "j_susp_z1", "j_susp_z2"), ("tendon_eq_rear", "j_susp_z3", "j_susp_z4")]:
+        ft = ET.SubElement(
+            tendon, "fixed", name=eq_name, stiffness="2100", damping="28", springlength=eq_springlen
+        )
+        ET.SubElement(ft, "joint", joint=j_a, coef="0.5")
+        ET.SubElement(ft, "joint", joint=j_b, coef="0.5")
 
     # 2. 径向摆臂先导台车 (19-2 铸铁摆臂实体赋密度) 与从轮台车
     tz_truck = -(r_drv - r_trk)
@@ -697,15 +707,24 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             equality, "connect", name=f"loop_eccentric_{tag}", site1=f"s_ecc_front_{tag}", site2=f"s_exp_tail_{tag}"
         )
 
-        # 2-3 月牙滑块 (真实 ~0.34g 黄铜滑块质量；保留 exp_link_slot_tilt 修正右侧月牙板 t=0 偏角)
+        # O3-1: 2-3 圆弧月牙槽等效铰接 (R = radius_rod_length)，死点处圆心与心向棒前销严格重合，确保恒定先导量 (Constant Lead)
+        L_rad_m = vg_cfg["radius_rod_length"] * s
         slot_lim = vg_cfg["die_slot_half_travel"] * s
-        slot_tilt = exp_link_slot_tilt(theta, cfg)
+        ang_lim = math.asin(min(0.95, slot_lim / L_rad_m))
+        pose_dc = solve_side_pose(0.0, cfg)
+        alpha_dc = math.atan2(
+            -(pose_dc["comb_mid"][1] - pose_dc["exp_trunnion"][1]),
+            pose_dc["comb_mid"][0] - pose_dc["exp_trunnion"][0],
+        )
+        slot_tilt = exp_link_slot_tilt(theta, cfg) + alpha_dc
+        cx_arc = L_rad_m * math.cos(slot_tilt)
+        cz_arc = -L_rad_m * math.sin(slot_tilt)
         die_body = ET.SubElement(exp_body, "body", name=f"die_block_{tag}", pos="0 0 0")
         attach_part_inertial(die_body, parts_mp["die_block"], pitch_y_rad=exp_pitch_y)
         ET.SubElement(
-            die_body, "joint", name=f"j_die_shift_{tag}", type="slide",
-            axis=f"{math.sin(slot_tilt):.6f} 0 {math.cos(slot_tilt):.6f}",
-            limited="true", range=f"{-slot_lim:.6f} {slot_lim:.6f}", damping="0.08"
+            die_body, "joint", name=f"j_die_shift_{tag}", type="hinge", axis="0 1 0",
+            pos=f"{cx_arc:.6f} 0 {cz_arc:.6f}",
+            limited="true", range=f"{-ang_lim:.6f} {ang_lim:.6f}", damping="0.00035"
         )
         ET.SubElement(
             die_body, "geom", name=f"die_vis_{tag}", type="mesh",

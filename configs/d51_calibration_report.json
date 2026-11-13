@@ -1,0 +1,56 @@
+{
+  "scanner_300dpi_px_per_mm": 11.8415,
+  "nominal_300dpi_px_per_mm": 11.811,
+  "scanner_scale_drift_pct": 0.258,
+  "measurements": {
+    "photo_ortho_side_p43": {
+      "detected_inter_axle_pitches_px": [
+        365.0,
+        383.0,
+        356.0,
+        366.0,
+        370.0
+      ],
+      "median_inter_axle_pitch_px": 366.0,
+      "calibrated_photo_px_per_mm": 7.871,
+      "measured_wheel_outer_dia_mm": 44.06,
+      "measured_leading_axle_x_mm": 168.59,
+      "nominal_leading_axle_x_mm": 168.0,
+      "leading_axle_residual_mm": 0.59
+    },
+    "photo_ortho_bottom_p44": {
+      "wheelset_edge_x_px": [
+        1660,
+        1938,
+        2034
+      ],
+      "outer_flange_span_px": 374.0,
+      "outer_flange_span_mm": 47.52,
+      "reference_track_gauge_mm": 45.0
+    },
+    "step09_valve_ortho_p11": {
+      "detected_ortho_wheel_circles_px": [
+        [
+          426.5,
+          1621.5,
+          283.3
+        ],
+        [
+          939.5,
+          1603.5,
+          278.9
+        ]
+      ],
+      "wheel_flange_od_at_300dpi_mm": 47.85,
+      "verified_return_crank_boss_mm": 7.23,
+      "locked_return_crank_radius_mm": 7.0,
+      "verified_main_crank_boss_mm": 10.57,
+      "locked_main_crank_radius_mm": 10.0
+    }
+  },
+  "kinematic_closure_audit": {
+    "full_360deg_solvable": true,
+    "neutral_combination_lever_stroke_mm": 2.901,
+    "theoretical_2x_lead_lap_mm": 2.901
+  }
+}
