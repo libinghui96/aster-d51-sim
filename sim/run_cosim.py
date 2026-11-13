@@ -72,7 +72,9 @@ def calibrate_model_and_valves(model: mujoco.MjModel) -> CylinderCalibration:
     q_fdc_R = float(model.jnt_range[j_pR, 1] - 0.002)
     stroke = float((model.jnt_range[j_pL, 1] - model.jnt_range[j_pL, 0]) - 0.004)
 
-    # 在临时副本上空转主动轮测定中立位滑阀往复极值
+    # 在临时副本上空转主动轮测定中立位滑阀往复极值 (临时屏蔽接触与重力，等效架空滚轮台空转测阀)
+    saved_disable = int(model.opt.disableflags)
+    model.opt.disableflags = saved_disable | int(mujoco.mjtDisableBit.mjDSBL_CONTACT) | int(mujoco.mjtDisableBit.mjDSBL_GRAVITY)
     cal_data = mujoco.MjData(model)
     cal_data.ctrl[act_rev] = 0.0
     qvel_w3 = model.joint("j_wheel_3").dofadr[0]
@@ -92,6 +94,7 @@ def calibrate_model_and_valves(model: mujoco.MjModel) -> CylinderCalibration:
         if step_i >= 1500:
             vL_hist.append(float(cal_data.sensordata[adr_vL]))
             vR_hist.append(float(cal_data.sensordata[adr_vR]))
+    model.opt.disableflags = saved_disable
 
     center_L = 0.5 * (max(vL_hist) + min(vL_hist))
     center_R = 0.5 * (max(vR_hist) + min(vR_hist))
@@ -210,10 +213,12 @@ class CoSimRunner:
         self.data.ctrl[self.act_fR] = F_R
         self.data.ctrl[self.act_rev] = self.ctrl.reverser * 1.25
 
-        # 施加轴动给水泵液压负载与滚轮试验台轴承负载阻尼
+        # 施加轴动给水泵液压负载与滚轮台/实轨列车编组运行阻力
         self.data.qfrc_applied[self.qvel_pump] = F_pump
         if self.is_roller_mode:
             self.data.qfrc_applied[self.qvel_w3] = -0.0022 * omega_3 - 0.00012 * omega_3 * abs(omega_3)
+        else:
+            self.data.qfrc_applied[self.qvel_w3] = -0.0055 * omega_3 - 0.00048 * omega_3 * abs(omega_3)
 
         mujoco.mj_step(self.model, self.data)
         return tel

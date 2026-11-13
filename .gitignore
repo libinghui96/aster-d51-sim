@@ -2,6 +2,11 @@
 data/
 
 logs/
+site/
+.code
 MUJOCO_LOG.TXT
 __pycache__/
 *.pyc
+web/node_modules/
+web/dist/
+web/public/models/

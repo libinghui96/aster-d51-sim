@@ -4,3 +4,4 @@ opencv-python>=4.9.0
 matplotlib>=3.8.0
 pillow>=10.0.0
 mujoco>=3.1.0
+build123d>=0.7.0

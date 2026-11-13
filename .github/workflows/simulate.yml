@@ -30,16 +30,33 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
       - name: Install system OpenGL (OSMesa)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libosmesa6
 
       - name: Install Python deps
         run: pip install mujoco numpy matplotlib pillow
 
-      - name: Check model is in sync with generator
+      - name: Check models are in sync with generator
         run: |
-          python scripts/03_generate_mjcf.py --out /tmp/d51_regen.xml
+          python scripts/03_generate_mjcf.py --mode roller --out /tmp/d51_regen.xml
           diff -q /tmp/d51_regen.xml models/d51_full.xml
+          python scripts/03_generate_mjcf.py --mode curve_r2m --out /tmp/d51_r2m_regen.xml
+          diff -q /tmp/d51_r2m_regen.xml models/d51_r2m.xml
+
+      - name: Sync CAD/MJCF assets & build Web 3D interactive frontend
+        run: |
+          python scripts/05_sync_web_assets.py
+          npm --prefix web ci
+          npm --prefix web run build
+          mkdir -p site
+          cp -r web/dist/. site/
+          touch site/.nojekyll
 
       - name: Headless test-run demo (telemetry plot)
         run: python -m sim.run_cosim --headless-demo --out-plot site/d51_telemetry.png 2>&1 | grep -v '^WARNING'
@@ -47,16 +64,17 @@ jobs:
       - name: Render running animation
         run: python scripts/04_render_animation.py --out site/d51_running.gif 2>&1 | grep -v '^WARNING'
 
-      - name: Build page
+      - name: Build CI telemetry report page
         run: |
-          cat > site/index.html <<EOF
+          cat > site/report.html <<EOF
           <!doctype html>
           <html lang="zh">
-          <head><meta charset="utf-8"><title>Aster D51 co-simulation</title>
-          <style>body{font-family:sans-serif;background:#111;color:#ddd;max-width:1100px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #333}</style>
+          <head><meta charset="utf-8"><title>Aster D51 CI Telemetry Report</title>
+          <style>body{font-family:sans-serif;background:#111;color:#ddd;max-width:1100px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #333}a.btn{display:inline-block;background:#b85c00;color:#fff;text-decoration:none;padding:8px 14px;border-radius:6px;font-weight:600}</style>
           </head>
           <body>
-          <h1>Aster D51 1D 热力学 + MuJoCo 联合仿真</h1>
+          <h1>Aster D51 1D 热力学 + MuJoCo 联合仿真 CI 报告</h1>
+          <p><a class="btn" href="./">打开 Web 3D 实时交互数字孪生</a></p>
           <p>commit <code>${GITHUB_SHA::7}</code>, built $(date -u '+%Y-%m-%d %H:%M UTC')</p>
           <h2>滚轮台热炉运转 (4x 慢放)</h2>
           <img src="d51_running.gif" alt="running animation">

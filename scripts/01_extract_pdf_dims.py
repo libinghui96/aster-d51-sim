@@ -105,6 +105,21 @@ def default_d51_kinematics() -> Dict:
             "axle_pump_bore": 3.2,                # PN3.2-1: 轴动给水泵柱塞直径 3.2mm
             "axle_pump_eccentric": 3.5,           # 第 3 轴给水泵偏心轮偏心距
             "axle_pump_x": -22.0                  # 轴動ポンプ (6-5) 泵体中心 X 坐标
+        },
+        "tender_and_track": {
+            "drawbar_loco_pin_x": -146.0,
+            "drawbar_length": 34.0,
+            "drawbar_tender_pin_local_x": 116.0,
+            "tender_body_length": 226.0,
+            "tender_body_width": 74.0,
+            "tender_body_height": 52.0,
+            "tender_deck_z": 18.0,
+            "bogie_center_span": 116.0,
+            "bogie_wheelbase": 48.0,
+            "tender_wheel_diameter": 26.8,
+            "empty_mass_kg": 1.15,
+            "curve_radius_mm": 2000.0,
+            "curve_segments": 144
         }
     }
 

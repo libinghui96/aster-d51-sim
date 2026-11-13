@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aster Hobby JNR D51 - Web 3D Live Steam Twin</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body { overflow: hidden; background: #0f1216; font-family: system-ui, -apple-system, sans-serif; color: #e6edf3; }
+    #canvas-container { width: 100vw; height: 100vh; }
+
+    #loading-overlay {
+      position: fixed; inset: 0; background: rgba(12, 15, 20, 0.94);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 100; gap: 12px; font-size: 15px;
+    }
+    .hud-panel {
+      position: fixed; background: rgba(18, 22, 28, 0.85); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 14px 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    }
+    #top-gauges { top: 16px; left: 16px; width: 345px; display: flex; flex-direction: column; gap: 10px; }
+    #cab-controls { bottom: 16px; right: 16px; width: 365px; display: flex; flex-direction: column; gap: 9px; }
+    #scene-toolbar { top: 16px; right: 16px; display: flex; gap: 8px; }
+
+    h2 { font-size: 12.5px; letter-spacing: 0.6px; color: #9da7b3; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 6px; }
+    .gauge-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .val-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; color: #58a6ff; }
+    .bar-bg { width: 100%; height: 8px; background: #21262d; border-radius: 4px; overflow: hidden; position: relative; }
+    .bar-fill { height: 100%; transition: width 0.08s linear; background: linear-gradient(90deg, #2ea043, #d29922, #f85149); }
+    .water-fill { height: 100%; transition: width 0.08s linear; background: #388bfd; }
+    .mid-mark { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #fff; opacity: 0.85; }
+
+    .ctrl-row { display: grid; grid-template-columns: 116px 1fr 48px; align-items: center; gap: 8px; font-size: 12.5px; }
+    input[type="range"] { width: 100%; accent-color: #d29922; cursor: pointer; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    button, select {
+      background: #21262d; color: #e6edf3; border: 1px solid rgba(255,255,255,0.16);
+      padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; transition: 0.15s;
+    }
+    button:hover, select:hover { background: #30363d; }
+    button.active { background: #b85c00; border-color: #ffa657; color: #fff; }
+    .badge-warn { color: #ff7b72; font-weight: 700; font-size: 12px; min-height: 16px; }
+  </style>
+</head>
+<body>
+  <div id="loading-overlay">
+    <div id="loading-text">正在初始化 MuJoCo WASM 物理内核与 D51 CAD 网格...</div>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <div id="scene-toolbar" class="hud-panel">
+    <select id="select-scene">
+      <option value="d51_full.xml">試運転用コロ (滚轮台悬空)</option>
+      <option value="d51_r2m.xml">R2m 环形弯道 + 8-20B 煤水车</option>
+    </select>
+    <select id="select-cam">
+      <option value="normal">标准金属外观</option>
+      <option value="xray">气缸与蒸汽室半透明透视 (X-Ray)</option>
+    </select>
+    <button id="btn-hot-preset" class="active">3.8kg/cm² 热炉即发</button>
+    <button id="btn-cold-reset">冷炉整备重置</button>
+  </div>
+
+  <div id="top-gauges" class="hud-panel">
+    <h2>Aster D51 Live Steam Telemetry</h2>
+    <div class="gauge-row">
+      <span>ボイラ圧力 (PG-ø20)</span>
+      <span id="txt-pressure" class="val-mono">0.00 / 4.00 kgf/cm²</span>
+    </div>
+    <div class="bar-bg"><div id="bar-pressure" class="bar-fill" style="width: 0%"></div></div>
+
+    <div class="gauge-row">
+      <span>水面計水位 (適正 50%)</span>
+      <span id="txt-water" class="val-mono">50.0 %</span>
+    </div>
+    <div class="bar-bg">
+      <div id="bar-water" class="water-fill" style="width: 50%"></div>
+      <div class="mid-mark" title="適正水位 50%"></div>
+    </div>
+
+    <div class="gauge-row"><span>蒸気室 / 過熱蒸気温度</span><span id="txt-steam" class="val-mono">0.00 kgf | 25°C</span></div>
+    <div class="gauge-row"><span>動輪回転 / 1:32 換算車速</span><span id="txt-speed" class="val-mono">0 RPM | 0.0 km/h</span></div>
+    <div class="gauge-row"><span>燃料アルコール / 炭水車水</span><span id="txt-tanks" class="val-mono">130 ml | 320 ml</span></div>
+    <div class="gauge-row"><span>左右ピストン有効推力</span><span id="txt-forces" class="val-mono">L: 0.0N | R: 0.0N</span></div>
+    <div id="txt-alarm" class="badge-warn"></div>
+  </div>
+
+  <div id="cab-controls" class="hud-panel">
+    <h2>Cab Controls (運転室操作盤)</h2>
+    <div class="ctrl-row">
+      <label>加減弁 (Regulator)</label>
+      <input id="rng-regulator" type="range" min="0" max="1" step="0.02" value="0" />
+      <span id="val-regulator" class="val-mono">0%</span>
+    </div>
+    <div class="ctrl-row">
+      <label>逆転機 (Reverser)</label>
+      <input id="rng-reverser" type="range" min="-1" max="1" step="0.02" value="0.78" />
+      <span id="val-reverser" class="val-mono">+78%</span>
+    </div>
+    <div class="ctrl-row">
+      <label>通風弁 (Blower)</label>
+      <input id="rng-blower" type="range" min="0" max="1" step="0.05" value="0.25" />
+      <span id="val-blower" class="val-mono">25%</span>
+    </div>
+    <div class="ctrl-row">
+      <label>バイパス弁 (給水)</label>
+      <input id="rng-bypass" type="range" min="0" max="1" step="0.05" value="0.40" />
+      <span id="val-bypass" class="val-mono">40%</span>
+    </div>
+    <div class="btn-row">
+      <button id="btn-burner" class="active">バーナー点火</button>
+      <button id="btn-fan">煙突通風機</button>
+      <button id="btn-drain" class="active">ドレン弁 (排液)</button>
+      <button id="btn-handpump">手動給水 (+5回)</button>
+      <button id="btn-warp">15x 沸騰加速</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
