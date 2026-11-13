@@ -1,0 +1,7 @@
+# 原厂说明书 PDF 与提取的图纸截图 (版权资料，不入库)
+data/
+
+logs/
+MUJOCO_LOG.TXT
+__pycache__/
+*.pyc

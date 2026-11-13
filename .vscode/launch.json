@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "1. 提取 PDF 正交图纸与几何 JSON",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/01_extract_pdf_dims.py",
+      "args": ["--pdf", "data/raw_pdfs/d51_illustrations.pdf", "--export-default"],
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "2. 编译 D51 全车闭环 MJCF (滚轮台模式)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/03_generate_mjcf.py",
+      "args": ["--mode", "roller"],
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "3. 启动 MuJoCo 3D 交互查看器",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "mujoco.viewer",
+      "args": ["--mjcf=models/d51_full.xml"],
+      "console": "integratedTerminal"
+    }
+  ]
+}
