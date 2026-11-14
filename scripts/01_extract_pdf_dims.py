@@ -69,7 +69,8 @@ def default_d51_kinematics() -> Dict[str, Any]:
                 "drive_4": 0.2,
             },
             "leading_pivot_r2m_offset": 10.0,     # イラスト 20 (20-6): R2m 与 R3m 支点孔距 10mm
-            "quartering_deg_R_minus_L": -90.0,    # 图 9.5: 右侧曲柄滞后左侧 90° 正交相位
+            "quartering_deg_R_minus_L": -90.0,    # 图 9.5 (JNR D51 右先行): 极角 atan2(z,x) 下 theta_L=0°, theta_R=-90° (绕 +Y 前进正转时右曲柄超前左曲柄 90°)
+            "coupling_knuckle_offset": 8.5,       # イラスト 7 (7-12/7-15): 耦合连杆分节铰接销距第2/3动轮曲柄销偏置 (mm)
         },
         "cylinder_and_rods": {
             "bore": 15.0,                         # PR-15 活塞环锁死内径 15.0mm
@@ -97,9 +98,9 @@ def default_d51_kinematics() -> Dict[str, Any]:
             "union_link_length": 15.0,            # 短连杆 (1-27 リンク) 孔距
             "comb_lever_total_length": 28.0,      # 合併てこ (1-23) 下端孔至最上端阀叉孔总长
             "comb_lever_lap_lead_offset": 3.5,    # 合併てこ最上孔(接阀杆)与次上孔(接心向棒)间距
-            "reverser_shaft_x": 34.0,             # 逆転器アームシャフト (4-12) X 坐标
-            "reverser_shaft_z": 26.5,             # 逆転器アームシャフト (4-12) Z 坐标
-            "reverser_arm_length": 11.0,          # 逆転アーム (2-11/2-18) 摇臂长度
+            "reverser_shaft_x": 25.5,             # 逆転器アームシャフト (4-12) X 坐标 (= 46.5 - 10.0 - 11.0, 严格保证 11.0mm 摇臂水平力臂)
+            "reverser_shaft_z": 26.5,             # 逆転器アームシャフト (4-12) Z 坐标 (= 15.5 + 11.0, 严格匹配 11.0mm 吊杆铅垂孔距)
+            "reverser_arm_length": 11.0,          # 逆転アーム (2-11/2-18) 摇臂孔距
             "lift_link_length": 11.0,             # 吊杆 (2-10 リンク) 孔距
         },
         "boiler_and_aux": {
@@ -357,10 +358,18 @@ def headless_auto_calibrate(exported: Dict[str, Path], spec: Dict[str, Any]) -> 
         valve_xs.append(best_vx)
 
     neutral_lead_travel_mm = max(valve_xs) - min(valve_xs)
+    arm_eff_mm = (vg["trunnion_x"] - vg["radius_rod_back_ext"]) - vg["reverser_shaft_x"]
+    die_full_mm = (arm_eff_mm * math.sin(0.45)) * (vg["radius_rod_length"] / (vg["radius_rod_length"] + vg["radius_rod_back_ext"]))
+    quad_amp_mm = die_full_mm * (vg["return_crank_radius"] / vg["exp_link_tail_radius"])
+    full_gear_stroke_mm = 2.0 * math.hypot(0.5 * neutral_lead_travel_mm, quad_amp_mm)
     report["kinematic_closure_audit"] = {
         "full_360deg_solvable": True,
+        "quartering_convention": "JNR Right-Hand Lead (theta_L=0.0 deg, theta_R=-90.0 deg under +Y forward spin)",
         "neutral_combination_lever_stroke_mm": round(neutral_lead_travel_mm, 3),
         "theoretical_2x_lead_lap_mm": round(2.0 * neutral_lead_travel_mm * 0.5, 3),
+        "reverser_effective_arm_mm": round(arm_eff_mm, 2),
+        "full_gear_die_shift_at_25deg_mm": round(die_full_mm, 3),
+        "full_gear_valve_stroke_mm": round(full_gear_stroke_mm, 3),
     }
     print(
         f"[AUTO-CALIB] 完成无头标定: DPI={px_per_mm:.4f} px/mm | "

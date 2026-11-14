@@ -50,7 +50,11 @@
   },
   "kinematic_closure_audit": {
     "full_360deg_solvable": true,
+    "quartering_convention": "JNR Right-Hand Lead (theta_L=0.0 deg, theta_R=-90.0 deg under +Y forward spin)",
     "neutral_combination_lever_stroke_mm": 2.901,
-    "theoretical_2x_lead_lap_mm": 2.901
+    "theoretical_2x_lead_lap_mm": 2.901,
+    "reverser_effective_arm_mm": 11.0,
+    "full_gear_die_shift_at_25deg_mm": 4.138,
+    "full_gear_valve_stroke_mm": 5.18
   }
 }

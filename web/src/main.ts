@@ -166,12 +166,12 @@ async function main() {
 
     const jRev = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_reverser");
     const actRev = objId(mujoco.mjtObj.mjOBJ_ACTUATOR, "reverser_ctrl");
-    model.jnt_range[2 * jRev] = -1.25;
-    model.jnt_range[2 * jRev + 1] = 1.25;
-    model.actuator_ctrlrange[2 * actRev] = -1.25;
-    model.actuator_ctrlrange[2 * actRev + 1] = 1.25;
-    model.actuator_gainprm[10 * actRev] = 80.0;
-    model.actuator_biasprm[10 * actRev + 1] = -80.0;
+    model.jnt_range[2 * jRev] = -0.48;
+    model.jnt_range[2 * jRev + 1] = 0.48;
+    model.actuator_ctrlrange[2 * actRev] = -0.46;
+    model.actuator_ctrlrange[2 * actRev + 1] = 0.46;
+    model.actuator_gainprm[10 * actRev] = 60.0;
+    model.actuator_biasprm[10 * actRev + 1] = -60.0;
 
     const jPL = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_piston_L");
     const jPR = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_piston_R");
@@ -230,9 +230,9 @@ async function main() {
       stroke: model.jnt_range[2 * jPL + 1] - model.jnt_range[2 * jPL] - 0.004,
       qValveCenterL: 0.5 * (vMaxL + vMinL),
       qValveCenterR: 0.5 * (vMaxR + vMinR),
-      steamLap: 0.45 * leadAmp,
+      steamLap: 0.78 * leadAmp,
       exhaustLap: 0.02 * leadAmp,
-      portWidth: 0.85 * leadAmp,
+      portWidth: 0.95 * leadAmp,
     };
 
     data = new mujoco.MjData(model);
@@ -288,9 +288,21 @@ async function main() {
           }
         }
 
-        if (meshKey.includes("rod") || meshKey.includes("link") || meshKey.includes("reverser")) {
+        if (
+          meshKey.includes("rod") ||
+          meshKey.includes("link") ||
+          meshKey.includes("reverser") ||
+          meshKey.includes("return_crank") ||
+          meshKey.includes("lever")
+        ) {
           mat = matSteel;
-        } else if (meshKey.includes("valve") || meshKey.includes("piston") || meshKey.includes("die") || meshKey.includes("driving_axlebox")) {
+        } else if (
+          meshKey.includes("valve") ||
+          meshKey.includes("piston") ||
+          meshKey.includes("die") ||
+          meshKey.includes("driving_axlebox") ||
+          meshKey.includes("axle_pump")
+        ) {
           mat = matBrass;
         } else if (meshKey.includes("cylinder_block")) {
           mat = matIron.clone();
@@ -460,7 +472,7 @@ async function main() {
       );
       data.ctrl[idxMap.actFL] = out.forceL;
       data.ctrl[idxMap.actFR] = out.forceR;
-      data.ctrl[idxMap.actRev] = ctrl.reverser * 1.25;
+      data.ctrl[idxMap.actRev] = ctrl.reverser * 0.45;
       data.qfrc_applied[idxMap.qvelValL] = out.valveFrictionL;
       data.qfrc_applied[idxMap.qvelValR] = out.valveFrictionR;
       data.qfrc_applied[idxMap.qvelPump] = out.forcePump;

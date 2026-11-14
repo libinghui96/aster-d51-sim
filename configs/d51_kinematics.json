@@ -25,7 +25,8 @@
       "drive_4": 0.2
     },
     "leading_pivot_r2m_offset": 10.0,
-    "quartering_deg_R_minus_L": -90.0
+    "quartering_deg_R_minus_L": -90.0,
+    "coupling_knuckle_offset": 8.5
   },
   "cylinder_and_rods": {
     "bore": 15.0,
@@ -53,7 +54,7 @@
     "union_link_length": 15.0,
     "comb_lever_total_length": 28.0,
     "comb_lever_lap_lead_offset": 3.5,
-    "reverser_shaft_x": 34.0,
+    "reverser_shaft_x": 25.5,
     "reverser_shaft_z": 26.5,
     "reverser_arm_length": 11.0,
     "lift_link_length": 11.0

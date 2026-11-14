@@ -47,15 +47,15 @@ KEY_8 = ord("8")    # 一键切换至 3.8 kgf/cm² 热炉待发状态
 def calibrate_model_and_valves(model: mujoco.MjModel) -> CylinderCalibration:
     """
     对标说明书第 9 节「弁調整」:
-    1. 放宽逆转器横轴转动行程，使月牙滑块达到约 72% 满档进气截止比；
+    1. 采用 4-12 逆转横轴真实 11.0mm 摇臂与 ±0.46 rad (±26.4°) 行程，达到约 74% 满档进气截止比；
     2. 在独立 MjData 副本上以中立位 N 空转车轮 1.5 圈，精确测定左右滑阀气口对称中心与外余面。
     """
     j_rev = model.joint("j_reverser").id
     act_rev = model.actuator("reverser_ctrl").id
-    model.jnt_range[j_rev] = [-1.25, 1.25]
-    model.actuator_ctrlrange[act_rev] = [-1.25, 1.25]
-    model.actuator_gainprm[act_rev, 0] = 80.0
-    model.actuator_biasprm[act_rev, 1] = -80.0
+    model.jnt_range[j_rev] = [-0.48, 0.48]
+    model.actuator_ctrlrange[act_rev] = [-0.46, 0.46]
+    model.actuator_gainprm[act_rev, 0] = 60.0
+    model.actuator_biasprm[act_rev, 1] = -60.0
 
     # 铸铁轮箍 + 試運転用コロ滚子等效惯量; 按 iquat 找到轴线 (世界 Y) 对应的主轴分量
     for idx in range(1, 5):
@@ -108,9 +108,9 @@ def calibrate_model_and_valves(model: mujoco.MjModel) -> CylinderCalibration:
         stroke=stroke,
         q_valve_center_L=center_L,
         q_valve_center_R=center_R,
-        steam_lap=0.45 * lead_amp,  # 实测 0.25~0.65 中仅 0.45 在 ±65%/±95% 档均不卡死点
+        steam_lap=0.78 * lead_amp,  # 恢复真实 11.0mm 逆转摇臂后，外余面 0.78*lead_amp (~1.17mm) 兼顾中立锁死截汽与 1.0kgf 冷态顺畅起动
         exhaust_lap=0.02 * lead_amp,
-        port_width=0.85 * lead_amp,
+        port_width=0.95 * lead_amp,
     )
 
 
@@ -240,7 +240,7 @@ class CoSimRunner:
 
         self.data.ctrl[self.act_fL] = F_L
         self.data.ctrl[self.act_fR] = F_R
-        self.data.ctrl[self.act_rev] = self.ctrl.reverser * 1.25
+        self.data.ctrl[self.act_rev] = self.ctrl.reverser * 0.45
 
         # 施加平面滑阀背压摩擦反力 (O3-2)、给水泵液压负载与列车运行阻力
         self.data.qfrc_applied[self.qvel_valL] = tel.valve_friction_L

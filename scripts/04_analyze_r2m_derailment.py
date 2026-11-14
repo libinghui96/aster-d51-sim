@@ -59,13 +59,22 @@ def build_pivot_variant_xml(base_xml_path: Path, pivot_mode: str, tmp_dir: Path)
     else:
         arm_len, yaw_lim, yaw_stiff = 0.062, 0.090, 0.65
 
+    old_arm_len = float(lead_ws.attrib["pos"].split()[0])
     arm_pos[0] = lead_axle_x - arm_len
     lead_arm.set("pos", f"{arm_pos[0]:.6f} {arm_pos[1]:.6f} {arm_pos[2]:.6f}")
     lead_ws.set("pos", f"{arm_len:.6f} 0 0")
     j_yaw.set("range", f"{-yaw_lim:.6f} {yaw_lim:.6f}")
     j_yaw.set("stiffness", f"{yaw_stiff:.4f}")
 
-    # 同步调整摆臂可视化几何长度 (若存在)
+    # 同步调整 19-2 先导台车架可视化网格与质心偏移 (切换 20-6 双孔定位槽至 R2m/R3m 孔位)
+    frame_vis = lead_arm.find("geom[@name='lead_frame_vis']")
+    if frame_vis is not None:
+        frame_vis.set("pos", f"{arm_len:.6f} 0 0")
+    inert = lead_arm.find("inertial")
+    if inert is not None:
+        ip = [float(v) for v in inert.attrib["pos"].split()]
+        ip[0] += arm_len - old_arm_len
+        inert.set("pos", f"{ip[0]:.6f} {ip[1]:.6f} {ip[2]:.6f}")
     arm_bar = lead_arm.find("geom[@name='lead_arm_bar']")
     if arm_bar is not None:
         arm_bar.set("pos", f"{0.5 * arm_len:.6f} 0 0")
