@@ -17,16 +17,19 @@ pip install -r requirements.txt
 python scripts/02_build_cad_meshes.py                           # 构建 54 件全水密 CAD STL 网格与材料惯量库
 python scripts/03_generate_mjcf.py --mode roller                # 编译滚轮台模型 -> models/d51_full.xml
 python scripts/03_generate_mjcf.py --mode curve_r2m --out models/d51_r2m.xml
-python scripts/09_verify_cad_and_clearance.py                   # 运行 CAD 拓扑/BOM 真值/360° 净空与闭环门禁
-python -m sim.run_cosim --headless-demo                         # 试运转全流程 -> logs/d51_telemetry.png
+python scripts/09_verify_cad_and_clearance.py                   # 运行 CAD 拓扑/BOM 真值/360° 净空与 Gate 9 闭环门禁
+python -m sim.run_cosim --headless-demo                         # 试运转全流程 (1D + CFD LUT) -> logs/d51_telemetry.png
+python -m sim.run_cosim --headless-demo --gpu-3d                # 启用本地 CUDA 571万体素 3D 空间热流扩展试运转
 python scripts/04_analyze_r2m_derailment.py                     # R2m vs R3m 先导支点过弯 Nadal 脱线分析
 MUJOCO_GL=egl python scripts/04_render_animation.py             # 离屏渲染 -> logs/d51_running.gif
 ```
 
-### 2. Web 3D 实时交互前端
+### 2. Web 3D 实时交互前端（支持纯浏览器 WASM 或直连本地 GPU 3D 推流桥）
 ```bash
-python scripts/05_sync_web_assets.py                            # 同步 XML 与 STL 至 web/public/models/
-cd web && npm install && npm run dev                            # 启动浏览器交互端 (http://localhost:5173)
+python scripts/05_sync_web_assets.py                            # 同步 XML 与 54 件 STL 至 web/public/models/
+cd web && npm install && npm run dev                            # 纯前端 WASM + GLSL 着色器交互端 (http://localhost:5173)
+# 或在构建前端后启动本地 GPU 3D 实时 WebSocket 推流桥 (http://127.0.0.1:8765):
+npm --prefix web run build && python -m sim.gpu_3d_server --scene roller --preset hot
 ```
 
 `data/` 下的原厂说明书 PDF 不随仓库分发；`scripts/01_extract_pdf_dims.py` 需要自行放入 `data/raw_pdfs/`。

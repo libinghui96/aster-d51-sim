@@ -25,6 +25,7 @@
 
     h2 { font-size: 12px; letter-spacing: 0.6px; color: #9da7b3; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
     .lut-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: rgba(46, 160, 67, 0.22); color: #56d364; border: 1px solid rgba(86, 211, 100, 0.35); }
+    .lut-badge.live-3d { background: rgba(31, 182, 255, 0.22); color: #58e6ff; border-color: rgba(88, 230, 255, 0.55); box-shadow: 0 0 10px rgba(56, 200, 255, 0.35); }
     .gauge-row { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; }
     .val-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; color: #58a6ff; }
     .val-hot { color: #ff6b61 !important; text-shadow: 0 0 8px rgba(255, 80, 60, 0.55); }
@@ -93,6 +94,7 @@
     <div class="gauge-row"><span>動輪回転 / 1:32 換算車速</span><span id="txt-speed" class="val-mono">0 RPM | 0.0 km/h</span></div>
     <div class="gauge-row"><span>燃料アルコール / 炭水車水</span><span id="txt-tanks" class="val-mono">130 ml | 320 ml</span></div>
     <div class="gauge-row"><span>左右ピストン有効推力</span><span id="txt-forces" class="val-mono">L: 0.0N | R: 0.0N</span></div>
+    <div class="gauge-row"><span>乾き度 x / 当量比 φ / 油膜</span><span id="txt-fluid3d" class="val-mono">x=0.95 | φ=1.00 | 3.8μm</span></div>
     <div id="txt-alarm" class="badge-warn"></div>
   </div>
 

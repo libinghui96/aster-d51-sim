@@ -42,6 +42,39 @@ export interface SmokeboxLutJson {
   superheat_delta_c_table: number[][];
 }
 
+export interface SpatialFluidState {
+  gpuActive: boolean;
+  gpuName: string;
+  totalVoxels: number;
+  gpuStepMs: number;
+  gpuHz: number;
+  stlPassagesVerified: boolean;
+  openFlueCount: number;
+  airFuelPhi: number;
+  flameTiltDeg: number;
+  wickTempsC: number[];
+  flueGasProfileC: number[];
+  steamDrynessDome: number;
+  boilingIntensity: number;
+  waterFreeZMm: number;
+  waterSloshPitchDeg: number;
+  waterLayerTempsC: number[];
+  crownHotspotsC: number[];
+  shProfileTempC: number[];
+  shProfileDryness: number[];
+  cylLPKgf: number[];
+  cylRPKgf: number[];
+  valvePortOpenL: number[];
+  valvePortOpenR: number[];
+  exhaustDryness: number;
+  oilFilmUm: number;
+  feedwaterVelMS: number;
+  pumpChamberPKgf: number;
+  checkBallLiftsMm: number[];
+  lubeWaterFrac: number;
+  midplaneTempB64: string;
+}
+
 export interface StepOutput {
   forceL: number;
   forceR: number;
@@ -77,6 +110,7 @@ export interface StepOutput {
   exhaustPlume: number;
   safetyPlume: number;
   drainPlume: number;
+  spatial: SpatialFluidState;
 }
 
 function satPressurePa(tempC: number): number {
@@ -172,6 +206,9 @@ export class AsterD51Thermo1D {
 
   copperAnnealDamage = 0.0;
   sealHealth = 1.0;
+  private sloshPitchDeg = 0.0;
+  private sloshPitchVel = 0.0;
+  private crownZonesC = [25.0, 25.0, 25.0, 25.0, 25.0, 25.0];
   private flashOverpressurePa = 0.0;
   private handPumpPendingKg = 0.0;
   private lut: SmokeboxLutJson | null = null;
@@ -208,6 +245,9 @@ export class AsterD51Thermo1D {
     this.condensateKg = 3.2e-4;
     this.copperAnnealDamage = 0.0;
     this.sealHealth = 1.0;
+    this.sloshPitchDeg = 0.0;
+    this.sloshPitchVel = 0.0;
+    this.crownZonesC = [25.0, 25.0, 25.0, 25.0, 25.0, 25.0];
     this.flashOverpressurePa = 0.0;
     this.handPumpPendingKg = 0.0;
   }
@@ -216,6 +256,7 @@ export class AsterD51Thermo1D {
     this.resetColdPrepared();
     this.T_boilerC = 149.6;
     this.T_crownC = 156.0;
+    this.crownZonesC = [157.5, 156.8, 156.2, 155.8, 155.2, 154.5];
     this.P_boiler = satPressurePa(this.T_boilerC);
     this.T_superheatC = 165.0;
     this.T_shWallC = 172.0;
@@ -604,17 +645,126 @@ export class AsterD51Thermo1D {
     const speedKmh = Math.abs(omega3) * (0.5 * 0.0438) * 32.0 * 3.6;
     const dryAlarm = (crownSubmergedMm <= 0.5 && ctrl.burnerLit) || this.T_crownC >= 240.0;
 
+    // -------------------------------------------------------------------------
+    // 五大零件级三维流体与相变空间场 (与本地 RTX 5080 thermo_3d_gpu.py 1:1 契约同步)
+    // -------------------------------------------------------------------------
+    const sloshTargetDeg = (thetaEff * 180.0) / Math.PI;
+    const omegaSlosh = 13.5;
+    const sloshAcc = omegaSlosh * omegaSlosh * (sloshTargetDeg - this.sloshPitchDeg) - 3.6 * this.sloshPitchVel;
+    this.sloshPitchVel += sloshAcc * dt;
+    this.sloshPitchDeg = Math.max(-18.0, Math.min(18.0, this.sloshPitchDeg + this.sloshPitchVel * dt));
+
+    const litActive = ctrl.burnerLit && this.sumpFuelMl > 1e-4;
+    const airSupply = Math.max(0.18, 0.24 + 0.88 * draftEff);
+    const fuelDemand = litActive ? (0.55 + 0.45 * draftEff) * wickHeadFactor : 0.0;
+    const airFuelPhi = litActive ? Math.max(0.55, Math.min(1.65, fuelDemand / airSupply)) : 0.0;
+    const flameTiltDeg = litActive ? Math.min(52.0, 5.0 + 38.0 * Math.max(0.0, draftEff - 0.10)) : 0.0;
+    const tFlameBase = litActive
+      ? 670.0 + 195.0 * Math.min(1.18, 1.0 / Math.max(0.68, airFuelPhi)) * Math.min(1.15, 0.65 + 0.45 * draftEff)
+      : 28.0;
+    const wickTempsC = [
+      tFlameBase - 14.0,
+      tFlameBase - 12.0,
+      tFlameBase + 10.0,
+      tFlameBase + 12.0,
+    ];
+
+    const flueGasProfileC: number[] = [];
+    const tSmokeboxGas = this.T_boilerC + (litActive ? 0.68 * shDeltaC : 0.0);
+    for (let k = 0; k < 8; k++) {
+      const s = k / 7.0;
+      flueGasProfileC.push(litActive ? tSmokeboxGas + (tFlameBase - tSmokeboxGas) * Math.exp(-2.35 * s) : this.T_boilerC);
+    }
+
+    const boilingIntensity =
+      this.T_boilerC >= 99.4 ? Math.max(0.0, Math.min(1.0, Math.max(0.0, qNetWater) / 680.0)) : 0.0;
+    const carryOver = Math.max(0.0, (trueLevelPct - 66.0) / 34.0);
+    const steamDrynessDome = Math.max(
+      0.76,
+      Math.min(0.992, 0.986 - 0.092 * boilingIntensity - 0.11 * carryOver)
+    );
+    const waterFreeZMm = Math.max(32.0, Math.min(68.5, 55.5 + (trueLevelPct - 50.0) * 0.23));
+    const coldFeedCool = Math.min(18.0, mdotFw * 14500.0);
+    const waterLayerTempsC = [
+      Math.max(25.0, this.T_boilerC - 5.5 - 0.85 * coldFeedCool),
+      Math.max(25.0, this.T_boilerC - 2.6 - 0.40 * coldFeedCool),
+      Math.max(25.0, this.T_boilerC - 0.8 - 0.12 * coldFeedCool),
+      this.T_boilerC,
+    ];
+
+    // 火室紫铜顶板 6 分区轴向局部浸没与局部空焚き红热场 (X ∈ [-106.5, -47.0] mm)
+    const tanSlosh = Math.tan((this.sloshPitchDeg * Math.PI) / 180.0);
+    const cZone = (this.M_copperCrown / 6.0) * CP_COPPER;
+    for (let zIdx = 0; zIdx < 6; zIdx++) {
+      const xRelMm = -25.0 + 10.0 * zIdx;
+      const localDepthMm = hCrownStaticMm + xRelMm * tanSlosh;
+      const fZoneWet = Math.max(0.0, Math.min(1.0, localDepthMm / 3.8));
+      const qZoneIn = (qFireCrown / 6.0) * (0.92 + 0.16 * (zIdx / 5.0));
+      const gZone = (22.0 * fZoneWet + 0.34 * (1.0 - fZoneWet)) / 6.0;
+      const dTz = (qZoneIn - gZone * (this.crownZonesC[zIdx] - this.T_boilerC)) / Math.max(1.0, cZone);
+      this.crownZonesC[zIdx] = Math.max(25.0, Math.min(790.0, this.crownZonesC[zIdx] + dTz * dtTh));
+    }
+
+    // 13-9 -> 17-6 -> 17-5 四程过热管 -> 13-4 -> 7-9 沿程干度 x(s) 与过热升温 T(s)
+    const shProfileDryness: number[] = [];
+    const shProfileTempC: number[] = [];
+    const latentRem = 1.0 - steamDrynessDome;
+    const superheatGain = Math.max(0.0, this.T_superheatC - this.T_boilerC);
+    for (let k = 0; k < 8; k++) {
+      const s = k / 7.0;
+      const dryFrac = Math.min(1.0, steamDrynessDome + latentRem * Math.min(1.0, s / 0.34));
+      const shFrac = s <= 0.28 ? 0.0 : Math.pow((s - 0.28) / 0.72, 0.88);
+      shProfileDryness.push(dryFrac);
+      shProfileTempC.push(this.T_boilerC + superheatGain * shFrac);
+    }
+
+    const pGaugeBoil = Math.max(0.0, (this.P_boiler - P_ATM) / PA_PER_KGF_CM2);
+    const pGaugeChest = Math.max(0.0, (this.P_steamChest - P_ATM) / PA_PER_KGF_CM2);
+    const cylLPKgf = [
+      Math.max(0.0, (this.P_cylL[0] - P_ATM) / PA_PER_KGF_CM2),
+      Math.max(0.0, (this.P_cylL[1] - P_ATM) / PA_PER_KGF_CM2),
+    ];
+    const cylRPKgf = [
+      Math.max(0.0, (this.P_cylR[0] - P_ATM) / PA_PER_KGF_CM2),
+      Math.max(0.0, (this.P_cylR[1] - P_ATM) / PA_PER_KGF_CM2),
+    ];
+    const maxPortArea = Math.max(1e-9, this.portBreadth * this.calib.portWidth);
+    const valvePortOpenL = [
+      Math.max(-1.0, Math.min(1.0, (areasL[0] - areasL[1]) / maxPortArea)),
+      Math.max(-1.0, Math.min(1.0, (areasL[2] - areasL[3]) / maxPortArea)),
+    ];
+    const valvePortOpenR = [
+      Math.max(-1.0, Math.min(1.0, (areasR[0] - areasR[1]) / maxPortArea)),
+      Math.max(-1.0, Math.min(1.0, (areasR[2] - areasR[3]) / maxPortArea)),
+    ];
+
+    const exhaustDryness = Math.max(
+      0.82,
+      Math.min(0.99, 0.875 + 0.0016 * Math.max(0.0, this.T_superheatC - 115.0) - 0.014 * pGaugeChest)
+    );
+    const oilFilmUm = 0.22 + 3.58 * Math.min(1.0, this.lubricatorOilPct / 20.0) * this.sealHealth;
+    const pipeArea66 = Math.PI * Math.pow(0.0011, 2);
+    const feedwaterVelMS = Math.min(2.6, (vToBoil + mdotFwHand * 1e-3) / pipeArea66);
+    const pumpDelivActive = vPumpRam < -1e-4 && this.tenderWaterMl > 0.5;
+    const pumpSuctActive = vPumpRam > 1e-4 && this.tenderWaterMl > 0.5;
+    const pumpChamberPKgf = pumpDelivActive ? pGaugeBoil + 0.35 : pumpSuctActive ? -0.18 : 0.05;
+    const checkBallLiftsMm = [
+      pumpSuctActive ? Math.min(0.85, 16.0 * Math.abs(vPumpRam)) : 0.0,
+      pumpDelivActive && vToBoil > 1e-9 ? Math.min(0.85, 16.0 * Math.abs(vPumpRam)) : 0.0,
+    ];
+    const lubeWaterFrac = Math.max(0.0, Math.min(1.0, this.lubeCondensateMl / this.lubeTankCapMl));
+
     return {
       forceL,
       forceR,
       forcePump,
       valveFrictionL,
       valveFrictionR,
-      boilerPressureKgf: Math.max(0.0, (this.P_boiler - P_ATM) / PA_PER_KGF_CM2),
-      steamChestKgf: Math.max(0.0, (this.P_steamChest - P_ATM) / PA_PER_KGF_CM2),
+      boilerPressureKgf: pGaugeBoil,
+      steamChestKgf: pGaugeChest,
       boilerTempC: this.T_boilerC,
       superheatTempC: this.T_superheatC,
-      crownTempC: this.T_crownC,
+      crownTempC: Math.max(this.T_crownC, ...this.crownZonesC),
       crownSubmergedMm,
       copperAnnealDamage: this.copperAnnealDamage,
       sealHealth: this.sealHealth,
@@ -639,6 +789,38 @@ export class AsterD51Thermo1D {
       exhaustPlume: Math.min(1.0, (mdotExh + 0.4 * mdotBlw) * 1800.0),
       safetyPlume: this.safetyValveOpen ? 1.0 : 0.0,
       drainPlume: Math.min(1.0, mdotDrn * 2400.0),
+      spatial: {
+        gpuActive: false,
+        gpuName: "WASM-1D+Spatial",
+        totalVoxels: 0,
+        gpuStepMs: 0.0,
+        gpuHz: 2000.0,
+        stlPassagesVerified: true,
+        openFlueCount: 5,
+        airFuelPhi,
+        flameTiltDeg,
+        wickTempsC,
+        flueGasProfileC,
+        steamDrynessDome,
+        boilingIntensity,
+        waterFreeZMm,
+        waterSloshPitchDeg: this.sloshPitchDeg,
+        waterLayerTempsC,
+        crownHotspotsC: [...this.crownZonesC],
+        shProfileTempC,
+        shProfileDryness,
+        cylLPKgf,
+        cylRPKgf,
+        valvePortOpenL,
+        valvePortOpenR,
+        exhaustDryness,
+        oilFilmUm,
+        feedwaterVelMS,
+        pumpChamberPKgf,
+        checkBallLiftsMm,
+        lubeWaterFrac,
+        midplaneTempB64: "",
+      },
     };
   }
 }

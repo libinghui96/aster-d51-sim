@@ -16,7 +16,7 @@ import math
 from pathlib import Path
 import sys
 import time
-from typing import List
+from typing import Any, List, Optional
 
 import mujoco
 import numpy as np
@@ -120,7 +120,12 @@ def bar_gauge(val: float, vmin: float, vmax: float, width: int = 20) -> str:
     return "[" + "#" * filled + "-" * (width - filled) + "]"
 
 
-def render_dashboard(tel: ThermoTelemetry, ctrl: CabControls, auto_fireman_on: bool = False) -> str:
+def render_dashboard(
+    tel: ThermoTelemetry,
+    ctrl: CabControls,
+    auto_fireman_on: bool = False,
+    spatial_3d: Optional[Any] = None,
+) -> str:
     """生成 ANSI 终端实时驾驶台仪表盘"""
     sv_tag = "!! POPPING !!" if tel.safety_valve_open else "CLOSED       "
     burner_tag = "LIT (燃焼中)" if ctrl.burner_lit else "OFF (消火)  "
@@ -130,23 +135,38 @@ def render_dashboard(tel: ThermoTelemetry, ctrl: CabControls, auto_fireman_on: b
     rev_mode = "NEUTRAL (N)" if abs(ctrl.reverser) < 0.05 else (
         f"FWD +{ctrl.reverser*100:3.0f}%" if ctrl.reverser > 0 else f"REV {ctrl.reverser*100:4.0f}%"
     )
+    eng_tag = (
+        f"RTX 5080 3D ({spatial_3d.total_voxels/1e6:.2f}M vox @ {spatial_3d.gpu_step_ms:.1f}ms)"
+        if spatial_3d is not None
+        else "1D Lumped + CFD LUT"
+    )
 
     lines = [
-        "\033[H\033[J" + "=" * 76,
-        f"  ASTER HOBBY JNR D51 LIVE STEAM COSIMULATOR  |  Sim Time: {tel.sim_time:6.1f} s  (Warp: {ctrl.thermal_warp:.0f}x)",
-        "=" * 76,
+        "\033[H\033[J" + "=" * 78,
+        f"  ASTER D51 LIVE STEAM COSIM [{eng_tag}] | t={tel.sim_time:6.1f}s ({ctrl.thermal_warp:.0f}x)",
+        "=" * 78,
         f"  圧力計 (PG-ø20) : {bar_gauge(tel.boiler_pressure_kgf, 0, 5.0)} {tel.boiler_pressure_kgf:4.2f} / 5.00 kgf/cm² [SV: {sv_tag}]",
         f"  水面計 (11-7)   : {bar_gauge(tel.water_level_pct, 0, 100)} {tel.water_level_pct:4.1f} %  (実水位:{tel.true_water_level_pct:4.1f}% | 頂板水深:{tel.crown_submerged_mm:+5.1f}mm)",
         f"  蒸気室 / 銅火室 : {tel.steam_chest_kgf:4.2f} kgf/cm²  |  T_boil: {tel.boiler_temp_c:5.1f}°C  |  T_crown: {tel.crown_temp_c:5.1f}°C  |  T_sh: {tel.superheat_temp_c:5.1f}°C",
         f"  燃料アルコール  : {tel.alcohol_ml:5.1f} / 130 ml |  炭水車水槽: {tel.tender_water_ml:5.1f} ml | 油:{tel.lubricator_oil_pct:4.1f}% | シール:{tel.seal_health*100:3.0f}%",
         f"  シリンダ・煙室  : 壁温 {tel.cyl_wall_temp_c:5.1f}°C | 凝結水 {tel.condensate_g:4.2f}g | 煙室負圧 {tel.smokebox_vacuum_pa:4.0f}Pa | F_L={tel.force_L:+5.1f}N F_R={tel.force_R:+5.1f}N",
         f"  走行・給水収支  : 動輪 {tel.wheel_rpm:+6.1f} RPM ({tel.scale_speed_kmh:5.1f} km/h) | 蒸発 {tel.steam_gen_g_s:4.2f} g/s | 給水 {tel.feedwater_g_s:4.2f} g/s",
-        "-" * 76,
-        f"  [I]着火:{burner_tag}  [O]燃料弁:{ctrl.fuel_valve*100:3.0f}%   [B]通風機:{fan_tag}    [K/L]通風弁:{ctrl.blower_valve*100:3.0f}%",
-        f"  [↑/↓]加減弁:{ctrl.regulator*100:3.0f}%    [←/→]逆転機:{rev_mode}  [X]ドレン:{drain_tag} [,/ .]バイパス:{ctrl.bypass_valve*100:3.0f}%",
-        f"  [A]AI司炉:{af_tag} [Y]手動ポンプ(+5) [9]15x加速 [7]冷機リセット [8]3.8kg即発車",
-        "=" * 76,
     ]
+    if spatial_3d is not None:
+        lines.append(
+            f"  3D 流体場プローブ: 空燃比 φ={spatial_3d.air_fuel_phi:4.2f} (火炎傾角 {spatial_3d.flame_tilt_deg:4.1f}°) | "
+            f"過熱乾き度 x={spatial_3d.sh_profile_dryness[0]:.2f}->{spatial_3d.sh_profile_dryness[-1]:.2f} | "
+            f"煙管貫通 {spatial_3d.open_flue_count}/5"
+        )
+    lines.extend(
+        [
+            "-" * 78,
+            f"  [I]着火:{burner_tag}  [O]燃料弁:{ctrl.fuel_valve*100:3.0f}%   [B]通風機:{fan_tag}    [K/L]通風弁:{ctrl.blower_valve*100:3.0f}%",
+            f"  [↑/↓]加減弁:{ctrl.regulator*100:3.0f}%    [←/→]逆転機:{rev_mode}  [X]ドレン:{drain_tag} [,/ .]バイパス:{ctrl.bypass_valve*100:3.0f}%",
+            f"  [A]AI司炉:{af_tag} [Y]手動ポンプ(+5) [9]15x加速 [7]冷機リセット [8]3.8kg即発車",
+            "=" * 78,
+        ]
+    )
     if tel.hydrolock_L or tel.hydrolock_R:
         lines.append("  [HYDROLOCK!] 冷気筒ウォーターハンマー発生! 直ちに [X] ドレン弁を開いて排水して下さい!")
     if tel.flash_steam_spike:
@@ -159,13 +179,24 @@ def render_dashboard(tel: ThermoTelemetry, ctrl: CabControls, auto_fireman_on: b
 
 
 class CoSimRunner:
-    """封装 MuJoCo 与 1D 热力学步进器"""
+    """封装 MuJoCo 与 1D / RTX 5080 3D 热流体耦合步进器"""
 
-    def __init__(self, xml_path: Path, preset: str = "cold"):
+    def __init__(self, xml_path: Path, preset: str = "cold", use_gpu_3d: bool = False):
         self.model = mujoco.MjModel.from_xml_path(str(xml_path))
         self.calib = calibrate_model_and_valves(self.model)
         self.data = mujoco.MjData(self.model)
-        self.thermo = AsterD51Thermo1D(self.calib)
+        self.use_gpu_3d = bool(use_gpu_3d)
+        if self.use_gpu_3d:
+            from sim.thermo_3d_gpu import AsterD51Thermo3DGPU
+
+            self.thermo: Any = AsterD51Thermo3DGPU(self.calib)
+            print(
+                f"[RTX 5080 3D] 已加载 {self.thermo.total_voxels:,} 体素五大零件域求解器 "
+                f"(STL 体素化耗时 {self.thermo.voxelize_init_ms:.1f} ms, "
+                f"5烟管贯通={self.thermo.open_flue_count}/5, 烟室气密={self.thermo.smokebox_airtight})"
+            )
+        else:
+            self.thermo = AsterD51Thermo1D(self.calib)
         self.ctrl = CabControls()
 
         # 缓存传感器、执行器与关节地址
@@ -183,6 +214,7 @@ class CoSimRunner:
         self.act_rev = self.model.actuator("reverser_ctrl").id
 
         self.qvel_w3 = self.model.joint("j_wheel_3").dofadr[0]
+        self.qpos_pump = self.model.joint("j_pump_ram").qposadr[0]
         self.qvel_pump = self.model.joint("j_pump_ram").dofadr[0]
         self.qvel_valL = self.model.joint("j_valve_L").dofadr[0]
         self.qvel_valR = self.model.joint("j_valve_R").dofadr[0]
@@ -222,7 +254,7 @@ class CoSimRunner:
             accel_x = (fwd_vel - self._prev_fwd_vel) / max(1e-6, dt)
             self._prev_fwd_vel = fwd_vel
 
-        F_L, F_R, F_pump, tel = self.thermo.step(
+        step_kwargs = dict(
             dt=dt,
             q_pL=float(sd[self.s_pL]),
             v_pL=float(sd[self.s_vL]),
@@ -239,6 +271,9 @@ class CoSimRunner:
             pitch_rad=pitch_rad,
             accel_x=accel_x,
         )
+        if self.use_gpu_3d:
+            step_kwargs["q_ram"] = float(self.data.qpos[self.qpos_pump])
+        F_L, F_R, F_pump, tel = self.thermo.step(**step_kwargs)
 
         self.data.ctrl[self.act_fL] = F_L
         self.data.ctrl[self.act_fR] = F_R
@@ -259,10 +294,12 @@ class CoSimRunner:
         return tel
 
 
-def run_interactive(xml_path: Path, preset: str, auto_fireman: bool = False) -> None:
+def run_interactive(
+    xml_path: Path, preset: str, auto_fireman: bool = False, use_gpu_3d: bool = False
+) -> None:
     import mujoco.viewer
 
-    runner = CoSimRunner(xml_path, preset=preset)
+    runner = CoSimRunner(xml_path, preset=preset, use_gpu_3d=use_gpu_3d)
     af_agent = AutoFiremanAgent()
     af_enabled = auto_fireman
 
@@ -334,7 +371,10 @@ def run_interactive(xml_path: Path, preset: str, auto_fireman: bool = False) -> 
 
             now = time.perf_counter()
             if tel is not None and (now - last_print) >= 0.10:
-                sys.stdout.write(render_dashboard(tel, runner.ctrl, auto_fireman_on=af_enabled) + "\n")
+                sp = getattr(runner.thermo, "spatial", None)
+                sys.stdout.write(
+                    render_dashboard(tel, runner.ctrl, auto_fireman_on=af_enabled, spatial_3d=sp) + "\n"
+                )
                 sys.stdout.flush()
                 last_print = now
 
@@ -344,7 +384,7 @@ def run_interactive(xml_path: Path, preset: str, auto_fireman: bool = False) -> 
                 time.sleep(sleep_s)
 
 
-def run_headless_demo(xml_path: Path, out_png: Path) -> None:
+def run_headless_demo(xml_path: Path, out_png: Path, use_gpu_3d: bool = False) -> None:
     """
     自动执行说明书試運転 ①~⑫ 标准流程并绘制遥测曲线:
     阶段 A: 开燃料阀 + 外置抽风机点火升压 (15x 热加速验证沸腾曲线)
@@ -354,7 +394,7 @@ def run_headless_demo(xml_path: Path, out_png: Path) -> None:
     """
     import matplotlib.pyplot as plt
 
-    runner = CoSimRunner(xml_path, preset="cold")
+    runner = CoSimRunner(xml_path, preset="cold", use_gpu_3d=use_gpu_3d)
     c = runner.ctrl
     c.fuel_valve = 1.0
     c.burner_lit = True
@@ -443,6 +483,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Aster D51 1D-3D 实时热机联合仿真器")
     parser.add_argument("--xml", type=Path, default=Path("models/d51_full.xml"))
     parser.add_argument("--preset", choices=["cold", "hot"], default="cold")
+    parser.add_argument("--gpu-3d", action="store_true", help="启用本地 RTX 5080 571万体素五大零件域真 3D 多相热流求解器")
     parser.add_argument("--auto-fireman", action="store_true", help="启动时默认开启 RTX 5080 标定 AI 自动司炉巡航")
     parser.add_argument("--headless-demo", action="store_true", help="无 GUI 自动运行标准试车流程并输出曲线图")
     parser.add_argument("--out-plot", type=Path, default=Path("logs/d51_telemetry.png"))
@@ -452,9 +493,9 @@ def main() -> None:
         raise FileNotFoundError(f"未找到模型 {args.xml}，请先运行 python scripts/03_generate_mjcf.py")
 
     if args.headless_demo:
-        run_headless_demo(args.xml, args.out_plot)
+        run_headless_demo(args.xml, args.out_plot, use_gpu_3d=args.gpu_3d)
     else:
-        run_interactive(args.xml, args.preset, auto_fireman=args.auto_fireman)
+        run_interactive(args.xml, args.preset, auto_fireman=args.auto_fireman, use_gpu_3d=args.gpu_3d)
 
 
 if __name__ == "__main__":

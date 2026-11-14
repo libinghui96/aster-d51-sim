@@ -53,7 +53,9 @@
 - RTX 5080 烟室 3D CFD 标定查找表生成：`python scripts/06_gpu_smokebox_cfd.py`
 - RTX 5080 并行参数辨识与自动司炉寻优：`python scripts/07_gpu_fireman_opt.py`
 - 启动 3D 交互热机联调（热炉即发）：`python -m sim.run_cosim --xml models/d51_full.xml --preset hot`
-- 无 GUI 自动化全流程试车验收与绘图：`python -m sim.run_cosim --xml models/d51_full.xml --headless-demo`
+- 启动 RTX 5080 571万体素真 3D 零件级多相热流联调：`python -m sim.run_cosim --xml models/d51_full.xml --preset hot --gpu-3d`
+- 启动本地 RTX 5080 Live 3D WebSocket 推流桥（供浏览器 60 FPS 直连）：`python -m sim.gpu_3d_server --scene roller --preset hot`
+- 无 GUI 自动化全流程试车验收与绘图：`python -m sim.run_cosim --xml models/d51_full.xml --headless-demo --gpu-3d`
 - 同步资产并构建 Web 3D 实时交互前端：`python scripts/05_sync_web_assets.py && npm --prefix web run build`
 
 ---
@@ -67,7 +69,7 @@
   2. **滑阀背压摩擦**：根据蒸汽室表压压紧外进气平面 D 型滑阀的法向载荷与注油润滑状态，实时计算滑动摩擦反力回写 `j_valve_L` / `j_valve_R`；
   3. **动轮跷跷板均衡梁**：动轮垂向悬挂 `j_susp_z1..4` 通过 `<tendon>` 耦合模拟 `イラスト 3` 跷跷板均衡梁（Equalizer）。
 - **O4 锅炉热损伤、坡道假水位与冷缸水锤**：`thermo_1d.py` 维护分层紫铜火室顶板壁温 `T_crown_c`、坡道/加减速表观假水位、密封圈热退化完好度 `seal_health` 及左右气缸前/后腔液态冷凝水体积，支持空焚き（干烧退火软化 + 高温补水闪蒸压力尖峰）与未开排液阀时的冷缸不可压缩水锤（Hydrolock）冲击锁死判定。
-- **O5 & O6 RTX 5080 GPU 烟室 CFD 与自动司炉 Agent**：若 `configs/smokebox_lut.json` 存在，优先通过双线性插值读取 RTX 5080 GPU 3D CFD 标定的烟室文丘里引风与火管换热功率；支持基于 GPU 并行轨迹寻优的 `AutoFiremanAgent`（`sim/auto_fireman.py` & `configs/auto_fireman_policy.json`），且所有后端新特性须与 `web/` 前端保持同步。
+- **O5 & O6 RTX 5080 GPU 烟室 CFD、571万体素零件级真 3D 多相热流引擎与自动司炉 Agent**：支持离线 LUT（`configs/smokebox_lut.json`）与本地实时 5.71M 体素 CUDA STL 体素化三维多相求解器（`sim/thermo_3d_gpu.py` + `sim/gpu_3d_server.py` WebSocket 推流桥，直接从 `.stl` 雕刻燃烧室/5烟管/沸腾自由水面/四程过热管/滑阀气缸/给水油路三维流体域并双向耦合 MuJoCo）；支持 `AutoFiremanAgent`（`sim/auto_fireman.py`）及全套零件级 GLSL 三维流体着色器（`web/src/fluidShaders.ts`）。
 
 ---
 
