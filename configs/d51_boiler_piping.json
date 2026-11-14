@@ -1,7 +1,7 @@
 {
   "meta": {
     "model": "Aster Hobby JNR D51 Standard / Heavy-Equipped (1/32, Gauge 1)",
-    "stage": "P0-B (V2-BOILER-CAD)",
+    "stage": "P0-D (V2-PIPING-LUBE-TRUE)",
     "units": "mm, ml, cm^2, bar/kgf_cm2",
     "template_calibration": {
       "templates_found": true,
@@ -15,6 +15,77 @@
       "template1_cab_wrapper_mm": [
         69.75,
         77.86
+      ]
+    },
+    "illustration_calibration": {
+      "pdf_found": true,
+      "illust12_tubeplate_major_px": 259.5,
+      "illust12_upper_flue_od_est_mm": 11.59,
+      "illust12_lower_flue_od_est_mm": 8.06,
+      "illust12_detected_flue_ellipses": 5,
+      "illust23_detected_wick_cups": 4,
+      "illust23_wick_dia_mm": 10.0
+    }
+  },
+  "dummy_parts_registry": {
+    "15-3": {
+      "part_no": "15-3",
+      "jp_name": "ダミー逆止弁",
+      "en_name": "Dummy Boiler Clack Valve (Front Boiler Side Cosmetic Only)",
+      "is_dummy": true,
+      "connected_pipes": [],
+      "mount_xyz_mm": [
+        58.0,
+        30.4,
+        44.0
+      ]
+    },
+    "16-2": {
+      "part_no": "16-2",
+      "jp_name": "ダミー泥溜栓",
+      "en_name": "Dummy Firebox Mud/Blowdown Plug",
+      "is_dummy": true,
+      "connected_pipes": [],
+      "mount_xyz_mm": [
+        -78.0,
+        24.8,
+        24.0
+      ]
+    },
+    "30-2": {
+      "part_no": "30-2",
+      "jp_name": "ダミー汽笛",
+      "en_name": "Dummy Roof-Top Whistle (Functional Whistle is 11-8 Under Frame)",
+      "is_dummy": true,
+      "connected_pipes": [],
+      "mount_xyz_mm": [
+        -48.0,
+        -7.5,
+        76.5
+      ]
+    },
+    "22-11": {
+      "part_no": "22-11",
+      "jp_name": "空気圧縮機 (ダミー外観)",
+      "en_name": "Dummy Left-Walkway Twin Air Compressor",
+      "is_dummy": true,
+      "connected_pipes": [],
+      "mount_xyz_mm": [
+        -12.0,
+        34.2,
+        37.5
+      ]
+    },
+    "22-13": {
+      "part_no": "22-13",
+      "jp_name": "元空気溜 (ダミー外観)",
+      "en_name": "Dummy Main Air Reservoirs",
+      "is_dummy": true,
+      "connected_pipes": [],
+      "mount_xyz_mm": [
+        -18.0,
+        31.8,
+        34.5
       ]
     }
   },
@@ -42,88 +113,287 @@
       "normal_50pct_water_z_mm": 59.0,
       "normal_crown_submergence_mm": 11.5
     },
-    "dual_flue_tubes": {
-      "count": 2,
-      "y_centers_mm": [
-        -12.5,
-        12.5
-      ],
-      "z_center_mm": 42.0,
+    "five_flue_tubes": {
+      "total_count": 5,
       "x_range_mm": [
         -47.0,
         92.0
       ],
       "length_mm": 139.0,
-      "od_mm": 13.0,
-      "id_mm": 11.4,
-      "wall_mm": 0.8
+      "upper_superheater_flues": {
+        "count": 2,
+        "yz_centers_mm": [
+          [
+            -11.5,
+            46.5
+          ],
+          [
+            11.5,
+            46.5
+          ]
+        ],
+        "od_mm": 11.5,
+        "id_mm": 10.0,
+        "wall_mm": 0.75,
+        "houses_part": "17-5 スーパーヒータ (Twin-U 4-Pass)"
+      },
+      "lower_fire_tubes": {
+        "count": 3,
+        "yz_centers_mm": [
+          [
+            -13.0,
+            35.0
+          ],
+          [
+            0.0,
+            33.2
+          ],
+          [
+            13.0,
+            35.0
+          ]
+        ],
+        "od_mm": 8.0,
+        "id_mm": 6.7,
+        "wall_mm": 0.65
+      }
     },
     "verified_capacities": {
-      "geometric_net_volume_ml": 401.8,
+      "geometric_net_volume_ml": 382.3,
       "locked_thermo_total_volume_ml": 380.0,
       "water_gauge_0pct_ml": 140.0,
       "water_gauge_50pct_ml": 210.0,
       "water_gauge_100pct_ml": 280.0,
       "firebox_crown_area_cm2": 22.99,
       "firebox_wall_area_cm2": 44.52,
-      "flues_gas_side_area_cm2": 99.56,
-      "flues_water_side_area_cm2": 113.54,
-      "total_evaporative_area_cm2": 181.05
+      "flues_gas_side_area_cm2": 175.11,
+      "flues_water_side_area_cm2": 205.24,
+      "total_evaporative_area_cm2": 272.75
     }
   },
   "superheater_and_steam_piping": {
     "material": "Stainless Steel SUS304",
     "density_kg_m3": 7930.0,
-    "steam_dome_x_mm": 26.0,
-    "dry_pipe_od_mm": 4.0,
-    "dry_pipe_id_mm": 2.8,
+    "cab_regulator_11_10": {
+      "part_nos": [
+        "11-10",
+        "11-11"
+      ],
+      "jp_name": "加減弁",
+      "location": "Cab Backhead Upper-Center",
+      "xyz_mm": [
+        -113.5,
+        0.0,
+        56.0
+      ],
+      "internal_pipe_part": "13-9 加減管",
+      "internal_pipe_z_mm": 60.5,
+      "internal_pipe_od_mm": 4.0,
+      "internal_pipe_id_mm": 2.8
+    },
     "superheater_4pass": {
+      "element_part": "17-5",
+      "jp_name": "スーパーヒータ",
+      "hollow_bolt_part": "17-6 中空ボルト",
+      "front_union_part": "17-4",
+      "main_supply_pipe_part": "13-4 主蒸気供給管",
+      "topology": "Twin-U 4-Pass (2 Passes per Upper ø11.5mm Superheater Flue)",
       "passes": 4,
-      "tube_od_mm": 3.2,
-      "tube_id_mm": 2.2,
+      "tube_od_mm": 3.0,
+      "tube_id_mm": 2.0,
       "x_turn_in_flue_mm": -24.0,
-      "x_smokebox_header_mm": 106.0,
-      "total_heated_length_mm": 520.0,
-      "outer_heat_transfer_area_cm2": 52.28
+      "x_smokebox_header_mm": 102.0,
+      "total_heated_length_mm": 504.0,
+      "outer_heat_transfer_area_cm2": 47.5
     },
     "branch_steam_pipes": {
+      "part_nos": [
+        "13-4",
+        "7-9",
+        "1-20"
+      ],
+      "lubricator_tee_xyz_mm": [
+        122.0,
+        0.0,
+        18.5
+      ],
       "x_chest_entry_mm": 126.0,
       "y_chest_centers_mm": [
         -32.5,
         32.5
       ],
       "z_chest_entry_mm": 18.5,
-      "tube_od_mm": 3.6,
-      "tube_id_mm": 2.4
+      "tube_od_mm": 3.4,
+      "tube_id_mm": 2.3
     },
     "smokebox_draft_ejector": {
+      "exhaust_pipe_part": "7-8 排気管",
       "chimney_axis_x_mm": 130.0,
       "blast_nozzle_part": "20-7",
       "blast_nozzle_tip_z_mm": 26.0,
       "blast_nozzle_orifice_dia_mm": 4.2,
       "blast_nozzle_area_mm2": 13.854,
+      "silencer_bleed_parts": [
+        "28-7",
+        "28-8",
+        "28-9",
+        "28-10"
+      ],
+      "blower_valve_part": "11-12 通風弁",
+      "blower_pipe_part": "13-8 通風管",
+      "blower_nozzle_part": "17-3 通風ノズル",
       "blower_ring_eff_area_mm2": 0.16,
-      "petticoat_part": "18-25",
+      "petticoat_part": "18-28 ペチコート",
+      "chimney_part": "18-25 煙突",
       "petticoat_entry_z_mm": 56.0,
       "petticoat_throat_dia_mm": 13.6,
       "petticoat_flare_dia_mm": 23.2
+    },
+    "auxiliary_steam_lines": {
+      "functional_whistle": {
+        "valve_parts": [
+          "11-1",
+          "11-2",
+          "11-3"
+        ],
+        "pipe_part": "13-3 汽笛管",
+        "whistle_part": "11-8 汽笛",
+        "location": "Under Rear Main Frame (Inside |Y| <= 11mm)",
+        "whistle_xyz_mm": [
+          -126.0,
+          -6.5,
+          11.5
+        ],
+        "roof_whistle_30_2_is_dummy": true
+      },
+      "backhead_blowdown": {
+        "valve_parts": [
+          "11-16",
+          "11-17"
+        ],
+        "jp_name": "排水弁",
+        "xyz_mm": [
+          -114.5,
+          6.5,
+          24.0
+        ],
+        "side_plug_16_2_is_dummy": true
+      }
     }
   },
+  "feedwater_piping_topology": {
+    "routing_corridor": "100% Inside Main Frames (|Y| <= 11.0 mm), Routed REARWARD",
+    "max_abs_y_mm": 11.0,
+    "wheel_side_pipes_count": 0,
+    "dummy_clack_15_3_connected": false,
+    "axle_pump_loop": {
+      "tender_outlet_part": "31-12",
+      "suction_pipe_part": "6-10 軸動ポンプ管 (吸込)",
+      "suction_y_mm": 6.8,
+      "suction_z_mm": 9.2,
+      "pump_body_part": "6-5 軸動ポンプ",
+      "pump_x_mm": -22.0,
+      "check_balls_spec": "Twin SB-ø3 Stainless Check Balls",
+      "delivery_pipe_part": "6-6 軸動ポンプ管 (吐出・後方走線)",
+      "delivery_direction": "rearward",
+      "delivery_y_mm": -6.5,
+      "delivery_z_mm": 10.2,
+      "rear_tee_xyz_mm": [
+        -114.0,
+        -6.5,
+        10.2
+      ],
+      "boiler_riser_part": "6-8 ボイラ給水管",
+      "boiler_check_valve_part": "13-7 逆止弁 (ボイラ後上部)",
+      "boiler_check_xyz_mm": [
+        -110.5,
+        -4.8,
+        56.0
+      ],
+      "bypass_branch_part": "4-16 戻り管",
+      "bypass_valve_part": "4-17 バイパスバルブ",
+      "bypass_valve_xyz_mm": [
+        -114.5,
+        -8.8,
+        25.5
+      ],
+      "bypass_return_part": "4-15 戻り管",
+      "tender_return_standpipe_part": "31-14"
+    },
+    "hand_pump_loop": {
+      "hand_pump_part": "31-5 ハンドポンプ",
+      "tender_outlet_part": "31-13",
+      "delivery_pipe_part": "13-11 配水管",
+      "delivery_y_mm": 3.8,
+      "delivery_z_mm": 9.2,
+      "firebox_check_valve_part": "13-2 逆止弁 (火室底部独立)",
+      "firebox_check_xyz_mm": [
+        -104.0,
+        3.8,
+        17.5
+      ]
+    }
+  },
+  "displacement_lubricator_system": {
+    "type": "Roscoe Steam-Condensation Displacement Lubricator (置換式油タンク)",
+    "tank_part": "4-2 オイルタンク",
+    "filler_cap_part": "4-1 キャップ",
+    "cap_seal": "PN5-1.9",
+    "front_deck_hatch_part": "25-3 前デッキ蓋",
+    "orientation": "central_horizontal_cylindrical",
+    "location": "Between Front Main Frames, Above Leading Truck Pivot, Under Smokebox Saddle",
+    "x_range_mm": [
+      142.0,
+      166.0
+    ],
+    "y_center_mm": 0.0,
+    "max_abs_y_mm": 10.5,
+    "z_center_mm": 6.2,
+    "tank_od_mm": 13.6,
+    "cap_xyz_mm": [
+      164.0,
+      0.0,
+      14.0
+    ],
+    "oil_delivery_tee_xyz_mm": [
+      122.0,
+      0.0,
+      18.5
+    ],
+    "feeds_into_parts": [
+      "13-4",
+      "7-9"
+    ],
+    "has_bottom_drain": false,
+    "service_method": "Top Cap 4-1 Syringe Suction & Refill (スポイト水抜き給油)",
+    "oil_capacity_ml": 6.5,
+    "endurance_min_nominal": 60.0
+  },
   "alcohol_burner_system": {
+    "burner_part": "23-1 バーナー",
+    "holder_part": "23-2 バーナーホルダ",
+    "tender_tank_part": "36-4 アルコールタンク",
+    "fuel_needle_valve_part": "36-6 燃料コック",
+    "sump_part": "34-2 サンプ (恒液位槽)",
     "fuel_type": "Denatured / Fuel Alcohol (Methanol-Ethanol, LHV ~ 24.5 MJ/kg)",
     "tender_tank_capacity_ml": 130.0,
     "endurance_min_nominal": 20.0,
-    "feed_method": "Constant-Level Chicken-Feeder Sump (サンプ恒液位供油)",
-    "wick_count": 3,
-    "wick_centers_x_mm": [
-      -95.5,
-      -77.5,
-      -59.5
+    "feed_method": "Constant-Level Sump (34-2 サンプ恒液位供油)",
+    "wick_count": 4,
+    "array_layout": "2x2",
+    "wick_material": "Ceramic Fiber Standing Wicks",
+    "wick_dia_mm": 10.0,
+    "wick_cup_od_mm": 10.8,
+    "wick_x_mm": [
+      -89.0,
+      -65.0
     ],
-    "wick_cup_od_mm": 12.2,
-    "wick_cup_id_mm": 9.8,
-    "wick_top_z_mm": 18.5,
-    "supply_tube_od_mm": 3.2
+    "wick_y_mm": [
+      -5.8,
+      5.8
+    ],
+    "wick_top_z_mm": 18.8,
+    "supply_tube_od_mm": 3.0
   },
   "pumps_and_valves_bom": {
     "axle_feed_pump_6_5": {
@@ -134,10 +404,17 @@
       "eccentric_throw_mm": 3.5,
       "stroke_mm": 7.0,
       "theoretical_disp_ml_per_rev": 0.0563,
-      "check_balls_dia_mm": 3.175,
+      "check_balls_part": "SB-ø3",
+      "check_balls_count": 2,
+      "check_balls_dia_mm": 3.0,
       "suction_cracking_dp_kpa": 6.0,
       "delivery_cracking_dp_kpa": 14.0,
-      "boiler_clack_x_mm": 48.0
+      "boiler_clack_part": "13-7",
+      "boiler_clack_xyz_mm": [
+        -110.5,
+        -4.8,
+        56.0
+      ]
     },
     "bypass_needle_valve_4_17": {
       "part_no": "4-17",
@@ -151,10 +428,15 @@
       "ram_bore_mm": 7.0,
       "stroke_mm": 16.0,
       "disp_ml_per_stroke": 0.616,
-      "strokes_for_half_boiler": 30
+      "strokes_for_half_boiler": 30,
+      "firebox_clack_part": "13-2"
     },
-    "regulator_throttle_valve": {
-      "location": "Steam Dome Top / Cab Pull-Rod",
+    "regulator_throttle_valve_11_10": {
+      "part_nos": [
+        "11-10",
+        "11-11"
+      ],
+      "location": "Cab Backhead -> 13-9 Internal Pipe -> 17-6 Hollow Bolt",
       "max_orifice_dia_mm": 2.6,
       "max_area_mm2": 5.309,
       "discharge_coeff_cd": 0.72
@@ -172,26 +454,38 @@
       "seat_dia_mm": 2.2,
       "discharge_coeff_cd": 0.62
     },
-    "blower_valve": {
+    "blower_valve_11_12": {
+      "part_no": "11-12",
+      "nozzle_part": "17-3",
       "seat_dia_mm": 1.2,
       "nominal_draft_angle_deg": 30.0,
       "discharge_coeff_cd": 0.65
     },
     "water_gauge_11_7": {
-      "part_no": "11-7",
+      "part_nos": [
+        "11-4",
+        "11-5",
+        "11-6",
+        "11-7"
+      ],
       "glass_od_mm": 4.0,
       "visible_span_mm": 18.0,
-      "x_cab_backhead_mm": -114.5
+      "x_cab_backhead_mm": -114.5,
+      "y_mm": -9.5
     },
-    "displacement_lubricator": {
-      "type": "Roscoe Steam-Condensation Displacement",
-      "x_mm": 148.0,
-      "y_mm": 18.5,
-      "z_mm": 13.5,
-      "oil_capacity_ml": 6.5,
-      "endurance_min_nominal": 60.0
+    "pressure_gauge_13_1": {
+      "siphon_part": "13-1",
+      "gauge_spec": "PG-ø20 (0~5 kgf/cm²)",
+      "x_cab_backhead_mm": -114.5,
+      "y_mm": 9.5,
+      "z_mm": 58.5
     },
-    "cylinder_drain_cocks": {
+    "cylinder_drain_cocks_1_16": {
+      "part_nos": [
+        "1-16",
+        "1-17",
+        "8-5"
+      ],
       "ports_total": 4,
       "orifice_dia_mm": 1.2,
       "discharge_coeff_cd": 0.62

@@ -103,6 +103,7 @@ async function main() {
   let geomMeshes: THREE.Mesh[] = [];
   let cylHousingMeshes: THREE.Mesh[] = [];
   let boilerOuterMeshes: THREE.Mesh[] = [];
+  let tenderOuterMeshes: THREE.Mesh[] = [];
   let boilerShellMats: THREE.MeshStandardMaterial[] = [];
   let copperCoreMats: THREE.MeshStandardMaterial[] = [];
   let simGroup = new THREE.Group();
@@ -158,6 +159,7 @@ async function main() {
     geomMeshes = [];
     cylHousingMeshes = [];
     boilerOuterMeshes = [];
+    tenderOuterMeshes = [];
     boilerShellMats = [];
     copperCoreMats = [];
     prevFwdVel = 0.0;
@@ -183,6 +185,7 @@ async function main() {
     const jValR = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_valve_R");
     const jW3 = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_wheel_3");
     const jPump = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_pump_ram");
+    const jDrain = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_drain_cock");
 
     const sAdr = (sName: string) => model.sensor_adr[objId(mujoco.mjtObj.mjOBJ_SENSOR, sName)];
     idxMap = {
@@ -196,12 +199,13 @@ async function main() {
       qvelPump: model.jnt_dofadr[jPump],
       qvelValL: model.jnt_dofadr[jValL],
       qvelValR: model.jnt_dofadr[jValR],
+      qvelDrain: jDrain >= 0 ? model.jnt_dofadr[jDrain] : -1,
       locoBody: objId(mujoco.mjtObj.mjOBJ_BODY, "loco_frame"),
       tenderBody: objId(mujoco.mjtObj.mjOBJ_BODY, "tender_body"),
     };
 
     if (idxMap.tenderBody >= 0) {
-      tenderDryMass = Math.max(0.6, model.body_mass[idxMap.tenderBody] - 0.422);
+      tenderDryMass = Math.max(0.6, model.body_mass[idxMap.tenderBody] - 0.250);
     }
 
     const savedDisable = model.opt.disableflags;
@@ -234,7 +238,7 @@ async function main() {
       stroke: model.jnt_range[2 * jPL + 1] - model.jnt_range[2 * jPL] - 0.004,
       qValveCenterL: 0.5 * (vMaxL + vMinL),
       qValveCenterR: 0.5 * (vMaxR + vMinR),
-      steamLap: 0.78 * leadAmp,
+      steamLap: 0.99 * leadAmp,
       exhaustLap: 0.02 * leadAmp,
       portWidth: 0.95 * leadAmp,
     };
@@ -247,21 +251,51 @@ async function main() {
     const matSteel = new THREE.MeshStandardMaterial({ color: 0xd8dee9, metalness: 0.88, roughness: 0.22 });
     const matBrass = new THREE.MeshStandardMaterial({ color: 0xd8a03c, metalness: 0.82, roughness: 0.26 });
     const matCopper = new THREE.MeshStandardMaterial({ color: 0xc96f46, metalness: 0.86, roughness: 0.24 });
+    const pbrMatByName: Record<string, THREE.MeshStandardMaterial> = {
+      mat_black_iron: matIron,
+      mat_machined_steel: matSteel,
+      mat_brass: matBrass,
+      mat_copper: matCopper,
+    };
 
     const xmlDoc = new DOMParser().parseFromString(
       new TextDecoder().decode(mujoco.FS.readFile(`/working/${xmlFile}`)), "text/xml"
     );
     const meshTags = Array.from(xmlDoc.querySelectorAll("asset > mesh"));
     const meshIdToKey = meshTags.map((el) => (el.getAttribute("file") || "").replace(".stl", ""));
+    const matTags = Array.from(xmlDoc.querySelectorAll("asset > material"));
+    const matIdToName = matTags.map((el) => el.getAttribute("name") || "");
+    const geomTags = Array.from(xmlDoc.querySelectorAll("worldbody geom"));
+    const geomNameToMat = new Map<string, string>();
+    for (const gel of geomTags) {
+      const gn = gel.getAttribute("name");
+      const gm = gel.getAttribute("material");
+      if (gn && gm) geomNameToMat.set(gn, gm);
+    }
+
     const alignedMeshCache = new Map<number, THREE.BufferGeometry>();
     const meshObjType = typeof mujoco.mjtObj.mjOBJ_MESH === "number" ? mujoco.mjtObj.mjOBJ_MESH : mujoco.mjtObj.mjOBJ_MESH.value;
+    const matObjType = typeof mujoco.mjtObj.mjOBJ_MATERIAL === "number" ? mujoco.mjtObj.mjOBJ_MATERIAL : mujoco.mjtObj.mjOBJ_MATERIAL.value;
+    const geomObjType = typeof mujoco.mjtObj.mjOBJ_GEOM === "number" ? mujoco.mjtObj.mjOBJ_GEOM : mujoco.mjtObj.mjOBJ_GEOM.value;
+
+    const resolveMjcfMatName = (gIdx: number): string => {
+      const matId = model.geom_matid ? model.geom_matid[gIdx] : -1;
+      if (matId >= 0) {
+        const byApi = mujoco.mj_id2name(model, matObjType, matId) || "";
+        if (byApi) return byApi;
+        if (matIdToName[matId]) return matIdToName[matId];
+      }
+      const gName = mujoco.mj_id2name(model, geomObjType, gIdx) || "";
+      return geomNameToMat.get(gName) || "";
+    };
 
     for (let g = 0; g < model.ngeom; g++) {
       const grp = model.geom_group[g];
       const rgbaA = model.geom_rgba[4 * g + 3];
       const gType = model.geom_type[g];
+      const mjMatName = resolveMjcfMatName(g);
       let threeGeom: THREE.BufferGeometry | null = null;
-      let mat: THREE.Material = matIron;
+      let mat: THREE.Material = pbrMatByName[mjMatName] || matIron;
       let meshKey = "";
 
       if (gType === 7) {
@@ -293,35 +327,20 @@ async function main() {
           }
         }
 
+        // Gate 7: 直接按 MJCF material="mat_..." 赋予金属材质，仅对外壳遮挡层/热发光铜胆克隆独立实例供透视与红热控制
+        const baseMat = pbrMatByName[mjMatName] || matIron;
         if (meshKey === "boiler_firebox_flues") {
-          const cuMat = matCopper.clone();
+          const cuMat = baseMat.clone();
           copperCoreMats.push(cuMat);
           mat = cuMat;
-        } else if (
-          meshKey === "superheater_piping" ||
-          meshKey.includes("rod") ||
-          meshKey.includes("link") ||
-          meshKey.includes("reverser") ||
-          meshKey.includes("return_crank") ||
-          meshKey.includes("lever")
-        ) {
-          mat = matSteel;
-        } else if (
-          meshKey === "alcohol_burner" ||
-          meshKey === "boiler_aux_valves" ||
-          meshKey.includes("valve") ||
-          meshKey.includes("piston") ||
-          meshKey.includes("die") ||
-          meshKey.includes("driving_axlebox") ||
-          meshKey.includes("axle_pump")
-        ) {
-          mat = matBrass;
-        } else if (meshKey.includes("cylinder_block")) {
-          mat = matIron.clone();
         } else if (meshKey === "boiler_superstructure") {
-          const bMat = matIron.clone();
+          const bMat = baseMat.clone();
           boilerShellMats.push(bMat);
           mat = bMat;
+        } else if (meshKey === "cylinder_block_L" || meshKey === "cylinder_block_R" || meshKey === "tender_body") {
+          mat = baseMat.clone();
+        } else {
+          mat = baseMat;
         }
       } else if (grp < 3 && rgbaA > 0.05 && gType !== 0) {
         const sx = model.geom_size[3 * g];
@@ -336,18 +355,24 @@ async function main() {
           threeGeom = new THREE.CapsuleGeometry(sx, 2 * sy, 8, 16);
           threeGeom.rotateX(Math.PI / 2);
         }
-        const col = new THREE.Color(model.geom_rgba[4 * g], model.geom_rgba[4 * g + 1], model.geom_rgba[4 * g + 2]);
-        mat = sx < 0.008 && model.geom_rgba[4 * g] > 0.72
-          ? matBrass
-          : new THREE.MeshStandardMaterial({ color: col, metalness: 0.55, roughness: 0.42 });
+        if (mjMatName && pbrMatByName[mjMatName]) {
+          mat = pbrMatByName[mjMatName];
+        } else {
+          const col = new THREE.Color(model.geom_rgba[4 * g], model.geom_rgba[4 * g + 1], model.geom_rgba[4 * g + 2]);
+          mat = new THREE.MeshStandardMaterial({ color: col, metalness: 0.55, roughness: 0.42 });
+        }
       }
 
       const mesh = new THREE.Mesh(threeGeom || new THREE.BufferGeometry(), mat);
       mesh.visible = threeGeom !== null && grp < 3 && rgbaA > 0.05;
-      if (threeGeom && gType === 7 && meshKey.includes("cylinder_block")) {
-        cylHousingMeshes.push(mesh);
-      } else if (threeGeom && gType === 7 && meshKey === "boiler_superstructure") {
-        boilerOuterMeshes.push(mesh);
+      if (threeGeom && gType === 7) {
+        if (meshKey === "cylinder_block_L" || meshKey === "cylinder_block_R") {
+          cylHousingMeshes.push(mesh);
+        } else if (meshKey === "boiler_superstructure") {
+          boilerOuterMeshes.push(mesh);
+        } else if (meshKey === "tender_body") {
+          tenderOuterMeshes.push(mesh);
+        }
       }
       simGroup.add(mesh);
       geomMeshes.push(mesh);
@@ -436,7 +461,16 @@ async function main() {
       m.renderOrder = xray ? 2 : 0;
       mat.needsUpdate = true;
     }
+    for (const m of tenderOuterMeshes) {
+      const mat = m.material as THREE.MeshStandardMaterial;
+      mat.transparent = xray;
+      mat.opacity = xray ? 0.22 : 1.0;
+      mat.depthWrite = !xray;
+      m.renderOrder = xray ? 2 : 0;
+      mat.needsUpdate = true;
+    }
   };
+  applyVisualMode();
   const locoMat4 = new THREE.Matrix4();
   const tmpQuat = new THREE.Quaternion();
   const prevLocoPos = new THREE.Vector3();
@@ -499,6 +533,9 @@ async function main() {
       data.qfrc_applied[idxMap.qvelValL] = out.valveFrictionL;
       data.qfrc_applied[idxMap.qvelValR] = out.valveFrictionR;
       data.qfrc_applied[idxMap.qvelPump] = out.forcePump;
+      if (idxMap.qvelDrain >= 0) {
+        data.qfrc_applied[idxMap.qvelDrain] = ctrl.drainCock ? 0.022 : 0.0;
+      }
       if (isRollerMode) {
         data.qfrc_applied[idxMap.qvelW3] = -0.0022 * w3 - 0.00012 * w3 * Math.abs(w3);
       } else {

@@ -108,7 +108,7 @@ def calibrate_model_and_valves(model: mujoco.MjModel) -> CylinderCalibration:
         stroke=stroke,
         q_valve_center_L=center_L,
         q_valve_center_R=center_R,
-        steam_lap=0.78 * lead_amp,  # 恢复真实 11.0mm 逆转摇臂后，外余面 0.78*lead_amp (~1.17mm) 兼顾中立锁死截汽与 1.0kgf 冷态顺畅起动
+        steam_lap=0.99 * lead_amp,  # 精确匹配中立先导振幅 (保留 1% 微先导)，确保 3.8kgf 中立档严密锁止且 1.0kgf 冷态正反转强劲自启动
         exhaust_lap=0.02 * lead_amp,
         port_width=0.95 * lead_amp,
     )
@@ -186,6 +186,8 @@ class CoSimRunner:
         self.qvel_pump = self.model.joint("j_pump_ram").dofadr[0]
         self.qvel_valL = self.model.joint("j_valve_L").dofadr[0]
         self.qvel_valR = self.model.joint("j_valve_R").dofadr[0]
+        j_dc_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "j_drain_cock")
+        self.qvel_drain = int(self.model.jnt_dofadr[j_dc_id]) if j_dc_id >= 0 else -1
         self.loco_bid = self.model.body("loco_frame").id
         self.is_roller_mode = self.model.jnt_type[0] != mujoco.mjtJoint.mjJNT_FREE
         self._prev_fwd_vel = 0.0
@@ -246,6 +248,8 @@ class CoSimRunner:
         self.data.qfrc_applied[self.qvel_valL] = tel.valve_friction_L
         self.data.qfrc_applied[self.qvel_valR] = tel.valve_friction_R
         self.data.qfrc_applied[self.qvel_pump] = F_pump
+        if self.qvel_drain >= 0:
+            self.data.qfrc_applied[self.qvel_drain] = 0.022 if self.ctrl.drain_cock else 0.0
         if self.is_roller_mode:
             self.data.qfrc_applied[self.qvel_w3] = -0.0022 * omega_3 - 0.00012 * omega_3 * abs(omega_3)
         else:

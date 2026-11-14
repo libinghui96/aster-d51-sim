@@ -328,7 +328,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
 
     default = ET.SubElement(mj, "default")
     ET.SubElement(default, "geom", condim="3", solref="0.0015 1.0", solimp="0.95 0.99 0.0001")
-    ET.SubElement(default, "equality", solref="0.0015 1.0", solimp="0.95 0.995 0.00005")
+    ET.SubElement(default, "joint", solreflimit="0.002 1.0", solimplimit="0.98 0.995 0.0001")
+    ET.SubElement(default, "equality", solref="0.0006 1.0", solimp="0.995 0.9995 0.000005")
 
     mesh_dir = Path("models/meshes")
     asset = ET.SubElement(mj, "asset")
@@ -383,9 +384,13 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     mp_boil = parts_mp["boiler_superstructure"]
     mp_cu_core = parts_mp["boiler_firebox_flues"]
     mp_sh_pipe = parts_mp["superheater_piping"]
+    mp_fw_pipe = parts_mp["feedwater_piping"]
+    mp_lub = parts_mp["displacement_lubricator"]
     mp_burner = parts_mp["alcohol_burner"]
     mp_aux_valves = parts_mp["boiler_aux_valves"]
+    mp_eq_brakes = parts_mp["chassis_equalizer_brakes"]
     mp_cylL, mp_cylR = parts_mp["cylinder_block_L"], parts_mp["cylinder_block_R"]
+    mp_sbL, mp_sbR = parts_mp["slide_bar_L"], parts_mp["slide_bar_R"]
     mp_mbL, mp_mbR = parts_mp["motion_bracket_L"], parts_mp["motion_bracket_R"]
     cyl_pos_L = np.array([rc_cfg["cylinder_center_x"] * s, +rc_cfg["cylinder_center_y"] * s, rc_cfg["cylinder_center_z"] * s])
     cyl_pos_R = np.array([rc_cfg["cylinder_center_x"] * s, -rc_cfg["cylinder_center_y"] * s, rc_cfg["cylinder_center_z"] * s])
@@ -401,7 +406,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         (m_boiler_water / 12.0) * (3.0 * (r_core**2) + L_core**2),
         (m_boiler_water / 12.0) * (3.0 * (r_core**2) + L_core**2),
     ])
-    m_front_saddle = 0.340
+    m_front_saddle = 0.235
     I_front_saddle = (m_front_saddle / 12.0) * np.diag([0.042**2 + 0.018**2, 0.055**2 + 0.018**2, 0.055**2 + 0.042**2])
     attach_composite_inertial(
         frame,
@@ -409,10 +414,15 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             (mp_boil["mass_kg"], np.array(mp_boil["com_m"]), full_to_mat3(mp_boil["fullinertia"])),
             (mp_cu_core["mass_kg"], np.array(mp_cu_core["com_m"]), full_to_mat3(mp_cu_core["fullinertia"])),
             (mp_sh_pipe["mass_kg"], np.array(mp_sh_pipe["com_m"]), full_to_mat3(mp_sh_pipe["fullinertia"])),
+            (mp_fw_pipe["mass_kg"], np.array(mp_fw_pipe["com_m"]), full_to_mat3(mp_fw_pipe["fullinertia"])),
+            (mp_lub["mass_kg"], np.array(mp_lub["com_m"]), full_to_mat3(mp_lub["fullinertia"])),
             (mp_burner["mass_kg"], np.array(mp_burner["com_m"]), full_to_mat3(mp_burner["fullinertia"])),
             (mp_aux_valves["mass_kg"], np.array(mp_aux_valves["com_m"]), full_to_mat3(mp_aux_valves["fullinertia"])),
+            (mp_eq_brakes["mass_kg"], np.array(mp_eq_brakes["com_m"]), full_to_mat3(mp_eq_brakes["fullinertia"])),
             (mp_cylL["mass_kg"], np.array(mp_cylL["com_m"]) + cyl_pos_L, full_to_mat3(mp_cylL["fullinertia"])),
             (mp_cylR["mass_kg"], np.array(mp_cylR["com_m"]) + cyl_pos_R, full_to_mat3(mp_cylR["fullinertia"])),
+            (mp_sbL["mass_kg"], np.array(mp_sbL["com_m"]) + cyl_pos_L, full_to_mat3(mp_sbL["fullinertia"])),
+            (mp_sbR["mass_kg"], np.array(mp_sbR["com_m"]) + cyl_pos_R, full_to_mat3(mp_sbR["fullinertia"])),
             (mp_mbL["mass_kg"], np.array(mp_mbL["com_m"]) + mb_pos_L, full_to_mat3(mp_mbL["fullinertia"])),
             (mp_mbR["mass_kg"], np.array(mp_mbR["com_m"]) + mb_pos_R, full_to_mat3(mp_mbR["fullinertia"])),
             (m_side_plate, np.array([0.020, +0.0135, 0.004]), I_side_plate),
@@ -425,14 +435,19 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         ET.SubElement(
             frame, "geom", name=f"main_chassis_{s_tag}", type="box",
             pos=f"0.020 {sgn_f * 0.0135:.6f} 0.004", size="0.165 0.00175 0.008",
-            rgba="0.12 0.12 0.14 1", mass="0", contype="0", conaffinity="0"
+            material="mat_black_iron", rgba="0.12 0.12 0.14 1", mass="0", contype="0", conaffinity="0"
         )
         ET.SubElement(
             frame, "geom", name=f"motion_bracket_vis_{s_tag}", type="mesh",
             mesh=f"m_motion_bracket_{s_tag}", material="mat_black_iron",
             pos=f"{tx_m:.6f} {sgn_f * y_vg_abs:.6f} {tz_m:.6f}", mass="0", contype="0", conaffinity="0"
         )
-    # P0-B 锅炉内脏参数化 CAD (零额外动力学自由度，挂载于 loco_frame 供 X-Ray 透视内窥与 3D CFD 体素化)
+    ET.SubElement(
+        frame, "geom", name="chassis_equalizer_brakes_vis", type="mesh",
+        mesh="m_chassis_equalizer_brakes", material="mat_black_iron",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    # P0-D 真实四回路锅炉内脏与车架内双水路/置换注油器参数化 CAD (挂载于 loco_frame，X-Ray 模式下 100% 常驻不透明)
     ET.SubElement(
         frame, "geom", name="boiler_copper_core_vis", type="mesh",
         mesh="m_boiler_firebox_flues", material="mat_copper",
@@ -441,6 +456,16 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     ET.SubElement(
         frame, "geom", name="superheater_piping_vis", type="mesh",
         mesh="m_superheater_piping", material="mat_machined_steel",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
+        frame, "geom", name="feedwater_piping_vis", type="mesh",
+        mesh="m_feedwater_piping", material="mat_brass",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
+        frame, "geom", name="displacement_lubricator_vis", type="mesh",
+        mesh="m_displacement_lubricator", material="mat_brass",
         pos="0 0 0", mass="0", contype="0", conaffinity="0"
     )
     ET.SubElement(
@@ -649,7 +674,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
                 pos=f"0 {sgn * y_tw_off:.6f} 0", contype="0", conaffinity="0", mass="0"
             )
 
-    # 3. 中央轴动给水泵 (6-3 黄铜偏心轮箍 + 6-5 黄铜柱塞) 与 4-12 逆转器横轴 (真实 11.0mm 双摇臂)
+    # 3. 中央轴动给水泵 (6-3 黄铜偏心轮箍 + 6-5 黄铜柱塞)、4-12 逆转器横轴、8-18 逆转长拉杆与 8-5 齿轮排液阀联动
+    play_m = float(rc_cfg.get("crank_pin_axial_play_mm", 0.35)) * s
     r_pump, x_pump = b_cfg["axle_pump_eccentric"] * s, b_cfg["axle_pump_x"] * s
     pump_ram = ET.SubElement(frame, "body", name="axle_pump_ram", pos=f"{x_pump:.6f} 0 0")
     ET.SubElement(
@@ -658,12 +684,16 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     )
     ET.SubElement(
         pump_ram, "geom", type="cylinder", fromto="-0.008 0 0  0.008 0 0",
-        size="0.0016", rgba="0.82 0.62 0.24 1", density="8500", contype="0", conaffinity="0"
+        size="0.0016", material="mat_brass", rgba="0.82 0.62 0.24 1", density="8500", contype="0", conaffinity="0"
     )
     ET.SubElement(pump_ram, "site", name="s_pump_pin", pos="0 0 0")
 
     pump_strap = ET.SubElement(wheel_bodies[3], "body", name="pump_eccentric_rod", pos=f"{r_pump:.6f} 0 0")
     attach_part_inertial(pump_strap, parts_mp["axle_pump_eccentric"])
+    ET.SubElement(
+        pump_strap, "joint", name="j_pump_pin_play", type="slide", axis="0 1 0",
+        limited="true", range=f"{-play_m:.6f} {play_m:.6f}", damping="0.04"
+    )
     ET.SubElement(pump_strap, "joint", name="j_pump_ecc", type="hinge", axis="0 1 0")
     ET.SubElement(
         pump_strap, "geom", name="pump_ecc_vis", type="mesh",
@@ -686,7 +716,35 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_reverser_shaft", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
     )
 
-    # 4. 左右双侧气缸、三段铰接耦合连杆、主连杆、十字头、平面滑阀与华氏五杆全金属 CAD 闭环
+    # Tier 3: 8-18 右侧逆转长拉杆 (通过零齿隙 <equality><joint> 定比联动，零新增执行器)
+    reach_body = ET.SubElement(frame, "body", name="cab_reach_rod", pos=f"{rev_x:.6f} -0.033500 {rev_z + 0.007:.6f}")
+    attach_part_inertial(reach_body, parts_mp["cab_reach_rod"])
+    ET.SubElement(
+        reach_body, "joint", name="j_reach_rod", type="slide", axis="1 0 0",
+        limited="true", range="-0.005 0.005", damping="0.02"
+    )
+    ET.SubElement(
+        reach_body, "geom", name="cab_reach_rod_vis", type="mesh",
+        mesh="m_cab_reach_rod", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
+    )
+    ET.SubElement(
+        equality, "joint", name="couple_reach_rod",
+        joint1="j_reach_rod", joint2="j_reverser", polycoef="0 0.007 0 -0.001167 0"
+    )
+
+    # Tier 3: 8-5 / 1-16 气缸底部齿轮排液阀被动联动轴 (由 drain_cock 状态视觉偏置驱动，零新增执行器)
+    dc_body = ET.SubElement(frame, "body", name="drain_cock_linkage", pos="0.124000 0.000000 -0.014500")
+    attach_part_inertial(dc_body, parts_mp["drain_cock_linkage"])
+    ET.SubElement(
+        dc_body, "joint", name="j_drain_cock", type="hinge", axis="0 1 0",
+        limited="true", range="-0.35 0.35", stiffness="0.08", damping="0.008"
+    )
+    ET.SubElement(
+        dc_body, "geom", name="drain_cock_vis", type="mesh",
+        mesh="m_drain_cock_linkage", material="mat_brass", contype="0", conaffinity="0", mass="0"
+    )
+
+    # 4. 左右双侧气缸、上置亮面滑杆、三段铰接耦合连杆、主连杆、十字头、平面滑阀与华氏五杆全金属 CAD 闭环
     L_union_m = vg_cfg["union_link_length"] * s
     L_comb_m = vg_cfg["comb_lever_total_length"] * s
     L_mv_m = vg_cfg["comb_lever_lap_lead_offset"] * s
@@ -705,6 +763,12 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         ET.SubElement(
             frame, "geom", name=f"cyl_housing_{tag}", type="mesh",
             mesh=f"m_cylinder_block_{tag}", material="mat_black_iron",
+            pos=f"{rc_cfg['cylinder_center_x']*s:.6f} {y_cyl:.6f} {rc_cfg['cylinder_center_z']*s:.6f}",
+            mass="0", contype="0", conaffinity="0"
+        )
+        ET.SubElement(
+            frame, "geom", name=f"slide_bar_vis_{tag}", type="mesh",
+            mesh=f"m_slide_bar_{tag}", material="mat_machined_steel",
             pos=f"{rc_cfg['cylinder_center_x']*s:.6f} {y_cyl:.6f} {rc_cfg['cylinder_center_z']*s:.6f}",
             mass="0", contype="0", conaffinity="0"
         )
@@ -775,13 +839,17 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         )
         add_coup_lat_bushing(coup_rear, 4, dx_4 - x_kr)
 
-        # 主连杆 (7-11 / 7-16)
+        # 主连杆 (7-11 / 7-16, 含 Tier 2 曲柄销 ±0.35mm 轴向微游隙释放 j_lat_y3)
         px, pz = pose["crosshead"]
         pitch_y = -math.atan2(pz - cz, px - cx)
         main_rod = ET.SubElement(
             wheel_bodies[3], "body", name=f"main_rod_{tag}", pos=f"{cx:.6f} {y_cyl:.6f} {cz:.6f}"
         )
         attach_part_inertial(main_rod, parts_mp["main_rod"], pitch_y_rad=pitch_y)
+        ET.SubElement(
+            main_rod, "joint", name=f"j_main_pin_play_{tag}", type="slide", axis="0 1 0",
+            limited="true", range=f"{-play_m:.6f} {play_m:.6f}", damping="0.04"
+        )
         ET.SubElement(main_rod, "joint", name=f"j_main_crank_{tag}", type="hinge", axis="0 1 0")
         ET.SubElement(
             main_rod, "geom", name=f"main_rod_vis_{tag}", type="mesh",
@@ -811,7 +879,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             site1=f"s_mainrod_small_{tag}", site2=f"s_crosshead_pin_{tag}"
         )
 
-        # 华氏五杆精密不锈钢 CAD 刚体链 (1-27 先导短连杆 + 1-23 合并杆 + 2-12 偏心棒 + 2-1 心向棒 + 2-10 吊杆)
+        # 华氏五杆精密不锈钢 CAD 刚体链 (1-27 先导短连杆 + 1-23 合并杆 + 2-12/19 偏心棒 + 2-1 心向棒 + 2-10 吊杆)
         u0x, u0z = pose["drop_arm"]
         u1x, u1z = pose["comb_bot"]
         mx, mz = pose["comb_mid"]
@@ -823,11 +891,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             pos=f"{u0x - px:.6f} {y_vg - y_cyl:.6f} {u0z - pz:.6f}",
             euler=f"0 {pitch_union:.6f} 0"
         )
-        attach_part_inertial(union_body, parts_mp["union_link"])
+        attach_part_inertial(union_body, parts_mp[f"union_link_{tag}"])
         ET.SubElement(union_body, "joint", name=f"j_union_{tag}", type="hinge", axis="0 1 0")
         ET.SubElement(
             union_body, "geom", name=f"union_link_vis_{tag}", type="mesh",
-            mesh="m_union_link", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
+            mesh=f"m_union_link_{tag}", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
         )
 
         pitch_comb = math.atan2(vx - u1x, vz - u1z)
@@ -866,6 +934,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         sdx, sdz = pose["die_pin"]
         q_die_0 = float(pose["q_die"])
         cx_arc, cz_arc = pose["arc_center_local"]
+        slot_tilt = math.atan2(-cz_arc, cx_arc)
         rlx, rlz = pose["rad_lift"]
         atx, atz = pose["arm_tip"]
 
@@ -874,36 +943,40 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             wheel_bodies[3], "body", name=f"eccentric_rod_{tag}",
             pos=f"{rx:.6f} {y_vg:.6f} {rz:.6f}", euler=f"0 {pitch_ecc:.6f} 0"
         )
-        attach_part_inertial(ecc_body, parts_mp["eccentric_rod"])
+        attach_part_inertial(ecc_body, parts_mp[f"eccentric_rod_{tag}"])
+        ET.SubElement(
+            ecc_body, "joint", name=f"j_ecc_pin_play_{tag}", type="slide", axis="0 1 0",
+            limited="true", range=f"{-play_m:.6f} {play_m:.6f}", damping="0.03"
+        )
         ET.SubElement(ecc_body, "joint", name=f"j_retcrank_{tag}", type="hinge", axis="0 1 0")
         ET.SubElement(
             ecc_body, "geom", name=f"ecc_rod_vis_{tag}", type="mesh",
-            mesh="m_eccentric_rod", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
+            mesh=f"m_eccentric_rod_{tag}", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
         )
         ET.SubElement(ecc_body, "site", name=f"s_ecc_front_{tag}", pos=f"{L_ecc_m:.6f} 0 0")
 
-        exp_pitch_y = math.atan2(-(etx - tx), -(etz - tz))
+        # Gate 3: 半月板 CAD 已按精确 exp_link_tail_cant_deg 构造下尾耳，按 slot_tilt 旋转后滑槽与尾孔同时实现 0.0000° 对齐！
         exp_body = ET.SubElement(frame, "body", name=f"expansion_link_{tag}", pos=f"{tx:.6f} {y_vg:.6f} {tz:.6f}")
-        attach_part_inertial(exp_body, parts_mp["expansion_link"], pitch_y_rad=exp_pitch_y)
+        attach_part_inertial(exp_body, parts_mp[f"expansion_link_{tag}"], pitch_y_rad=slot_tilt)
         ET.SubElement(exp_body, "joint", name=f"j_explink_{tag}", type="hinge", axis="0 1 0")
         ET.SubElement(
             exp_body, "geom", name=f"exp_link_vis_{tag}", type="mesh",
-            mesh="m_expansion_link", material="mat_machined_steel",
-            euler=f"0 {exp_pitch_y:.6f} 0", contype="0", conaffinity="0", mass="0"
+            mesh=f"m_expansion_link_{tag}", material="mat_machined_steel",
+            euler=f"0 {slot_tilt:.6f} 0", contype="0", conaffinity="0", mass="0"
         )
         ET.SubElement(exp_body, "site", name=f"s_exp_tail_{tag}", pos=f"{etx - tx:.6f} 0 {etz - tz:.6f}")
         ET.SubElement(
             equality, "connect", name=f"loop_eccentric_{tag}", site1=f"s_ecc_front_{tag}", site2=f"s_exp_tail_{tag}"
         )
 
-        # O3-1: 2-3 圆弧月牙槽等效铰接 (R = radius_rod_length)，初始置于零残差平衡微倾角 q_die_0
+        # O3-1: 2-3 圆弧月牙槽等效铰接 (R = radius_rod_length)，滑块网格按 slot_tilt 与圆弧滑槽严格同心
         slot_lim = vg_cfg["die_slot_half_travel"] * s
         ang_lim = math.asin(min(0.95, slot_lim / L_rad_m))
         die_body = ET.SubElement(
             exp_body, "body", name=f"die_block_{tag}",
             pos=f"{sdx - tx:.6f} 0 {sdz - tz:.6f}", euler=f"0 {q_die_0:.6f} 0"
         )
-        attach_part_inertial(die_body, parts_mp["die_block"], pitch_y_rad=exp_pitch_y - q_die_0)
+        attach_part_inertial(die_body, parts_mp[f"die_block_{tag}"], pitch_y_rad=slot_tilt)
         ET.SubElement(
             die_body, "joint", name=f"j_die_shift_{tag}", type="hinge", axis="0 1 0",
             pos=f"{cx_arc:.6f} 0 {cz_arc:.6f}", ref=f"{q_die_0:.6f}",
@@ -911,8 +984,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         )
         ET.SubElement(
             die_body, "geom", name=f"die_vis_{tag}", type="mesh",
-            mesh="m_die_block", material="mat_brass",
-            euler=f"0 {exp_pitch_y - q_die_0:.6f} 0", contype="0", conaffinity="0", mass="0"
+            mesh=f"m_die_block_{tag}", material="mat_brass",
+            euler=f"0 {slot_tilt:.6f} 0", contype="0", conaffinity="0", mass="0"
         )
 
         pitch_rad = -math.atan2(mz - sdz, mx - sdx)
@@ -920,11 +993,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             die_body, "body", name=f"radius_rod_{tag}",
             pos="0 0 0", euler=f"0 {pitch_rad - q_die_0:.6f} 0"
         )
-        attach_part_inertial(rad_body, parts_mp["radius_rod"])
+        attach_part_inertial(rad_body, parts_mp[f"radius_rod_{tag}"])
         ET.SubElement(rad_body, "joint", name=f"j_radius_{tag}", type="hinge", axis="0 1 0")
         ET.SubElement(
             rad_body, "geom", name=f"radius_rod_vis_{tag}", type="mesh",
-            mesh="m_radius_rod", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
+            mesh=f"m_radius_rod_{tag}", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
         )
         ET.SubElement(rad_body, "site", name=f"s_rad_front_{tag}", pos=f"{L_rad_m:.6f} 0 0")
         ET.SubElement(rad_body, "site", name=f"s_rad_lift_{tag}", pos=f"{-L_back_m:.6f} 0 0")
@@ -938,11 +1011,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             rev_shaft, "body", name=f"lift_link_{tag}",
             pos=f"{L_rev_arm:.6f} {y_vg:.6f} 0", euler=f"0 {pitch_lift:.6f} 0"
         )
-        attach_part_inertial(lift_arm, parts_mp["lift_link"])
+        attach_part_inertial(lift_arm, parts_mp[f"lift_link_{tag}"])
         ET.SubElement(lift_arm, "joint", name=f"j_lift_{tag}", type="hinge", axis="0 1 0")
         ET.SubElement(
             lift_arm, "geom", name=f"lift_link_vis_{tag}", type="mesh",
-            mesh="m_lift_link", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
+            mesh=f"m_lift_link_{tag}", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
         )
         ET.SubElement(lift_arm, "site", name=f"s_lift_bot_{tag}", pos=f"0 0 {-L_lift_m:.6f}")
         ET.SubElement(
@@ -959,11 +1032,12 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     ET.SubElement(sensor, "jointvel", name="pump_ram_vel", joint="j_pump_ram")
 
     # ==================== B. 四轴双转向架煤水车与牵引拉杆 ====================
-    if include_tender and on_rails:
+    if include_tender:
         x_pin_loco = t_cfg["drawbar_loco_pin_x"] * s
         L_drawbar = t_cfg["drawbar_length"] * s
         x_pin_tdr_local = t_cfg["drawbar_tender_pin_local_x"] * s
-        z_tdr_deck = rail_top_z + (2.0 * r_tdr) - 0.009
+        base_rail_z = rail_top_z if on_rails else (z_loco_axle - r_drv)
+        z_tdr_deck = base_rail_z + (2.0 * r_tdr) - 0.009
         half_span = 0.5 * t_cfg["bogie_center_span"] * s
         half_wb = 0.5 * t_cfg["bogie_wheelbase"] * s
 
@@ -975,7 +1049,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             phi_loco_pin = math.atan2(pin_loco_wy + R_curve, pin_loco_wx)
             phi_tdr = phi_loco_pin + (L_drawbar + x_pin_tdr_local) / R_curve
             tdr_wx = R_tdr * math.cos(phi_tdr)
-            tdr_wy = -R_curve + R_tdr * math.sin(phi_tdr)
+            tdr_wy = -R_curve + R_tdr * R_curve / R_curve * math.sin(phi_tdr)
             tdr_yaw = phi_tdr - 0.5 * math.pi
         else:
             tdr_wx, tdr_wy, tdr_yaw = pin_loco_wx - L_drawbar - x_pin_tdr_local, 0.0, 0.0
@@ -985,11 +1059,12 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         db_dx, db_dy = pin_tdr_wx - pin_loco_wx, pin_tdr_wy - pin_loco_wy
 
         drawbar = ET.SubElement(frame, "body", name="drawbar_8_8", pos=f"{x_pin_loco:.6f} 0 -0.006")
-        ET.SubElement(drawbar, "joint", name="j_drawbar_yaw", type="hinge", axis="0 0 1", damping="0.02")
-        ET.SubElement(drawbar, "joint", name="j_drawbar_pitch", type="hinge", axis="0 1 0", damping="0.02")
+        if on_rails:
+            ET.SubElement(drawbar, "joint", name="j_drawbar_yaw", type="hinge", axis="0 0 1", damping="0.02")
+            ET.SubElement(drawbar, "joint", name="j_drawbar_pitch", type="hinge", axis="0 1 0", damping="0.02")
         ET.SubElement(
             drawbar, "geom", type="capsule", fromto=f"0 0 0  {db_dx:.6f} {db_dy:.6f} 0",
-            size="0.0022", rgba="0.22 0.22 0.25 1", density=f"{rho_sus:.1f}", contype="0", conaffinity="0"
+            size="0.0022", material="mat_machined_steel", rgba="0.22 0.22 0.25 1", density=f"{rho_sus:.1f}", contype="0", conaffinity="0"
         )
         ET.SubElement(drawbar, "site", name="s_drawbar_rear", pos=f"{db_dx:.6f} {db_dy:.6f} 0")
 
@@ -997,25 +1072,32 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             world, "body", name="tender_body",
             pos=f"{tdr_wx:.6f} {tdr_wy:.6f} {z_tdr_deck:.6f}", euler=f"0 0 {tdr_yaw:.6f}"
         )
-        ET.SubElement(tender, "freejoint", name="tender_free")
+        if on_rails:
+            ET.SubElement(tender, "freejoint", name="tender_free")
         mp_tb = parts_mp["tender_body"]
-        m_tdr_fluid = 0.422
+        mp_ti = parts_mp["tender_internals"]
+        m_tdr_fluid = 0.250
         I_tdr_fluid = (m_tdr_fluid / 12.0) * np.diag([0.070**2 + 0.036**2, 0.200**2 + 0.036**2, 0.200**2 + 0.070**2])
         attach_composite_inertial(
             tender,
             [
                 (mp_tb["mass_kg"], np.array(mp_tb["com_m"]), full_to_mat3(mp_tb["fullinertia"])),
+                (mp_ti["mass_kg"], np.array(mp_ti["com_m"]), full_to_mat3(mp_ti["fullinertia"])),
                 (m_tdr_fluid, np.array([-0.015, 0.0, 0.022]), I_tdr_fluid),
             ],
         )
         z_pin_local = (z_loco_axle - 0.006) - z_tdr_deck
         ET.SubElement(tender, "site", name="s_tender_front_pin", pos=f"{x_pin_tdr_local:.6f} 0 {z_pin_local:.6f}")
         ET.SubElement(
+            tender, "geom", name="tender_internals_vis", type="mesh",
+            mesh="m_tender_internals", material="mat_brass", contype="0", conaffinity="0", mass="0"
+        )
+        ET.SubElement(
             tender, "geom", name="tender_body_vis", type="mesh",
             mesh="m_tender_body", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
         )
 
-        z_bogie_local = (rail_top_z + r_tdr + 0.0002) - z_tdr_deck
+        z_bogie_local = (base_rail_z + r_tdr + (0.0002 if on_rails else 0.0)) - z_tdr_deck
 
         for b_idx, bx in [(1, +half_span), (2, -half_span)]:
             if mode == "curve_r2m":
@@ -1032,15 +1114,17 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             else:
                 bogie = ET.SubElement(tender, "body", name=f"tender_bogie_{b_idx}", pos=f"{bx:.6f} 0 {z_bogie_local:.6f}")
                 attach_part_inertial(bogie, parts_mp["tender_bogie_frame"])
-                ET.SubElement(bogie, "joint", name=f"j_tbogie_{b_idx}_yaw", type="hinge", axis="0 0 1", damping="0.015")
-            ET.SubElement(
-                bogie, "joint", name=f"j_tbogie_{b_idx}_pitch", type="hinge", axis="0 1 0",
-                limited="true", range="-0.08 0.08", stiffness="0.6", damping="0.05"
-            )
-            ET.SubElement(
-                bogie, "joint", name=f"j_tbogie_{b_idx}_roll", type="hinge", axis="1 0 0",
-                limited="true", range="-0.05 0.05", stiffness="1.2", damping="0.08"
-            )
+                if on_rails:
+                    ET.SubElement(bogie, "joint", name=f"j_tbogie_{b_idx}_yaw", type="hinge", axis="0 0 1", damping="0.015")
+            if on_rails:
+                ET.SubElement(
+                    bogie, "joint", name=f"j_tbogie_{b_idx}_pitch", type="hinge", axis="0 1 0",
+                    limited="true", range="-0.08 0.08", stiffness="0.6", damping="0.05"
+                )
+                ET.SubElement(
+                    bogie, "joint", name=f"j_tbogie_{b_idx}_roll", type="hinge", axis="1 0 0",
+                    limited="true", range="-0.05 0.05", stiffness="1.2", damping="0.08"
+                )
             ET.SubElement(
                 bogie, "geom", name=f"tbogie_vis_{b_idx}", type="mesh",
                 mesh="m_tender_bogie_frame", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
@@ -1050,17 +1134,19 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
                 w_num = (b_idx - 1) * 2 + a_sub
                 t_abox = ET.SubElement(bogie, "body", name=f"tender_axlebox_{w_num}", pos=f"{ax_dx:.6f} 0 0")
                 attach_part_inertial(t_abox, parts_mp["tender_axlebox"])
-                ET.SubElement(
-                    t_abox, "joint", name=f"j_tsusp_z{w_num}", type="slide", axis="0 0 1",
-                    limited="true", range="-0.002 0.002", stiffness="900", damping="12"
-                )
+                if on_rails:
+                    ET.SubElement(
+                        t_abox, "joint", name=f"j_tsusp_z{w_num}", type="slide", axis="0 0 1",
+                        limited="true", range="-0.002 0.002", stiffness="900", damping="12"
+                    )
                 ET.SubElement(
                     t_abox, "geom", name=f"tabox_vis_{w_num}", type="mesh",
                     mesh="m_tender_axlebox", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
                 )
 
                 t_ws = ET.SubElement(t_abox, "body", name=f"tender_wheelset_{w_num}", pos="0 0 0")
-                ET.SubElement(t_ws, "joint", name=f"j_twheel_{w_num}", type="hinge", axis="0 1 0", damping="0.0005")
+                if on_rails:
+                    ET.SubElement(t_ws, "joint", name=f"j_twheel_{w_num}", type="hinge", axis="0 1 0", damping="0.0005")
                 attach_composite_inertial(
                     t_ws,
                     [
@@ -1068,7 +1154,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
                         (mp_tR["mass_kg"], np.array(mp_tR["com_m"]) + np.array([0.0, -y_tw_off, 0.0]), full_to_mat3(mp_tR["fullinertia"])),
                     ],
                 )
-                add_rail_wheel_colliders(t_ws, f"tdr_{w_num}", r_tdr, y_gauge_half, use_explicit_inertial=True, is_driving=False)
+                if on_rails:
+                    add_rail_wheel_colliders(t_ws, f"tdr_{w_num}", r_tdr, y_gauge_half, use_explicit_inertial=True, is_driving=False)
                 for s_tag, sgn in [("L", 1.0), ("R", -1.0)]:
                     ET.SubElement(
                         t_ws, "geom", name=f"tdr_vis_{w_num}_{s_tag}", type="mesh",
@@ -1076,12 +1163,13 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
                         pos=f"0 {sgn * y_tw_off:.6f} 0", contype="0", conaffinity="0", mass="0"
                     )
 
-        ET.SubElement(
-            equality, "connect", name="loop_tender_drawbar", site1="s_drawbar_rear", site2="s_tender_front_pin"
-        )
-        ET.SubElement(sensor, "framepos", name="loco_world_pos", objtype="body", objname="loco_frame")
-        ET.SubElement(sensor, "jointpos", name="leading_yaw_rad", joint="j_leading_yaw")
-        ET.SubElement(sensor, "jointpos", name="drawbar_yaw_rad", joint="j_drawbar_yaw")
+        if on_rails:
+            ET.SubElement(
+                equality, "connect", name="loop_tender_drawbar", site1="s_drawbar_rear", site2="s_tender_front_pin"
+            )
+            ET.SubElement(sensor, "framepos", name="loco_world_pos", objtype="body", objname="loco_frame")
+            ET.SubElement(sensor, "jointpos", name="leading_yaw_rad", joint="j_leading_yaw")
+            ET.SubElement(sensor, "jointpos", name="drawbar_yaw_rad", joint="j_drawbar_yaw")
 
     # [契约硬校验] 严禁任何运动刚体缺少真实材料惯量！
     for body_el in mj.iter("body"):

@@ -83,6 +83,7 @@ def default_d51_kinematics() -> Dict[str, Any]:
             "valve_axis_z": 18.5,                 # 上部平面滑阀 (1-6) 滑动轴线高度 Z
             "main_rod_length": 92.0,              # 主連棒 (7-11/7-16) 大小头孔距
             "crosshead_pin_dia": 3.0,             # 7-13 比例框: ø3.0 x 7.0mm
+            "crank_pin_axial_play_mm": 0.35,      # 曲柄销轴向微浮动游隙 ±0.35mm (防跨轮对横向锁死)
         },
         "walschaerts_valve_gear": {
             "return_crank_radius": 7.0,           # 图 9.2 硬指标: 回动曲柄孔距轮心精确 7.0mm
@@ -90,6 +91,7 @@ def default_d51_kinematics() -> Dict[str, Any]:
             "trunnion_x": 46.5,                   # 月牙加减链 (2-4) 旋转定轴 X 坐标
             "trunnion_z": 15.5,                   # 月牙加减链 (2-4) 旋转定轴 Z 坐标
             "exp_link_tail_radius": 13.5,         # 月牙板定轴中心至底部偏心杆耳孔距离
+            "exp_link_tail_cant_deg": 4.352738,   # 月牙板中立位圆弧槽法线与下尾耳矢量的精确固有夹角 (deg)
             "die_slot_half_travel": 6.5,          # 滑块 (2-3) 在月牙槽内自中立位 N 上下最大行程
             "eccentric_rod_length": 48.0,         # 偏心棒 (2-12/2-19) 两端孔距
             "radius_rod_length": 64.0,            # 心向棒 (2-1) 前端至滑块孔距 (圆弧月牙槽曲率半径 R)
@@ -102,6 +104,26 @@ def default_d51_kinematics() -> Dict[str, Any]:
             "reverser_shaft_z": 26.5,             # 逆転器アームシャフト (4-12) Z 坐标 (= 15.5 + 11.0, 严格匹配 11.0mm 吊杆铅垂孔距)
             "reverser_arm_length": 11.0,          # 逆転アーム (2-11/2-18) 摇臂孔距
             "lift_link_length": 11.0,             # 吊杆 (2-10 リンク) 孔距
+            "crank_pin_axial_play_mm": 0.35,      # 偏心销轴向微游隙 ±0.35mm
+            "y_layer_offsets": {
+                "chassis_inside_max_abs_y": 11.0,
+                "chassis_plate_abs_y_range": [11.75, 15.25],
+                "driving_wheel_abs_y_range": [21.4, 25.2],
+                "coupling_rod_center_abs_y": 28.0,
+                "main_rod_center_abs_y": 32.5,
+                "valve_gear_plane_abs_y": 36.0,
+                "return_crank_web_dy": -1.45,
+                "eccentric_rod_rear_dy": 0.15,
+                "eccentric_rod_front_lap_dy": -1.40,
+                "expansion_link_body_dy": 0.0,
+                "expansion_link_tail_ear_dy": 0.25,
+                "stepped_pin_2_2_head_dy": 1.55,
+                "stepped_pin_2_2_nut_dy": -2.40,
+                "radius_rod_bar_dy": -1.70,
+                "comb_lever_web_dy": 0.0,
+                "union_link_clevis_dy": 0.0,
+                "lift_link_bot_clevis_dy": -1.70,
+            },
         },
         "boiler_and_aux": {
             "boiler_front_id": 53.0,              # Template 6: ø53mm

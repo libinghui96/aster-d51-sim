@@ -40,14 +40,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libosmesa6
 
       - name: Install Python deps
-        run: pip install mujoco numpy matplotlib pillow
+        run: pip install mujoco numpy matplotlib pillow scipy
 
-      - name: Check models are in sync with generator
+      - name: Check models are in sync with generator & run Gate 1-8 verification
         run: |
           python scripts/03_generate_mjcf.py --mode roller --out /tmp/d51_regen.xml
           diff -q /tmp/d51_regen.xml models/d51_full.xml
           python scripts/03_generate_mjcf.py --mode curve_r2m --out /tmp/d51_r2m_regen.xml
           diff -q /tmp/d51_r2m_regen.xml models/d51_r2m.xml
+          python scripts/09_verify_cad_and_clearance.py
 
       - name: Sync CAD/MJCF assets & build Web 3D interactive frontend
         run: |
