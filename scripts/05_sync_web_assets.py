@@ -30,7 +30,7 @@ def main():
             shutil.copy2(stl, dst_meshes / stl.name)
             manifest["meshes"].append(stl.name)
 
-    for cfg_name in ("d51_mass_props.json", "smokebox_lut.json", "auto_fireman_policy.json"):
+    for cfg_name in ("d51_mass_props.json", "d51_boiler_piping.json", "smokebox_lut.json", "auto_fireman_policy.json"):
         cfg_p = Path("configs") / cfg_name
         if cfg_p.exists():
             shutil.copy2(cfg_p, dst_models / cfg_name)

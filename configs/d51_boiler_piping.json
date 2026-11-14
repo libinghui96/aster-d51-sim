@@ -1,0 +1,200 @@
+{
+  "meta": {
+    "model": "Aster Hobby JNR D51 Standard / Heavy-Equipped (1/32, Gauge 1)",
+    "stage": "P0-B (V2-BOILER-CAD)",
+    "units": "mm, ml, cm^2, bar/kgf_cm2",
+    "template_calibration": {
+      "templates_found": true,
+      "px_per_mm": 11.8415,
+      "template6_boiler_id_mm": 53.0,
+      "template5_smokebox_circ_mm": 203.77,
+      "template5_smokebox_od_mm": 64.86,
+      "template5_smokebox_len_mm": 70.43,
+      "template2_firebox_w_mm": 48.98,
+      "template2_firebox_l_mm": 64.86,
+      "template1_cab_wrapper_mm": [
+        69.75,
+        77.86
+      ]
+    }
+  },
+  "boiler_pressure_vessel": {
+    "material": "Oxygen-Free Copper C1100 (Silver-Brazed)",
+    "density_kg_m3": 8940.0,
+    "thermal_conductivity_w_mk": 385.0,
+    "centerline_z_mm": 44.0,
+    "barrel_x_range_mm": [
+      -112.0,
+      92.0
+    ],
+    "barrel_id_mm": 53.0,
+    "barrel_od_mm": 55.4,
+    "barrel_wall_mm": 1.2,
+    "inner_firebox": {
+      "x_range_mm": [
+        -107.5,
+        -47.0
+      ],
+      "width_mm": 38.0,
+      "floor_z_mm": 19.5,
+      "crown_sheet_z_mm": 47.5,
+      "wall_thickness_mm": 1.2,
+      "normal_50pct_water_z_mm": 59.0,
+      "normal_crown_submergence_mm": 11.5
+    },
+    "dual_flue_tubes": {
+      "count": 2,
+      "y_centers_mm": [
+        -12.5,
+        12.5
+      ],
+      "z_center_mm": 42.0,
+      "x_range_mm": [
+        -47.0,
+        92.0
+      ],
+      "length_mm": 139.0,
+      "od_mm": 13.0,
+      "id_mm": 11.4,
+      "wall_mm": 0.8
+    },
+    "verified_capacities": {
+      "geometric_net_volume_ml": 401.8,
+      "locked_thermo_total_volume_ml": 380.0,
+      "water_gauge_0pct_ml": 140.0,
+      "water_gauge_50pct_ml": 210.0,
+      "water_gauge_100pct_ml": 280.0,
+      "firebox_crown_area_cm2": 22.99,
+      "firebox_wall_area_cm2": 44.52,
+      "flues_gas_side_area_cm2": 99.56,
+      "flues_water_side_area_cm2": 113.54,
+      "total_evaporative_area_cm2": 181.05
+    }
+  },
+  "superheater_and_steam_piping": {
+    "material": "Stainless Steel SUS304",
+    "density_kg_m3": 7930.0,
+    "steam_dome_x_mm": 26.0,
+    "dry_pipe_od_mm": 4.0,
+    "dry_pipe_id_mm": 2.8,
+    "superheater_4pass": {
+      "passes": 4,
+      "tube_od_mm": 3.2,
+      "tube_id_mm": 2.2,
+      "x_turn_in_flue_mm": -24.0,
+      "x_smokebox_header_mm": 106.0,
+      "total_heated_length_mm": 520.0,
+      "outer_heat_transfer_area_cm2": 52.28
+    },
+    "branch_steam_pipes": {
+      "x_chest_entry_mm": 126.0,
+      "y_chest_centers_mm": [
+        -32.5,
+        32.5
+      ],
+      "z_chest_entry_mm": 18.5,
+      "tube_od_mm": 3.6,
+      "tube_id_mm": 2.4
+    },
+    "smokebox_draft_ejector": {
+      "chimney_axis_x_mm": 130.0,
+      "blast_nozzle_part": "20-7",
+      "blast_nozzle_tip_z_mm": 26.0,
+      "blast_nozzle_orifice_dia_mm": 4.2,
+      "blast_nozzle_area_mm2": 13.854,
+      "blower_ring_eff_area_mm2": 0.16,
+      "petticoat_part": "18-25",
+      "petticoat_entry_z_mm": 56.0,
+      "petticoat_throat_dia_mm": 13.6,
+      "petticoat_flare_dia_mm": 23.2
+    }
+  },
+  "alcohol_burner_system": {
+    "fuel_type": "Denatured / Fuel Alcohol (Methanol-Ethanol, LHV ~ 24.5 MJ/kg)",
+    "tender_tank_capacity_ml": 130.0,
+    "endurance_min_nominal": 20.0,
+    "feed_method": "Constant-Level Chicken-Feeder Sump (サンプ恒液位供油)",
+    "wick_count": 3,
+    "wick_centers_x_mm": [
+      -95.5,
+      -77.5,
+      -59.5
+    ],
+    "wick_cup_od_mm": 12.2,
+    "wick_cup_id_mm": 9.8,
+    "wick_top_z_mm": 18.5,
+    "supply_tube_od_mm": 3.2
+  },
+  "pumps_and_valves_bom": {
+    "axle_feed_pump_6_5": {
+      "part_no": "6-5",
+      "x_mm": -22.0,
+      "ram_seal": "PN3.2-1",
+      "ram_bore_mm": 3.2,
+      "eccentric_throw_mm": 3.5,
+      "stroke_mm": 7.0,
+      "theoretical_disp_ml_per_rev": 0.0563,
+      "check_balls_dia_mm": 3.175,
+      "suction_cracking_dp_kpa": 6.0,
+      "delivery_cracking_dp_kpa": 14.0,
+      "boiler_clack_x_mm": 48.0
+    },
+    "bypass_needle_valve_4_17": {
+      "part_no": "4-17",
+      "needle_seat_dia_mm": 1.8,
+      "flow_exponent_gamma": 1.35,
+      "nominal_50pct_balance_setting": 0.4
+    },
+    "tender_hand_pump_31_5": {
+      "part_no": "31-5",
+      "ram_seal": "PN7-1.9",
+      "ram_bore_mm": 7.0,
+      "stroke_mm": 16.0,
+      "disp_ml_per_stroke": 0.616,
+      "strokes_for_half_boiler": 30
+    },
+    "regulator_throttle_valve": {
+      "location": "Steam Dome Top / Cab Pull-Rod",
+      "max_orifice_dia_mm": 2.6,
+      "max_area_mm2": 5.309,
+      "discharge_coeff_cd": 0.72
+    },
+    "twin_safety_valves_28_6": {
+      "part_no": "28-6",
+      "count": 2,
+      "x_mm": -36.0,
+      "y_centers_mm": [
+        -3.8,
+        3.8
+      ],
+      "pop_pressure_kgf_cm2": 4.0,
+      "reseat_pressure_kgf_cm2": 3.55,
+      "seat_dia_mm": 2.2,
+      "discharge_coeff_cd": 0.62
+    },
+    "blower_valve": {
+      "seat_dia_mm": 1.2,
+      "nominal_draft_angle_deg": 30.0,
+      "discharge_coeff_cd": 0.65
+    },
+    "water_gauge_11_7": {
+      "part_no": "11-7",
+      "glass_od_mm": 4.0,
+      "visible_span_mm": 18.0,
+      "x_cab_backhead_mm": -114.5
+    },
+    "displacement_lubricator": {
+      "type": "Roscoe Steam-Condensation Displacement",
+      "x_mm": 148.0,
+      "y_mm": 18.5,
+      "z_mm": 13.5,
+      "oil_capacity_ml": 6.5,
+      "endurance_min_nominal": 60.0
+    },
+    "cylinder_drain_cocks": {
+      "ports_total": 4,
+      "orifice_dia_mm": 1.2,
+      "discharge_coeff_cd": 0.62
+    }
+  }
+}

@@ -338,6 +338,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     ET.SubElement(asset, "material", name="mat_black_iron", rgba="0.14 0.14 0.16 1", specular="0.6", shininess="0.5")
     ET.SubElement(asset, "material", name="mat_machined_steel", rgba="0.78 0.80 0.84 1", specular="0.9", shininess="0.8")
     ET.SubElement(asset, "material", name="mat_brass", rgba="0.82 0.62 0.24 1", specular="0.85", shininess="0.75")
+    ET.SubElement(asset, "material", name="mat_copper", rgba="0.78 0.43 0.27 1", specular="0.88", shininess="0.78")
 
     world = ET.SubElement(mj, "worldbody")
     ET.SubElement(world, "light", pos="0 -1.5 2.2", dir="0 0.4 -0.9", diffuse="0.92 0.92 0.92")
@@ -380,6 +381,10 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     tx_m, tz_m = vg_cfg["trunnion_x"] * s, vg_cfg["trunnion_z"] * s
 
     mp_boil = parts_mp["boiler_superstructure"]
+    mp_cu_core = parts_mp["boiler_firebox_flues"]
+    mp_sh_pipe = parts_mp["superheater_piping"]
+    mp_burner = parts_mp["alcohol_burner"]
+    mp_aux_valves = parts_mp["boiler_aux_valves"]
     mp_cylL, mp_cylR = parts_mp["cylinder_block_L"], parts_mp["cylinder_block_R"]
     mp_mbL, mp_mbR = parts_mp["motion_bracket_L"], parts_mp["motion_bracket_R"]
     cyl_pos_L = np.array([rc_cfg["cylinder_center_x"] * s, +rc_cfg["cylinder_center_y"] * s, rc_cfg["cylinder_center_z"] * s])
@@ -389,12 +394,12 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
 
     m_side_plate = (0.330 * 0.0035 * 0.016) * rho_iron
     I_side_plate = (m_side_plate / 12.0) * np.diag([0.0035**2 + 0.016**2, 0.330**2 + 0.016**2, 0.330**2 + 0.0035**2])
-    m_boil_core = 0.460 + 0.210
+    m_boiler_water = 0.210  # 50% 标准水位锅水质量 (210 ml)
     r_core, L_core = 0.5 * b_cfg["boiler_front_id"] * s, 0.204
-    I_boil_core = np.diag([
-        0.5 * m_boil_core * (r_core**2),
-        (m_boil_core / 12.0) * (3.0 * (r_core**2) + L_core**2),
-        (m_boil_core / 12.0) * (3.0 * (r_core**2) + L_core**2),
+    I_boiler_water = np.diag([
+        0.5 * m_boiler_water * (r_core**2),
+        (m_boiler_water / 12.0) * (3.0 * (r_core**2) + L_core**2),
+        (m_boiler_water / 12.0) * (3.0 * (r_core**2) + L_core**2),
     ])
     m_front_saddle = 0.340
     I_front_saddle = (m_front_saddle / 12.0) * np.diag([0.042**2 + 0.018**2, 0.055**2 + 0.018**2, 0.055**2 + 0.042**2])
@@ -402,13 +407,17 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         frame,
         [
             (mp_boil["mass_kg"], np.array(mp_boil["com_m"]), full_to_mat3(mp_boil["fullinertia"])),
+            (mp_cu_core["mass_kg"], np.array(mp_cu_core["com_m"]), full_to_mat3(mp_cu_core["fullinertia"])),
+            (mp_sh_pipe["mass_kg"], np.array(mp_sh_pipe["com_m"]), full_to_mat3(mp_sh_pipe["fullinertia"])),
+            (mp_burner["mass_kg"], np.array(mp_burner["com_m"]), full_to_mat3(mp_burner["fullinertia"])),
+            (mp_aux_valves["mass_kg"], np.array(mp_aux_valves["com_m"]), full_to_mat3(mp_aux_valves["fullinertia"])),
             (mp_cylL["mass_kg"], np.array(mp_cylL["com_m"]) + cyl_pos_L, full_to_mat3(mp_cylL["fullinertia"])),
             (mp_cylR["mass_kg"], np.array(mp_cylR["com_m"]) + cyl_pos_R, full_to_mat3(mp_cylR["fullinertia"])),
             (mp_mbL["mass_kg"], np.array(mp_mbL["com_m"]) + mb_pos_L, full_to_mat3(mp_mbL["fullinertia"])),
             (mp_mbR["mass_kg"], np.array(mp_mbR["com_m"]) + mb_pos_R, full_to_mat3(mp_mbR["fullinertia"])),
             (m_side_plate, np.array([0.020, +0.0135, 0.004]), I_side_plate),
             (m_side_plate, np.array([0.020, -0.0135, 0.004]), I_side_plate),
-            (m_boil_core, np.array([0.0225, 0.0, 0.044]), I_boil_core),
+            (m_boiler_water, np.array([0.010, 0.0, 0.042]), I_boiler_water),
             (m_front_saddle, np.array([0.145, 0.0, 0.008]), I_front_saddle),
         ],
     )
@@ -423,6 +432,27 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             mesh=f"m_motion_bracket_{s_tag}", material="mat_black_iron",
             pos=f"{tx_m:.6f} {sgn_f * y_vg_abs:.6f} {tz_m:.6f}", mass="0", contype="0", conaffinity="0"
         )
+    # P0-B 锅炉内脏参数化 CAD (零额外动力学自由度，挂载于 loco_frame 供 X-Ray 透视内窥与 3D CFD 体素化)
+    ET.SubElement(
+        frame, "geom", name="boiler_copper_core_vis", type="mesh",
+        mesh="m_boiler_firebox_flues", material="mat_copper",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
+        frame, "geom", name="superheater_piping_vis", type="mesh",
+        mesh="m_superheater_piping", material="mat_machined_steel",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
+        frame, "geom", name="alcohol_burner_vis", type="mesh",
+        mesh="m_alcohol_burner", material="mat_brass",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
+        frame, "geom", name="boiler_aux_valves_vis", type="mesh",
+        mesh="m_boiler_aux_valves", material="mat_brass",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
     ET.SubElement(
         frame, "geom", name="boiler_Super_vis", type="mesh",
         mesh="m_boiler_superstructure", material="mat_black_iron",

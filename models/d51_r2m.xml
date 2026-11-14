@@ -39,6 +39,10 @@
     <mesh name="m_cylinder_block_L" file="cylinder_block_L.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_cylinder_block_R" file="cylinder_block_R.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_boiler_superstructure" file="boiler_superstructure.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_boiler_firebox_flues" file="boiler_firebox_flues.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_superheater_piping" file="superheater_piping.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_alcohol_burner" file="alcohol_burner.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_boiler_aux_valves" file="boiler_aux_valves.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_tender_body" file="tender_body.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_tender_bogie_frame" file="tender_bogie_frame.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_truck_wheel_L" file="truck_wheel_L.stl" scale="0.001 0.001 0.001"/>
@@ -46,6 +50,7 @@
     <material name="mat_black_iron" rgba="0.14 0.14 0.16 1" specular="0.6" shininess="0.5"/>
     <material name="mat_machined_steel" rgba="0.78 0.80 0.84 1" specular="0.9" shininess="0.8"/>
     <material name="mat_brass" rgba="0.82 0.62 0.24 1" specular="0.85" shininess="0.75"/>
+    <material name="mat_copper" rgba="0.78 0.43 0.27 1" specular="0.88" shininess="0.78"/>
   </asset>
   <worldbody>
     <light pos="0 -1.5 2.2" dir="0 0.4 -0.9" diffuse="0.92 0.92 0.92"/>
@@ -594,11 +599,15 @@
     </body>
     <body name="loco_frame" pos="-0.023250 -0.000608 0.026100">
       <freejoint name="loco_free"/>
-      <inertial pos="0.008032 -0.000006 0.041838" mass="3.625344" fullinertia="4.534392149e-03 4.096621703e-02 3.936041665e-02 3.565310368e-06 5.449928799e-03 4.892662733e-08"/>
+      <inertial pos="0.006139 0.000108 0.041334" mass="3.687048" fullinertia="4.596926206e-03 4.148559160e-02 3.992781945e-02 -2.669584924e-05 5.600993566e-03 4.764429018e-06"/>
       <geom name="main_chassis_L" type="box" pos="0.020 0.013500 0.004" size="0.165 0.00175 0.008" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="motion_bracket_vis_L" type="mesh" mesh="m_motion_bracket_L" material="mat_black_iron" pos="0.046500 0.036000 0.015500" mass="0" contype="0" conaffinity="0"/>
       <geom name="main_chassis_R" type="box" pos="0.020 -0.013500 0.004" size="0.165 0.00175 0.008" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="motion_bracket_vis_R" type="mesh" mesh="m_motion_bracket_R" material="mat_black_iron" pos="0.046500 -0.036000 0.015500" mass="0" contype="0" conaffinity="0"/>
+      <geom name="boiler_copper_core_vis" type="mesh" mesh="m_boiler_firebox_flues" material="mat_copper" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="superheater_piping_vis" type="mesh" mesh="m_superheater_piping" material="mat_machined_steel" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="alcohol_burner_vis" type="mesh" mesh="m_alcohol_burner" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="boiler_aux_valves_vis" type="mesh" mesh="m_boiler_aux_valves" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="boiler_Super_vis" type="mesh" mesh="m_boiler_superstructure" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <body name="axlebox_1" pos="0.093000 0 0">
         <inertial pos="-0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 1.470645827e-23 6.375997060e-24 -6.284514739e-23"/>
@@ -860,7 +869,7 @@
         <site name="s_valve_clevis_L" pos="0 0 0"/>
       </body>
       <body name="expansion_link_L" pos="0.046500 0.036000 0.015500">
-        <inertial pos="-0.000055 0.000000 -0.003929" mass="0.004773" fullinertia="4.116154713e-07 4.227298554e-07 2.681343333e-08 1.126935596e-24 3.089170142e-08 -2.338216241e-23"/>
+        <inertial pos="-0.000103 0.000000 -0.000814" mass="0.003569" fullinertia="1.794539073e-07 1.872965265e-07 2.236874837e-08 -5.216684022e-25 7.836878887e-09 -2.341081747e-23"/>
         <joint name="j_explink_L" type="hinge" axis="0 1 0"/>
         <geom name="exp_link_vis_L" type="mesh" mesh="m_expansion_link" material="mat_machined_steel" euler="0 -0.047851 0" contype="0" conaffinity="0" mass="0"/>
         <site name="s_exp_tail_L" pos="0.000646 0 -0.013485"/>
@@ -903,7 +912,7 @@
         <site name="s_valve_clevis_R" pos="0 0 0"/>
       </body>
       <body name="expansion_link_R" pos="0.046500 -0.036000 0.015500">
-        <inertial pos="-0.001850 0.000000 -0.003467" mass="0.004773" fullinertia="3.559112729e-07 4.227298554e-07 8.251763178e-08 -9.718062995e-24 -1.388755867e-07 -2.129682499e-23"/>
+        <inertial pos="-0.000464 0.000000 -0.000676" mass="0.003569" fullinertia="1.528241027e-07 1.872965265e-07 4.899855295e-08 -1.119634617e-23 -5.945937489e-08 -2.056648596e-23"/>
         <joint name="j_explink_R" type="hinge" axis="0 1 0"/>
         <geom name="exp_link_vis_R" type="mesh" mesh="m_expansion_link" material="mat_machined_steel" euler="0 0.428401 0" contype="0" conaffinity="0" mass="0"/>
         <site name="s_exp_tail_R" pos="-0.005608 0 -0.012280"/>

@@ -102,7 +102,9 @@ async function main() {
   let thermo: AsterD51Thermo1D;
   let geomMeshes: THREE.Mesh[] = [];
   let cylHousingMeshes: THREE.Mesh[] = [];
+  let boilerOuterMeshes: THREE.Mesh[] = [];
   let boilerShellMats: THREE.MeshStandardMaterial[] = [];
+  let copperCoreMats: THREE.MeshStandardMaterial[] = [];
   let simGroup = new THREE.Group();
   scene.add(simGroup);
 
@@ -155,7 +157,9 @@ async function main() {
     scene.add(simGroup);
     geomMeshes = [];
     cylHousingMeshes = [];
+    boilerOuterMeshes = [];
     boilerShellMats = [];
+    copperCoreMats = [];
     prevFwdVel = 0.0;
 
     model = mujoco.MjModel.loadFromXML(`/working/${xmlFile}`);
@@ -242,6 +246,7 @@ async function main() {
     const matIron = new THREE.MeshStandardMaterial({ color: 0x282c34, metalness: 0.58, roughness: 0.38 });
     const matSteel = new THREE.MeshStandardMaterial({ color: 0xd8dee9, metalness: 0.88, roughness: 0.22 });
     const matBrass = new THREE.MeshStandardMaterial({ color: 0xd8a03c, metalness: 0.82, roughness: 0.26 });
+    const matCopper = new THREE.MeshStandardMaterial({ color: 0xc96f46, metalness: 0.86, roughness: 0.24 });
 
     const xmlDoc = new DOMParser().parseFromString(
       new TextDecoder().decode(mujoco.FS.readFile(`/working/${xmlFile}`)), "text/xml"
@@ -288,7 +293,12 @@ async function main() {
           }
         }
 
-        if (
+        if (meshKey === "boiler_firebox_flues") {
+          const cuMat = matCopper.clone();
+          copperCoreMats.push(cuMat);
+          mat = cuMat;
+        } else if (
+          meshKey === "superheater_piping" ||
           meshKey.includes("rod") ||
           meshKey.includes("link") ||
           meshKey.includes("reverser") ||
@@ -297,6 +307,8 @@ async function main() {
         ) {
           mat = matSteel;
         } else if (
+          meshKey === "alcohol_burner" ||
+          meshKey === "boiler_aux_valves" ||
           meshKey.includes("valve") ||
           meshKey.includes("piston") ||
           meshKey.includes("die") ||
@@ -306,7 +318,7 @@ async function main() {
           mat = matBrass;
         } else if (meshKey.includes("cylinder_block")) {
           mat = matIron.clone();
-        } else if (meshKey.includes("boiler")) {
+        } else if (meshKey === "boiler_superstructure") {
           const bMat = matIron.clone();
           boilerShellMats.push(bMat);
           mat = bMat;
@@ -334,6 +346,8 @@ async function main() {
       mesh.visible = threeGeom !== null && grp < 3 && rgbaA > 0.05;
       if (threeGeom && gType === 7 && meshKey.includes("cylinder_block")) {
         cylHousingMeshes.push(mesh);
+      } else if (threeGeom && gType === 7 && meshKey === "boiler_superstructure") {
+        boilerOuterMeshes.push(mesh);
       }
       simGroup.add(mesh);
       geomMeshes.push(mesh);
@@ -409,8 +423,17 @@ async function main() {
     for (const m of cylHousingMeshes) {
       const mat = m.material as THREE.MeshStandardMaterial;
       mat.transparent = xray;
-      mat.opacity = xray ? 0.28 : 1.0;
+      mat.opacity = xray ? 0.26 : 1.0;
       mat.depthWrite = !xray;
+      m.renderOrder = xray ? 2 : 0;
+      mat.needsUpdate = true;
+    }
+    for (const m of boilerOuterMeshes) {
+      const mat = m.material as THREE.MeshStandardMaterial;
+      mat.transparent = xray;
+      mat.opacity = xray ? 0.16 : 1.0;
+      mat.depthWrite = !xray;
+      m.renderOrder = xray ? 2 : 0;
       mat.needsUpdate = true;
     }
   };
@@ -535,7 +558,10 @@ async function main() {
       fireboxGlowLight.position.copy(fireboxLocal).applyMatrix4(locoMat4);
       fireboxGlowLight.intensity = ctrl.burnerLit ? 0.25 + 3.2 * hotRatio : 2.8 * hotRatio;
       for (const bMat of boilerShellMats) {
-        bMat.emissive.setRGB(0.55 * hotRatio, 0.09 * hotRatio, 0.02 * hotRatio);
+        bMat.emissive.setRGB(0.32 * hotRatio, 0.05 * hotRatio, 0.01 * hotRatio);
+      }
+      for (const cuMat of copperCoreMats) {
+        cuMat.emissive.setRGB(0.85 * hotRatio, 0.16 * hotRatio, 0.03 * hotRatio);
       }
 
       document.getElementById("badge-cfd")!.textContent = out.lutActive ? "RTX 5080 CFD" : "1D ANALYTIC";

@@ -14,7 +14,7 @@ Aster Hobby 1 番ゲージ (1/32, 45 mm 轨距) JNR D51 真蒸汽机车的 **1D 
 ### 1. Python 建模与仿真
 ```bash
 pip install -r requirements.txt
-python scripts/02_build_cad_meshes.py                           # 构建 36 件 CAD STL 网格与材料惯量库
+python scripts/02_build_cad_meshes.py                           # 构建 40 件 CAD STL 网格与材料惯量库
 python scripts/03_generate_mjcf.py --mode roller                # 编译滚轮台模型 -> models/d51_full.xml
 python scripts/03_generate_mjcf.py --mode curve_r2m --out models/d51_r2m.xml
 python -m sim.run_cosim --headless-demo                         # 试运转全流程 -> logs/d51_telemetry.png

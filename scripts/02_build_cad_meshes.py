@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 scripts/02_build_cad_meshes.py
-Aster D51 全套 32 件参数化 CAD 建模 + OpenCascade 精确物理质量/偏心质心/3x3惯量张量积分器 (V2-GEAR 精密走行配气版)。
+Aster D51 全套 40 件参数化 CAD 建模 + OpenCascade 精确物理质量/偏心质心/3x3惯量张量积分器 (V2-GEAR + V2-BOILER-CAD 版)。
 严格遵循 GEMINI.md 第 5 节契约：
-  - 黄铜 (BS: 气缸、滑阀、锅筒配件、动轮轴箱、月牙滑块、给水泵偏心箍): 8500 kg/m³
-  - 不锈钢 (SUS: 主连杆、三段铰接耦合连杆、7-10 回动曲柄、华氏五杆系、逆转横轴): 7930 kg/m³
+  - 紫铜 (C1100: 受压内火室、平顶板、前后管板、双火管): 8940 kg/m³
+  - 黄铜 (BS: 气缸、滑阀、6-5 轴动泵阀体、逆止阀、水面计/压力表、注油器、轴箱、月牙滑块): 8500 kg/m³
+  - 不锈钢 (SUS: 4折过热器管网、乏汽喷嘴/裙罩、主连杆、三段铰接耦合连杆、7-10 回动曲柄、华氏五杆、逆转横轴): 7930 kg/m³
   - 铸铁/钢 (FC/S45C: 第3主动轮/从动轮、2-5 配气导轨托架、先导/从轮台车架、煤水车转向架): 7350 kg/m³
 输出:
-  - models/meshes/*.stl (32 个高精度水密网格)
+  - models/meshes/*.stl (40 个高精度水密网格)
   - configs/d51_mass_props.json (SI 单位制: kg, m, kg·m²)
 """
 
@@ -21,6 +22,7 @@ from OCP.BRepGProp import BRepGProp
 from OCP.GProp import GProp_GProps
 from build123d import (
     Box,
+    Cone,
     Cylinder,
     Plane,
     PolarLocations,
@@ -34,11 +36,13 @@ from build123d import (
 )
 
 # 原厂金属材质密度表 (kg/m³)
-RHO_BRASS = 8500.0              # 黄铜 BS (1-6 滑阀, 5-9 轴箱, 2-3 滑块, 6-3 偏心环等)
-RHO_STAINLESS = 7930.0          # 不锈钢 SUS (连杆系, 7-10 回动曲柄, 华氏五杆, 4-12 逆转横轴等)
+RHO_COPPER = 8940.0             # 无氧紫铜 C1100 (内火室、顶板、双火管、管板)
+RHO_BRASS = 8500.0              # 黄铜 BS (1-6 滑阀, 6-5 轴动泵, 5-9 轴箱, 2-3 滑块, 6-3 偏心环等)
+RHO_STAINLESS = 7930.0          # 不锈钢 SUS (4折过热器, 连杆系, 7-10 回动曲柄, 华氏五杆, 4-12 逆转横轴等)
 RHO_CAST_IRON = 7350.0          # 铸铁/碳钢 (Boxpok 动轮, 2-5 配气托架, 台车架, 转向架等)
 RHO_COMPOSITE_VALVE = 8250.0    # 1-6 黄铜滑阀 + 1-22 不锈钢阀芯棒复合体
 RHO_COMPOSITE_PISTON = 8200.0   # 1-28 黄铜活塞 + SUS 活塞杆 + 1-31 十字头复合体
+RHO_BURNER_ASSY = 8200.0        # 三头黄铜/不锈钢毛细燃烧器总成
 
 
 def compute_occ_mass_props(solid: Any, density_kg_m3: float) -> Dict[str, Any]:
@@ -580,6 +584,12 @@ def build_tender_axlebox(cfg: Dict):
 
 
 def build_expansion_link(cfg: Dict):
+    """
+    2-4 月牙加减链 (加減リンク, イラスト 2 & 9):
+      - 原点 (0,0,0) 为定轴耳轴中心 (trunnion);
+      - 圆弧滑槽曲率半径 R = radius_rod_length = 64.0mm，上下端帽精确切合圆弧中心线 x = R - sqrt(R^2 - z^2);
+      - 下尾耳孔严格终止于 z = -r_tail = -13.5mm (外圆半径 2.2mm -> 最低点 -15.7mm)，消除多余下伸方柄。
+    """
     vg = cfg["walschaerts_valve_gear"]
     R_arc = float(vg["radius_rod_length"])
     r_tail = float(vg["exp_link_tail_radius"])
@@ -601,10 +611,18 @@ def build_expansion_link(cfg: Dict):
     )
     crescent_body -= slot_ring & Box(18.0, thick_y + 4.0, 2.0 * slot_half + 1.6)
 
-    top_cap = Pos(R_arc - math.hypot(R_arc, z_top), 0, z_top) * Rot(90, 0, 0) * Cylinder(radius=0.5 * body_w, height=thick_y)
-    bot_cap = Pos(R_arc - math.hypot(R_arc, z_bot), 0, z_bot) * Rot(90, 0, 0) * Cylinder(radius=0.5 * body_w, height=thick_y)
-    tail_arm = Pos(0.4, 0, 0.5 * (z_bot - r_tail)) * Box(4.2, thick_y - 0.6, abs(r_tail - z_bot) + 3.0)
-    tail_boss = Pos(0, 0, -r_tail) * Rot(90, 0, 0) * Cylinder(radius=2.2, height=2.4)
+    x_cap_top = R_arc - math.sqrt(max(0.0, R_arc**2 - z_top**2))
+    x_cap_bot = R_arc - math.sqrt(max(0.0, R_arc**2 - z_bot**2))
+    top_cap = Pos(x_cap_top, 0, z_top) * Rot(90, 0, 0) * Cylinder(radius=0.5 * body_w, height=thick_y)
+    bot_cap = Pos(x_cap_bot, 0, z_bot) * Rot(90, 0, 0) * Cylinder(radius=0.5 * body_w, height=thick_y)
+
+    z_tail = -r_tail
+    z_neck_top = z_bot + 1.0
+    neck_h = z_neck_top - z_tail
+    tail_arm = Pos(0.5 * x_cap_bot, 0, 0.5 * (z_neck_top + z_tail)) * Rot(0, 7.5, 0) * Box(
+        3.6, thick_y - 0.6, neck_h
+    )
+    tail_boss = Pos(0, 0, z_tail) * Rot(90, 0, 0) * Cylinder(radius=2.2, height=2.4)
     trunnion_bridge = Pos(-0.5 * body_w - 0.6, 0, 0) * Box(2.2, thick_y + 2.6, 4.6)
     trunnion_pins = Rot(90, 0, 0) * Cylinder(radius=1.8, height=thick_y + 5.6)
 
@@ -612,7 +630,7 @@ def build_expansion_link(cfg: Dict):
         crescent_body + top_cap + bot_cap + tail_arm + tail_boss + trunnion_bridge
         + (trunnion_pins - Box(slot_w + 0.4, thick_y - 0.8, 6.0))
     )
-    link -= Pos(0, 0, -r_tail) * Rot(90, 0, 0) * Cylinder(radius=0.95, height=thick_y + 4.0)
+    link -= Pos(0, 0, z_tail) * Rot(90, 0, 0) * Cylinder(radius=0.95, height=thick_y + 4.0)
     return link
 
 
@@ -711,8 +729,269 @@ def build_boiler_superstructure(cfg: Dict, heavy_equipped: bool = True):
         - Pos(0.5 * (x_sb_front - 3.0 + x_fb_rear + 3.0), 0, z_axis)
         * Rot(0, 90, 0)
         * Cylinder(radius=0.5 * float(b_cfg["boiler_front_id"]) + 1.5, height=(x_sb_front - x_fb_rear) - 6.0)
-        - Pos(0.5 * (x_fb_front + x_fb_rear), 0, z_axis - 12.0) * Box(fb_l - 4.0, fb_w - 4.0, fb_h - 4.0)
+        - Pos(0.5 * (x_sb_front - 3.5 + x_sb_rear + 2.0), 0, z_axis)
+        * Rot(0, 90, 0)
+        * Cylinder(radius=r_sb - 1.8, height=L_sb - 5.5)
+        - Pos(0.5 * (x_fb_front + x_fb_rear), 0, z_axis - 14.0) * Box(fb_l - 4.0, fb_w - 4.0, fb_h)
+        - Pos(x_chimney, 0, z_axis + r_sb + 6.5) * Cylinder(radius=6.2, height=28.0)
     )
+
+
+# ==================== 5. P0-B 锅炉受压紫铜内胆、4折过热器管网、三头燃烧器与泵阀总成 ====================
+
+def build_boiler_firebox_flues(cfg: Dict, pip_cfg: Dict):
+    """
+    紫铜受压内胆总成 (C1100 银焊无氧紫铜, ρ=8940 kg/m³):
+      - ø53.0mm 前/后紫铜管板 + 内锅筒衬套;
+      - 水冷夹套式紫铜内火室 (平顶板 z=47.5mm + 12 颗顶板撑螺栓头 + 后炉门圆孔);
+      - 左右对称双紫铜火管 (2 x ø13.0mm OD / ø11.4mm ID, y=±12.5mm, z=42.0mm)。
+    """
+    pv = pip_cfg["boiler_pressure_vessel"]
+    z_axis = float(pv["centerline_z_mm"])
+    r_in = 0.5 * float(pv["barrel_id_mm"])        # 26.5 mm
+    r_out = r_in + 0.9                            # 27.4 mm (< 28.0mm 外壳内腔，零重叠)
+    x_rear, x_front = [float(v) for v in pv["barrel_x_range_mm"]]
+
+    fb = pv["inner_firebox"]
+    fb_x0, fb_x1 = [float(v) for v in fb["x_range_mm"]]
+    fb_len = fb_x1 - fb_x0
+    fb_xm = 0.5 * (fb_x0 + fb_x1)
+    fb_w = float(fb["width_mm"])
+    fb_z0 = float(fb["floor_z_mm"])
+    z_crown = float(fb["crown_sheet_z_mm"])
+    fb_h = z_crown - fb_z0
+    t_cu = float(fb["wall_thickness_mm"])
+
+    fl = pv["dual_flue_tubes"]
+    fl_x0, fl_x1 = [float(v) for v in fl["x_range_mm"]]
+    fl_len = (fl_x1 + 2.5) - fl_x0
+    fl_xm = 0.5 * ((fl_x1 + 2.5) + fl_x0)
+    fl_zc = float(fl["z_center_mm"])
+    r_fl_out = 0.5 * float(fl["od_mm"])
+    r_fl_in = 0.5 * float(fl["id_mm"])
+    y_flues = [float(y) for y in fl["y_centers_mm"]]
+
+    # 1. 紫铜锅筒内衬套与前/中/后银焊管板法兰
+    liner_len = x_front - fb_x1
+    liner = (
+        Pos(0.5 * (x_front + fb_x1), 0, z_axis) * Rot(0, 90, 0) * Cylinder(radius=r_out, height=liner_len)
+        - Pos(0.5 * (x_front + fb_x1), 0, z_axis) * Rot(0, 90, 0) * Cylinder(radius=r_in, height=liner_len + 2.0)
+    )
+    front_tubeplate = Pos(x_front - 1.2, 0, z_axis) * Rot(0, 90, 0) * Cylinder(radius=r_out, height=2.4)
+    throat_plate = Pos(fb_x1 + 1.0, 0, z_axis) * Rot(0, 90, 0) * Cylinder(radius=r_out, height=2.0)
+    back_ring = (
+        Pos(fb_x0 + 1.0, 0, z_axis) * Rot(0, 90, 0) * Cylinder(radius=r_out, height=2.0)
+        - Pos(fb_x0 + 1.0, 0, z_axis) * Rot(0, 90, 0) * Cylinder(radius=r_in - 3.2, height=4.0)
+    )
+
+    # 2. 水冷紫铜内火室 + 顶板撑螺母凸台 + 泥圈法兰
+    fb_outer = Pos(fb_xm, 0, fb_z0 + 0.5 * fb_h) * Box(fb_len, fb_w, fb_h)
+    fb_cavity = Pos(fb_xm, 0, fb_z0 + 0.5 * (fb_h - t_cu) - 0.5) * Box(
+        fb_len - 2.0 * t_cu, fb_w - 2.0 * t_cu, fb_h - t_cu + 1.0
+    )
+    mud_ring = Pos(fb_xm, 0, fb_z0 + 1.0) * Box(fb_len + 2.4, fb_w + 3.2, 2.0) - Pos(
+        fb_xm, 0, fb_z0 + 1.0
+    ) * Box(fb_len - 2.0 * t_cu, fb_w - 2.0 * t_cu, 4.0)
+    firehole_ring = Pos(fb_x0 - 1.2, 0, z_crown - 9.5) * Rot(0, 90, 0) * Cylinder(radius=6.8, height=3.6)
+
+    stays = None
+    for sx in (-95.0, -78.0, -61.0):
+        for sy in (-12.0, -4.0, 4.0, 12.0):
+            b = Pos(sx, sy, z_crown + 0.8) * Cylinder(radius=1.1, height=1.6)
+            stays = b if stays is None else (stays + b)
+
+    # 3. 左右双紫铜火管 (贯通火室前板与烟室前管板)
+    flues_outer = None
+    flues_bore = None
+    for yf in y_flues:
+        fo = Pos(fl_xm, yf, fl_zc) * Rot(0, 90, 0) * Cylinder(radius=r_fl_out, height=fl_len)
+        bead = Pos(fl_x1 + 2.2, yf, fl_zc) * Rot(0, 90, 0) * Cylinder(radius=r_fl_out + 0.7, height=1.2)
+        fb_cut = Pos(fl_xm, yf, fl_zc) * Rot(0, 90, 0) * Cylinder(radius=r_fl_in, height=fl_len + 8.0)
+        flues_outer = (fo + bead) if flues_outer is None else (flues_outer + fo + bead)
+        flues_bore = fb_cut if flues_bore is None else (flues_bore + fb_cut)
+
+    throat_cut = Pos(fb_x1 + 1.0, 0, z_axis + 9.5) * Rot(0, 90, 0) * Cylinder(radius=13.5, height=5.0)
+    firehole_bore = Pos(fb_x0 - 1.0, 0, z_crown - 9.5) * Rot(0, 90, 0) * Cylinder(radius=5.0, height=8.0)
+
+    copper_core = (
+        liner + front_tubeplate + throat_plate + back_ring
+        + (fb_outer - fb_cavity) + mud_ring + firehole_ring + stays + flues_outer
+        - throat_cut - flues_bore - firehole_bore
+    )
+    return copper_core
+
+
+def build_superheater_piping(cfg: Dict, pip_cfg: Dict):
+    """
+    4 折不锈钢过热器盘管 + 汽包集汽管 + 烟室左右分叉主蒸汽管 + 20-7 乏汽喷嘴/通风环 + 18-25 烟囱裙罩 (SUS304)。
+    """
+    sp = pip_cfg["superheater_and_steam_piping"]
+    pv = pip_cfg["boiler_pressure_vessel"]
+    sh = sp["superheater_4pass"]
+    br = sp["branch_steam_pipes"]
+    ej = sp["smokebox_draft_ejector"]
+
+    x_dome = float(sp["steam_dome_x_mm"])
+    r_dry = 0.5 * float(sp["dry_pipe_od_mm"])
+    x_turn = float(sh["x_turn_in_flue_mm"])
+    x_hdr = float(sh["x_smokebox_header_mm"])
+    r_sh = 0.5 * float(sh["tube_od_mm"])
+    y_flues = [float(y) for y in pv["dual_flue_tubes"]["y_centers_mm"]]
+    z_flue = float(pv["dual_flue_tubes"]["z_center_mm"])
+
+    # 1. 汽包立管、顶置加减阀座、驾驶室拉杆与上部干饱和集汽管
+    standpipe = Pos(x_dome, 0, 62.5) * Cylinder(radius=2.4, height=29.0)
+    throttle_block = Pos(x_dome, 0, 76.5) * Box(8.6, 6.8, 5.2)
+    dry_pipe = Pos(0.5 * (x_dome + x_hdr), 0, 62.5) * Rot(0, 90, 0) * Cylinder(radius=r_dry, height=x_hdr - x_dome)
+    pull_rod = Pos(0.5 * (-113.0 + x_dome), 0, 62.5) * Rot(0, 90, 0) * Cylinder(radius=0.95, height=x_dome - (-113.0))
+
+    # 2. 烟室过热集箱 (Wet/Superheated Header) + 深入双火管内部的 4 折返弯过热管
+    header_box = Pos(x_hdr, 0, 55.5) * Box(6.4, 33.0, 5.4) + Pos(x_hdr, 0, 59.2) * Cylinder(radius=2.2, height=6.5)
+    sh_loops = None
+    L_leg = (x_hdr - 2.0) - x_turn
+    xm_leg = 0.5 * ((x_hdr - 2.0) + x_turn)
+    for yf in y_flues:
+        sgn = 1.0 if yf > 0 else -1.0
+        y_up, z_up = yf - sgn * 1.7, z_flue + 2.2
+        y_dn, z_dn = yf + sgn * 1.7, z_flue - 2.2
+        leg1 = Pos(xm_leg, y_up, z_up) * Rot(0, 90, 0) * Cylinder(radius=r_sh, height=L_leg)
+        leg2 = Pos(xm_leg, y_dn, z_dn) * Rot(0, 90, 0) * Cylinder(radius=r_sh, height=L_leg)
+        u_bend = Pos(x_turn, yf, z_flue) * Box(3.6, 5.2, 6.2)
+        riser1 = Pos(x_hdr - 2.2, y_up, 0.5 * (z_up + 55.5)) * Cylinder(radius=r_sh, height=55.5 - z_up)
+        riser2 = Pos(x_hdr + 1.2, y_dn, 0.5 * (z_dn + 55.5)) * Cylinder(radius=r_sh, height=55.5 - z_dn)
+        sub = leg1 + leg2 + u_bend + riser1 + riser2
+        sh_loops = sub if sh_loops is None else (sh_loops + sub)
+
+    # 3. 烟室内壁左右弧形主蒸汽分叉管 (Steam Delivery Pipes -> 左右蒸汽室)
+    x_chest = float(br["x_chest_entry_mm"])
+    r_br = 0.5 * float(br["tube_od_mm"])
+    branch_pipes = None
+    for sgn in (-1.0, 1.0):
+        elbow_out = Pos(0.5 * (x_hdr + x_chest - 4.0), sgn * 20.5, 51.0) * Rot(0, 18, sgn * 42) * Rot(0, 90, 0) * Cylinder(
+            radius=r_br, height=22.0
+        )
+        drop_arc = Pos(x_chest - 3.0, sgn * 27.2, 35.5) * Rot(sgn * -12, 0, 0) * Cylinder(radius=r_br, height=28.0)
+        chest_flange = Pos(x_chest - 2.0, sgn * 29.5, 22.0) * Box(5.4, 5.4, 3.0)
+        sub = elbow_out + drop_arc + chest_flange
+        branch_pipes = sub if branch_pipes is None else (branch_pipes + sub)
+
+    # 4. 乏汽汇流三通 + 20-7 乏汽喷嘴 + 通风环 + 18-25 喇叭口烟囱裙罩
+    x_ch = float(ej["chimney_axis_x_mm"])
+    z_tip = float(ej["blast_nozzle_tip_z_mm"])
+    r_orifice = 0.5 * float(ej["blast_nozzle_orifice_dia_mm"])
+
+    exh_breech = Pos(x_ch, 0, 15.0) * Rot(90, 0, 0) * Cylinder(radius=2.6, height=46.0)
+    blast_col = Pos(x_ch, 0, 0.5 * (14.5 + z_tip)) * Cone(bottom_radius=4.3, top_radius=3.1, height=z_tip - 14.5)
+    blower_ring = Pos(x_ch, 0, z_tip - 1.2) * Cylinder(radius=4.8, height=1.8) - Pos(
+        x_ch, 0, z_tip - 1.2
+    ) * Cylinder(radius=3.2, height=3.0)
+    blast_bore = Pos(x_ch, 0, z_tip - 4.0) * Cylinder(radius=r_orifice, height=10.0)
+
+    z_pet = float(ej["petticoat_entry_z_mm"])
+    r_pet_th = 0.5 * float(ej["petticoat_throat_dia_mm"])
+    r_pet_fl = 0.5 * float(ej["petticoat_flare_dia_mm"])
+    petticoat_outer = (
+        Pos(x_ch, 0, z_pet + 5.5) * Cone(bottom_radius=r_pet_fl, top_radius=r_pet_th + 1.0, height=11.0)
+        + Pos(x_ch, 0, z_pet + 14.5) * Cylinder(radius=r_pet_th + 1.0, height=8.0)
+    )
+    petticoat_inner = (
+        Pos(x_ch, 0, z_pet + 5.5) * Cone(bottom_radius=r_pet_fl - 1.0, top_radius=r_pet_th, height=11.4)
+        + Pos(x_ch, 0, z_pet + 14.5) * Cylinder(radius=r_pet_th, height=9.0)
+    )
+
+    return (
+        standpipe + throttle_block + dry_pipe + pull_rod + header_box + sh_loops + branch_pipes
+        + exh_breech + (blast_col + blower_ring - blast_bore) + (petticoat_outer - petticoat_inner)
+    )
+
+
+def build_alcohol_burner(cfg: Dict, pip_cfg: Dict):
+    """三头毛细酒精灯芯燃烧器 + 恒液位供油管总成 (イラスト 25/試運転)。"""
+    ab = pip_cfg["alcohol_burner_system"]
+    wick_xs = [float(x) for x in ab["wick_centers_x_mm"]]
+    r_cup_out = 0.5 * float(ab["wick_cup_od_mm"])
+    r_cup_in = 0.5 * float(ab["wick_cup_id_mm"])
+    z_top = float(ab["wick_top_z_mm"])
+    r_tube = 0.5 * float(ab["supply_tube_od_mm"])
+
+    manifold_bar = Pos(0.5 * (wick_xs[0] + wick_xs[-1]), 0, 11.2) * Box(
+        (wick_xs[-1] - wick_xs[0]) + 14.0, 6.8, 3.2
+    )
+    cups = None
+    for wx in wick_xs:
+        cup_shell = Pos(wx, 0, 0.5 * (11.2 + z_top)) * Cylinder(radius=r_cup_out, height=z_top - 11.2)
+        cup_well = Pos(wx, 0, z_top - 2.2) * Cylinder(radius=r_cup_in, height=5.0)
+        wick_core = Pos(wx, 0, z_top - 1.2) * Cylinder(radius=r_cup_in - 1.1, height=4.4)
+        air_collar = Pos(wx, 0, 13.8) * Cylinder(radius=r_cup_out + 0.8, height=1.6) - Pos(
+            wx, 0, 13.8
+        ) * Cylinder(radius=r_cup_in, height=3.0)
+        one = (cup_shell - cup_well) + wick_core + air_collar
+        cups = one if cups is None else (cups + one)
+
+    rear_lug = Pos(wick_xs[0] - 9.5, 0, 13.5) * Box(5.5, 12.0, 4.8)
+    feed_elbow = Pos(wick_xs[0] - 5.0, -4.5, 11.2) * Rot(90, 0, 0) * Cylinder(radius=r_tube, height=9.0)
+    feed_pipe = Pos(0.5 * (-142.0 + wick_xs[0] - 5.0), -9.0, 11.2) * Rot(0, 90, 0) * Cylinder(
+        radius=r_tube, height=(wick_xs[0] - 5.0) - (-142.0)
+    )
+    return manifold_bar + cups + rear_lug + feed_elbow + feed_pipe
+
+
+def build_boiler_aux_valves(cfg: Dict, pip_cfg: Dict):
+    """
+    全套黄铜给水泵阀与驾驶室仪表总成 (BS 黄铜, ρ=8500 kg/m³):
+      - 6-5 中央轴动给水泵阀体 + 上下双单向球阀六角帽 (避让动态柱塞孔 ø3.6mm);
+      - 给水上升铜管 + 锅筒侧壁逆止阀 (Clack Valve);
+      - 前车架置换式注油器 (Roscoe Displacement Lubricator);
+      - 驾驶室后炉门板 11-7 水面计、PG-ø20 压力表盘、加减阀手柄扇形齿板与 4-17 旁通阀手轮。
+    """
+    pv_bom = pip_cfg["pumps_and_valves_bom"]
+    x_pump = float(pv_bom["axle_feed_pump_6_5"]["x_mm"])      # -22.0 mm (柱塞中心销基准)
+    x_clack = float(pv_bom["axle_feed_pump_6_5"]["boiler_clack_x_mm"])
+    lub = pv_bom["displacement_lubricator"]
+    x_back = float(pv_bom["water_gauge_11_7"]["x_cab_backhead_mm"])
+
+    # 1. 6-5 轴动给水泵固定黄铜阀体 (置于后方 -39.0..-28.2mm，精准吞吐动态柱塞尾端 -33.5..-26.5mm)
+    pump_barrel = Pos(x_pump - 11.6, 0, 0) * Rot(0, 90, 0) * Cylinder(radius=3.8, height=10.8)
+    gland_nut = Pos(x_pump - 6.8, 0, 0) * Rot(0, 90, 0) * Cylinder(radius=4.5, height=2.2)
+    check_tower = Pos(x_pump - 14.5, 0, 0.8) * Cylinder(radius=3.6, height=15.6)
+    top_hex_cap = Pos(x_pump - 14.5, 0, 9.4) * Cylinder(radius=4.3, height=2.4)
+    bot_hex_cap = Pos(x_pump - 14.5, 0, -7.6) * Cylinder(radius=4.1, height=2.2)
+    pump_bracket = Pos(x_pump - 11.6, 0, 4.8) * Box(8.0, 24.0, 2.6)
+    ram_bore = Pos(x_pump - 10.5, 0, 0) * Rot(0, 90, 0) * Cylinder(radius=1.85, height=16.0)
+    pump_body = pump_barrel + gland_nut + check_tower + top_hex_cap + bot_hex_cap + pump_bracket - ram_bore
+
+    # 2. 侧向给水铜管与锅筒侧壁逆止阀 (Clack Valve)
+    pipe_out = Pos(x_pump - 14.5, 14.8, 8.5) * Rot(90, 0, 0) * Cylinder(radius=1.3, height=29.6)
+    pipe_rise = Pos(x_pump - 14.5, 29.6, 26.2) * Cylinder(radius=1.3, height=35.5)
+    pipe_fwd = Pos(0.5 * (x_pump - 14.5 + x_clack), 29.6, 44.0) * Rot(0, 90, 0) * Cylinder(
+        radius=1.3, height=x_clack - (x_pump - 14.5)
+    )
+    clack_valve = (
+        Pos(x_clack, 29.6, 44.0) * Cylinder(radius=3.2, height=8.4)
+        + Pos(x_clack, 28.0, 44.0) * Rot(90, 0, 0) * Cylinder(radius=2.8, height=4.2)
+    )
+
+    # 3. 前车架置换式注油器 (置換式油壺)
+    lx, ly, lz = float(lub["x_mm"]), float(lub["y_mm"]), float(lub["z_mm"])
+    lubricator = (
+        Pos(lx, ly, lz) * Cylinder(radius=5.2, height=13.0)
+        + Pos(lx, ly, lz + 7.6) * Cylinder(radius=3.4, height=2.4)
+        + Pos(lx - 10.0, ly, lz + 3.5) * Rot(0, 90, 0) * Cylinder(radius=1.1, height=20.0)
+    )
+
+    # 4. 驾驶室后壁 (Backhead) 11-7 水面计、PG-ø20 压力表、加减阀把柄与 4-17 旁通阀手轮
+    wg_top = Pos(x_back, -10.5, 57.0) * Box(4.6, 4.2, 3.6)
+    wg_bot = Pos(x_back, -10.5, 39.0) * Box(4.6, 4.2, 3.6)
+    wg_glass = Pos(x_back - 1.2, -10.5, 48.0) * Cylinder(radius=1.8, height=18.0)
+    pg_case = Pos(x_back - 1.5, 10.5, 58.5) * Rot(0, 90, 0) * Cylinder(radius=6.6, height=3.4)
+    pg_siphon = Pos(x_back - 0.8, 10.5, 51.0) * Cylinder(radius=1.1, height=11.0)
+    reg_quad = Pos(x_back, 0.0, 53.0) * Rot(0, 90, 0) * Cylinder(radius=4.2, height=3.2)
+    reg_lever = Pos(x_back - 2.2, 4.2, 56.5) * Rot(32, 0, 0) * Box(1.8, 2.2, 11.5)
+    bypass_stem = Pos(x_back, -16.5, 34.5) * Rot(0, 90, 0) * Cylinder(radius=1.4, height=5.0)
+    bypass_wheel = Pos(x_back - 3.0, -16.5, 34.5) * Rot(0, 90, 0) * Cylinder(radius=3.8, height=1.4)
+
+    cab_fittings = wg_top + wg_bot + wg_glass + pg_case + pg_siphon + reg_quad + reg_lever + bypass_stem + bypass_wheel
+    return pump_body + pipe_out + pipe_rise + pipe_fwd + clack_valve + lubricator + cab_fittings
 
 
 def build_tender_body(cfg: Dict):
@@ -780,12 +1059,14 @@ def build_spoked_truck_wheel(cfg: Dict, is_left: bool = True):
 def main():
     parser = argparse.ArgumentParser(description="Aster D51 全零件 CAD 建模与材料密度惯量积分器")
     parser.add_argument("--config", type=Path, default=Path("configs/d51_kinematics.json"))
+    parser.add_argument("--piping-config", type=Path, default=Path("configs/d51_boiler_piping.json"))
     parser.add_argument("--out-dir", type=Path, default=Path("models/meshes"))
     parser.add_argument("--mass-out", type=Path, default=Path("configs/d51_mass_props.json"))
     parser.add_argument("--standard-stack", action="store_true")
     args = parser.parse_args()
 
     cfg = json.loads(args.config.read_text(encoding="utf-8"))
+    pip_cfg = json.loads(args.piping_config.read_text(encoding="utf-8"))
     args.out_dir.mkdir(parents=True, exist_ok=True)
     q_deg = float(cfg["wheels_and_axles"]["quartering_deg_R_minus_L"])
 
@@ -823,6 +1104,10 @@ def main():
         ("cylinder_block_L", 0.04, RHO_BRASS, lambda: build_cylinder_block(cfg, True)),
         ("cylinder_block_R", 0.04, RHO_BRASS, lambda: build_cylinder_block(cfg, False)),
         ("boiler_superstructure", 0.08, RHO_BRASS, lambda: build_boiler_superstructure(cfg, not args.standard_stack)),
+        ("boiler_firebox_flues", 0.05, RHO_COPPER, lambda: build_boiler_firebox_flues(cfg, pip_cfg)),
+        ("superheater_piping", 0.035, RHO_STAINLESS, lambda: build_superheater_piping(cfg, pip_cfg)),
+        ("alcohol_burner", 0.03, RHO_BURNER_ASSY, lambda: build_alcohol_burner(cfg, pip_cfg)),
+        ("boiler_aux_valves", 0.03, RHO_BRASS, lambda: build_boiler_aux_valves(cfg, pip_cfg)),
         ("tender_body", 0.08, RHO_BRASS, lambda: build_tender_body(cfg)),
         ("tender_bogie_frame", 0.04, RHO_CAST_IRON, lambda: build_tender_bogie_frame(cfg)),
         ("truck_wheel_L", 0.03, RHO_CAST_IRON, lambda: build_spoked_truck_wheel(cfg, True)),
@@ -833,6 +1118,7 @@ def main():
         "meta": {
             "units": "SI (kg, m, kg*m^2)",
             "densities_kg_m3": {
+                "copper_C1100": RHO_COPPER,
                 "brass_BS": RHO_BRASS,
                 "stainless_SUS": RHO_STAINLESS,
                 "cast_iron_FC": RHO_CAST_IRON,
