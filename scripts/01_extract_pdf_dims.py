@@ -113,16 +113,16 @@ def default_d51_kinematics() -> Dict[str, Any]:
                 "main_rod_center_abs_y": 32.5,
                 "valve_gear_plane_abs_y": 36.0,
                 "return_crank_web_dy": -1.45,
-                "eccentric_rod_rear_dy": 0.15,
-                "eccentric_rod_front_lap_dy": -1.40,
+                "eccentric_rod_rear_dy": 0.45,
+                "eccentric_rod_front_lap_dy": -1.15,
                 "expansion_link_body_dy": 0.0,
-                "expansion_link_tail_ear_dy": 0.25,
-                "stepped_pin_2_2_head_dy": 1.55,
-                "stepped_pin_2_2_nut_dy": -2.40,
-                "radius_rod_bar_dy": -1.70,
+                "expansion_link_tail_ear_dy": 0.35,
+                "stepped_pin_2_2_head_dy": 2.35,
+                "stepped_pin_2_2_nut_dy": -1.90,
+                "radius_rod_bar_dy": -1.95,
                 "comb_lever_web_dy": 0.0,
                 "union_link_clevis_dy": 0.0,
-                "lift_link_bot_clevis_dy": -1.70,
+                "lift_link_bot_clevis_dy": -1.95,
             },
         },
         "boiler_and_aux": {
@@ -451,6 +451,61 @@ def interactive_measure_step09(img_path: Path, spec: Dict[str, Any]) -> None:
     print("[OK] 已根据イラスト 9 实测点更新连杆孔距参数！")
 
 
+def compute_exact_tail_cant_deg(spec: Dict[str, Any]) -> float:
+    """精确求解中立位圆弧月牙槽法线与 (trunnion -> exp_tail) 下尾耳矢量的固有偏角 (deg)，保证 0.000000° 偏差。"""
+    rc = spec["cylinder_and_rods"]
+    vg = spec["walschaerts_valve_gear"]
+    tx, tz = float(vg["trunnion_x"]), float(vg["trunnion_z"])
+    r_ret = float(vg["return_crank_radius"])
+    L_ecc = float(vg["eccentric_rod_length"])
+    r_tail = float(vg["exp_link_tail_radius"])
+    L_rad = float(vg["radius_rod_length"])
+    L_un = float(vg["union_link_length"])
+    L_comb = float(vg["comb_lever_total_length"])
+    L_mv = float(vg["comb_lever_lap_lead_offset"])
+    z_valve = float(rc["valve_axis_z"])
+
+    def _intersect_lower(p1: Tuple[float, float], r1: float, p2: Tuple[float, float], r2: float) -> Tuple[float, float]:
+        dx, dz = p2[0] - p1[0], p2[1] - p1[1]
+        d = math.hypot(dx, dz)
+        a = (r1 * r1 - r2 * r2 + d * d) / (2.0 * d)
+        h = math.sqrt(max(0.0, r1 * r1 - a * a))
+        xm, zm = p1[0] + a * dx / d, p1[1] + a * dz / d
+        rx, rz = -dz * (h / d), dx * (h / d)
+        sol1, sol2 = (xm + rx, zm + rz), (xm - rx, zm - rz)
+        return sol1 if sol1[1] <= sol2[1] else sol2
+
+    def _tail_angle(th: float) -> float:
+        e = _intersect_lower((r_ret * math.cos(th), r_ret * math.sin(th)), L_ecc, (tx, tz), r_tail)
+        return math.atan2(e[1] - tz, e[0] - tx)
+
+    th_fdc = math.radians(float(vg["return_crank_phase_deg"]))
+    mid = 0.5 * (_tail_angle(th_fdc) + _tail_angle(th_fdc + math.pi))
+
+    u0x = float(rc["crank_radius"]) + float(rc["main_rod_length"])
+    u0z = float(rc["cylinder_center_z"]) - float(vg["crosshead_drop"])
+
+    def _res_dc(phi: float) -> Tuple[float, float, float]:
+        mz = z_valve - L_mv * math.cos(phi)
+        mx = tx + math.sqrt(max(0.0, L_rad * L_rad - (mz - tz) ** 2))
+        vx = mx + L_mv * math.sin(phi)
+        u1x, u1z = vx - L_comb * math.sin(phi), z_valve - L_comb * math.cos(phi)
+        return math.hypot(u1x - u0x, u1z - u0z) - L_un, mx, mz
+
+    lo, hi = -0.3, 0.3
+    f_lo = _res_dc(lo)[0]
+    for _ in range(60):
+        m = 0.5 * (lo + hi)
+        fm = _res_dc(m)[0]
+        if f_lo * fm <= 0.0:
+            hi = m
+        else:
+            lo, f_lo = m, fm
+    _, mx_dc, mz_dc = _res_dc(0.5 * (lo + hi))
+    alpha_dc = math.atan2(-(mz_dc - tz), mx_dc - tx)
+    return round(math.degrees(mid + alpha_dc + 0.5 * math.pi), 6)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Aster D51 PDF 尺寸提取与无头像素标定工具")
     parser.add_argument("--pdf", type=Path, default=Path("data/raw_pdfs/d51_illustrations.pdf"))
@@ -481,6 +536,8 @@ def main() -> None:
 
     if args.interactive and "step09_valve_ortho" in exported:
         interactive_measure_step09(exported["step09_valve_ortho"], spec)
+
+    spec["walschaerts_valve_gear"]["exp_link_tail_cant_deg"] = compute_exact_tail_cant_deg(spec)
 
     args.out_json.parent.mkdir(parents=True, exist_ok=True)
     args.out_json.write_text(json.dumps(spec, indent=2, ensure_ascii=False), encoding="utf-8")

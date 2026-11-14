@@ -534,7 +534,7 @@ async function main() {
       data.qfrc_applied[idxMap.qvelValR] = out.valveFrictionR;
       data.qfrc_applied[idxMap.qvelPump] = out.forcePump;
       if (idxMap.qvelDrain >= 0) {
-        data.qfrc_applied[idxMap.qvelDrain] = ctrl.drainCock ? 0.022 : 0.0;
+        data.qfrc_applied[idxMap.qvelDrain] = ctrl.drainCock ? 0.0085 : 0.0;
       }
       if (isRollerMode) {
         data.qfrc_applied[idxMap.qvelW3] = -0.0022 * w3 - 0.00012 * w3 * Math.abs(w3);

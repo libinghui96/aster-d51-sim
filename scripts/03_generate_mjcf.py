@@ -329,7 +329,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     default = ET.SubElement(mj, "default")
     ET.SubElement(default, "geom", condim="3", solref="0.0015 1.0", solimp="0.95 0.99 0.0001")
     ET.SubElement(default, "joint", solreflimit="0.002 1.0", solimplimit="0.98 0.995 0.0001")
-    ET.SubElement(default, "equality", solref="0.0006 1.0", solimp="0.995 0.9995 0.000005")
+    ET.SubElement(default, "equality", solref="0.00045 1.0", solimp="0.997 0.9997 0.000002")
 
     mesh_dir = Path("models/meshes")
     asset = ET.SubElement(mj, "asset")
@@ -442,6 +442,17 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             mesh=f"m_motion_bracket_{s_tag}", material="mat_black_iron",
             pos=f"{tx_m:.6f} {sgn_f * y_vg_abs:.6f} {tz_m:.6f}", mass="0", contype="0", conaffinity="0"
         )
+    # 8-6 / 8-7 车架尾部牵引横梁框与 8-8 牵引立销 (衔接两侧主车架板，X-Ray 模式下保持完整实体不透明)
+    ET.SubElement(
+        frame, "geom", name="loco_rear_dragbox", type="box",
+        pos="-0.144000 0.000000 -0.002900", size="0.006200 0.015000 0.001600",
+        material="mat_black_iron", rgba="0.12 0.12 0.14 1", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
+        frame, "geom", name="loco_drawbar_pin_vis", type="cylinder",
+        fromto="-0.146000 0.000000 -0.009200  -0.146000 0.000000 -0.001200", size="0.001800",
+        material="mat_brass", rgba="0.82 0.62 0.24 1", mass="0", contype="0", conaffinity="0"
+    )
     ET.SubElement(
         frame, "geom", name="chassis_equalizer_brakes_vis", type="mesh",
         mesh="m_chassis_equalizer_brakes", material="mat_black_iron",
@@ -603,7 +614,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     attach_part_inertial(lead_arm, parts_mp["leading_truck_frame"], offset_xyz=(lead_arm_len, 0.0, 0.0))
     ET.SubElement(
         lead_arm, "joint", name="j_leading_susp", type="slide", axis="0 0 1",
-        springref="-0.0065" if on_rails else "0",
+        springref="-0.0069" if on_rails else "0",
         limited="true", range="-0.004 0.004", stiffness="1050", damping="16"
     )
     ET.SubElement(
@@ -732,8 +743,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         joint1="j_reach_rod", joint2="j_reverser", polycoef="0 0.007 0 -0.001167 0"
     )
 
-    # Tier 3: 8-5 / 1-16 气缸底部齿轮排液阀被动联动轴 (由 drain_cock 状态视觉偏置驱动，零新增执行器)
-    dc_body = ET.SubElement(frame, "body", name="drain_cock_linkage", pos="0.124000 0.000000 -0.014500")
+    # Tier 3: 8-5 / 1-16 气缸底部齿轮排液阀被动联动轴 (对准气缸底前后排水凸台对称中心 X=129.0, Z=-14.2mm)
+    dc_body = ET.SubElement(frame, "body", name="drain_cock_linkage", pos="0.129000 0.000000 -0.014200")
     attach_part_inertial(dc_body, parts_mp["drain_cock_linkage"])
     ET.SubElement(
         dc_body, "joint", name="j_drain_cock", type="hinge", axis="0 1 0",
@@ -1057,15 +1068,52 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         pin_tdr_wx = tdr_wx + x_pin_tdr_local * math.cos(tdr_yaw)
         pin_tdr_wy = tdr_wy + x_pin_tdr_local * math.sin(tdr_yaw)
         db_dx, db_dy = pin_tdr_wx - pin_loco_wx, pin_tdr_wy - pin_loco_wy
+        db_len = math.hypot(db_dx, db_dy)
+        db_yaw = math.atan2(db_dy, db_dx)
 
         drawbar = ET.SubElement(frame, "body", name="drawbar_8_8", pos=f"{x_pin_loco:.6f} 0 -0.006")
         if on_rails:
-            ET.SubElement(drawbar, "joint", name="j_drawbar_yaw", type="hinge", axis="0 0 1", damping="0.02")
-            ET.SubElement(drawbar, "joint", name="j_drawbar_pitch", type="hinge", axis="0 1 0", damping="0.02")
+            ET.SubElement(drawbar, "joint", name="j_drawbar_yaw", type="hinge", axis="0 0 1", armature="0.0005", damping="0.02")
+            ET.SubElement(drawbar, "joint", name="j_drawbar_pitch", type="hinge", axis="0 1 0", armature="0.0005", damping="0.02")
         ET.SubElement(
-            drawbar, "geom", type="capsule", fromto=f"0 0 0  {db_dx:.6f} {db_dy:.6f} 0",
-            size="0.0022", material="mat_machined_steel", rgba="0.22 0.22 0.25 1", density=f"{rho_sus:.1f}", contype="0", conaffinity="0"
+            drawbar, "geom", name="drawbar_bar_vis", type="box",
+            pos=f"{0.5 * db_dx:.6f} {0.5 * db_dy:.6f} 0", euler=f"0 0 {db_yaw:.6f}",
+            size=f"{0.5 * db_len:.6f} 0.002800 0.001250",
+            material="mat_machined_steel", rgba="0.72 0.74 0.77 1", density=f"{rho_sus:.1f}", contype="0", conaffinity="0"
         )
+        ET.SubElement(
+            drawbar, "geom", name="drawbar_eye_f_vis", type="cylinder",
+            fromto="0 0 -0.001500  0 0 0.001500", size="0.003500",
+            material="mat_machined_steel", rgba="0.72 0.74 0.77 1", mass="0", contype="0", conaffinity="0"
+        )
+        ET.SubElement(
+            drawbar, "geom", name="drawbar_eye_r_vis", type="cylinder",
+            fromto=f"{db_dx:.6f} {db_dy:.6f} -0.001500  {db_dx:.6f} {db_dy:.6f} 0.001500", size="0.003200",
+            material="mat_machined_steel", rgba="0.72 0.74 0.77 1", mass="0", contype="0", conaffinity="0"
+        )
+        # 四路随牵引杆铰接摆动的机车↔煤水车跨车柔性连接软管 (旁通回水 31-14、供醇 34-2、手摇补水 31-13、轴泵吸水 31-12)
+        hose_defs = [
+            ("umb_hose_return", -0.0084, 0.00132),
+            ("umb_hose_fuel", 0.0000, 0.00142),
+            ("umb_hose_hand", +0.0036, 0.00136),
+            ("umb_hose_suction", +0.0084, 0.00140),
+        ]
+        fx_hose = -0.1502 - x_pin_loco
+        fz_hose = 0.0034 - (-0.006)
+        x_tdr_sock = 0.1132
+        for h_name, sy_m, h_rad in hose_defs:
+            wx_s = tdr_wx + x_tdr_sock * math.cos(tdr_yaw) - sy_m * math.sin(tdr_yaw)
+            wy_s = tdr_wy + x_tdr_sock * math.sin(tdr_yaw) + sy_m * math.cos(tdr_yaw)
+            wz_s = z_tdr_deck + 0.0075
+            rx_h = wx_s - pin_loco_wx
+            ry_h = wy_s - pin_loco_wy
+            rz_h = wz_s - (z_loco_axle - 0.006)
+            ET.SubElement(
+                drawbar, "geom", name=h_name, type="cylinder",
+                fromto=f"{fx_hose:.6f} {sy_m:.6f} {fz_hose:.6f}  {rx_h:.6f} {ry_h:.6f} {rz_h:.6f}",
+                size=f"{h_rad:.6f}", material="mat_brass", rgba="0.82 0.62 0.24 1",
+                mass="0", contype="0", conaffinity="0"
+            )
         ET.SubElement(drawbar, "site", name="s_drawbar_rear", pos=f"{db_dx:.6f} {db_dy:.6f} 0")
 
         tender = ET.SubElement(
@@ -1165,7 +1213,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
 
         if on_rails:
             ET.SubElement(
-                equality, "connect", name="loop_tender_drawbar", site1="s_drawbar_rear", site2="s_tender_front_pin"
+                equality, "connect", name="loop_tender_drawbar", site1="s_drawbar_rear", site2="s_tender_front_pin",
+                solref="0.0004 1.0", solimp="0.998 0.9998 0.000001"
             )
             ET.SubElement(sensor, "framepos", name="loco_world_pos", objtype="body", objname="loco_frame")
             ET.SubElement(sensor, "jointpos", name="leading_yaw_rad", joint="j_leading_yaw")

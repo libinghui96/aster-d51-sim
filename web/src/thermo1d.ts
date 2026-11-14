@@ -153,11 +153,14 @@ export class AsterD51Thermo1D {
   P_boiler = P_ATM;
   P_steamChest = P_ATM;
   T_superheatC = 25.0;
+  T_shWallC = 25.0;
   safetyValveOpen = false;
 
   alcoholMl = 130.0;
   sumpFuelMl = 0.0;
   tenderWaterMl = 320.0;
+  readonly lubeTankCapMl = 3.2;
+  lubeCondensateMl = 0.64;
   lubricatorOilPct = 80.0;
 
   P_cylL = [P_ATM, P_ATM];
@@ -190,10 +193,12 @@ export class AsterD51Thermo1D {
     this.P_boiler = P_ATM;
     this.P_steamChest = P_ATM;
     this.T_superheatC = 25.0;
+    this.T_shWallC = 25.0;
     this.safetyValveOpen = false;
     this.alcoholMl = 130.0;
     this.sumpFuelMl = 0.0;
     this.tenderWaterMl = 320.0;
+    this.lubeCondensateMl = 0.2 * this.lubeTankCapMl;
     this.lubricatorOilPct = 80.0;
     this.P_cylL = [P_ATM, P_ATM];
     this.P_cylR = [P_ATM, P_ATM];
@@ -213,6 +218,7 @@ export class AsterD51Thermo1D {
     this.T_crownC = 156.0;
     this.P_boiler = satPressurePa(this.T_boilerC);
     this.T_superheatC = 165.0;
+    this.T_shWallC = 172.0;
     this.sumpFuelMl = 3.5;
     this.T_cylWallC = 132.0;
     this.M_condL = [1.5e-5, 1.5e-5];
@@ -408,9 +414,20 @@ export class AsterD51Thermo1D {
       const qLatCyl = Math.min(920.0, mdotCondTot * 2.1e6);
       const qConvCyl = Math.max(0.0, (this.T_superheatC - this.T_cylWallC) * 2.2);
       this.T_cylWallC = Math.min(this.T_superheatC, this.T_cylWallC + ((qLatCyl + qConvCyl) / 48.0) * dtTh);
-      this.lubricatorOilPct = Math.max(0.0, this.lubricatorOilPct - (80.0 / 3600.0) * dtTh);
     } else {
       this.T_cylWallC += (25.0 - this.T_cylWallC) * 0.002 * dtTh;
+    }
+
+    // 4-2 卧式蒸汽置换式注油器: 蒸汽受前车架冷气流冷却凝结沉水，等体积顶出蒸汽油汇入 13-4/7-9 给汽三通
+    if (this.P_steamChest > P_ATM + 2500.0 && this.lubeCondensateMl < this.lubeTankCapMl) {
+      const tSatLubeC = satTempC(this.P_steamChest);
+      const airCool = 1.0 + 0.022 * Math.min(40.0, Math.abs(omega3));
+      const pulse = 0.35 + 0.65 * Math.min(1.0, mdotIn / 1.5e-4);
+      const qLubeW = 0.0115 * airCool * pulse * Math.max(0.0, tSatLubeC - 25.0);
+      const mdotLubeCond = qLubeW / latentHeatJKg(tSatLubeC);
+      const dvDispMl = (mdotLubeCond / 985.0) * 1e6 * dtTh;
+      this.lubeCondensateMl = Math.min(this.lubeTankCapMl, this.lubeCondensateMl + dvDispMl);
+      this.lubricatorOilPct = Math.max(0.0, 100.0 * (1.0 - this.lubeCondensateMl / this.lubeTankCapMl));
     }
 
     let sealWear = 0.0;
@@ -471,13 +488,34 @@ export class AsterD51Thermo1D {
       smokeboxVacPa = 140.0 * (draftEff - 0.12);
     }
 
+    const thetaGradeOnly = Math.max(-0.30, Math.min(0.30, pitchRad + (ctrl.gradeDeg * Math.PI) / 180.0));
+    const wickHeadFactor = Math.max(0.75, Math.min(1.22, 1.0 - 0.32 * Math.tan(thetaGradeOnly)));
+
     let qComb = 0.0;
     if (ctrl.burnerLit && this.sumpFuelMl > 0) {
-      const usedMl = Math.min(this.sumpFuelMl, 0.108 * (0.55 + 0.45 * draftEff) * dtTh);
+      const usedMl = Math.min(this.sumpFuelMl, 0.108 * (0.55 + 0.45 * draftEff) * wickHeadFactor * dtTh);
       this.sumpFuelMl -= usedMl;
       qComb = etaBoilEff * 22.5e6 * ((usedMl / dtTh) * 789e-6);
     }
-    this.T_superheatC += Math.min(1.0, 1.5 * dtTh) * (this.T_boilerC + (ctrl.burnerLit ? shDeltaC : 0.0) - this.T_superheatC);
+
+    // 17-5 双 U 四程过热器 (上排 2 根 ø11.5mm 烟管内 504mm/47.5cm² SUS304 管壁对流热平衡)
+    const tFlueGasC = this.T_boilerC + (ctrl.burnerLit ? 1.32 * shDeltaC : 0.0);
+    const gGasToSh = 4.2 * (0.25 + 0.75 * draftEff);
+    const mdotCpSteam = mdotReg * 2080.0;
+    let qShToSteam: number;
+    let targetShC: number;
+    if (mdotCpSteam > 1e-5) {
+      const uShIn = 1.8 + 4200.0 * mdotReg;
+      const epsSh = 1.0 - Math.exp(-Math.min(12.0, uShIn / mdotCpSteam));
+      qShToSteam = epsSh * mdotCpSteam * (this.T_shWallC - this.T_boilerC);
+      targetShC = this.T_boilerC + epsSh * (this.T_shWallC - this.T_boilerC);
+    } else {
+      qShToSteam = 0.25 * (this.T_shWallC - this.T_boilerC);
+      targetShC = 0.35 * this.T_boilerC + 0.65 * this.T_shWallC;
+    }
+    const dTShWall = (gGasToSh * (tFlueGasC - this.T_shWallC) - qShToSteam) / 7.0;
+    this.T_shWallC = Math.max(25.0, Math.min(360.0, this.T_shWallC + dTShWall * dtTh));
+    this.T_superheatC += Math.min(1.0, 2.5 * dtTh) * (targetShC - this.T_superheatC);
 
     const vPump = this.tenderWaterMl > 0.5 ? 0.85 * this.A_axlePump * Math.max(0.0, -vPumpRam) : 0.0;
     const dpCheck = Math.max(8000.0, this.P_boiler - P_ATM);

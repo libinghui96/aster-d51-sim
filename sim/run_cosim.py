@@ -249,7 +249,7 @@ class CoSimRunner:
         self.data.qfrc_applied[self.qvel_valR] = tel.valve_friction_R
         self.data.qfrc_applied[self.qvel_pump] = F_pump
         if self.qvel_drain >= 0:
-            self.data.qfrc_applied[self.qvel_drain] = 0.022 if self.ctrl.drain_cock else 0.0
+            self.data.qfrc_applied[self.qvel_drain] = 0.0085 if self.ctrl.drain_cock else 0.0
         if self.is_roller_mode:
             self.data.qfrc_applied[self.qvel_w3] = -0.0022 * omega_3 - 0.00012 * omega_3 * abs(omega_3)
         else:

@@ -204,12 +204,15 @@ class AsterD51Thermo1D:
         self.P_boiler = P_ATM
         self.P_steam_chest = P_ATM
         self.T_superheat_c = 25.0
+        self.T_sh_wall_c = 25.0                                         # 17-5 双 U 四程过热器 SUS304 管壁温度 (°C)
         self.safety_valve_open = False
 
         self.alcohol_ml = 130.0
         self.sump_fuel_ml = 0.0
         self.tender_water_ml = 320.0
         self.T_feedwater_c = 25.0
+        self.lube_tank_cap_ml = 3.2                                     # 4-2 前车架卧式置换注油器容积 (3.2 ml)
+        self.lube_condensate_ml = 0.20 * self.lube_tank_cap_ml          # 沉底凝结水体积 (初始 80% 蒸汽油)
         self.lubricator_oil_pct = 80.0
 
         self.P_cyl_L = np.array([P_ATM, P_ATM], dtype=np.float64)
@@ -233,6 +236,7 @@ class AsterD51Thermo1D:
         self.P_boiler = sat_pressure_pa(self.T_boiler_c)
         self.P_steam_chest = P_ATM
         self.T_superheat_c = 165.0
+        self.T_sh_wall_c = 172.0
         self.sump_fuel_ml = 3.5
         self.T_cyl_wall_c = 132.0
         self.M_cond_L[:] = 1.5e-5
@@ -452,7 +456,7 @@ class AsterD51Thermo1D:
 
         self.condensate_kg = float(np.sum(self.M_cond_L) + np.sum(self.M_cond_R))
 
-        # --- 3. 气缸内衬凝结潜热 + 对流暖缸换热、置换式注油器与密封退化 ---
+        # --- 3. 气缸内衬凝结潜热 + 对流暖缸换热、4-2 蒸汽凝结等体积置换式注油器与密封退化 ---
         if mdot_cyl_in > 1e-6 or mdot_cond_tot > 1e-7:
             q_lat_cyl = min(920.0, mdot_cond_tot * 2.10e6)
             q_conv_cyl = max(0.0, (self.T_superheat_c - self.T_cyl_wall_c) * 2.2)
@@ -460,9 +464,22 @@ class AsterD51Thermo1D:
                 self.T_superheat_c,
                 self.T_cyl_wall_c + ((q_lat_cyl + q_conv_cyl) / 48.0) * dt_th,
             )
-            self.lubricator_oil_pct = max(0.0, self.lubricator_oil_pct - (80.0 / 3600.0) * dt_th)
         else:
             self.T_cyl_wall_c += (25.0 - self.T_cyl_wall_c) * 0.002 * dt_th
+
+        # 4-2 前车架卧式置换式注油器 (イラスト 4, 25):
+        # 主蒸汽经毛细管进入 4-2 黄铜油箱，受前车架环境气流冷却凝结沉底，按等体积置换将蒸汽油顶入 13-4/7-9 三通 (3.5 kgf/cm² 巡航续航 ~60 min)
+        if self.P_steam_chest > P_ATM + 2500.0 and self.lube_condensate_ml < self.lube_tank_cap_ml:
+            t_sat_lube_c = sat_temp_c(self.P_steam_chest)
+            air_cool_factor = 1.0 + 0.022 * min(40.0, abs(omega_3))
+            steam_pulse_factor = 0.35 + 0.65 * min(1.0, mdot_cyl_in / 1.5e-4)
+            q_lube_cond_w = 0.0115 * air_cool_factor * steam_pulse_factor * max(0.0, t_sat_lube_c - 25.0)
+            mdot_lube_cond_kg_s = q_lube_cond_w / latent_heat_j_kg(t_sat_lube_c)
+            dv_disp_ml = (mdot_lube_cond_kg_s / RHO_LIQ_WATER) * 1e6 * dt_th
+            self.lube_condensate_ml = min(self.lube_tank_cap_ml, self.lube_condensate_ml + dv_disp_ml)
+            self.lubricator_oil_pct = max(
+                0.0, 100.0 * (1.0 - self.lube_condensate_ml / self.lube_tank_cap_ml)
+            )
 
         # O4-3: 过热 (>225°C)、干摩缺油或水锤冲击累积损伤密封圈
         seal_wear_rate = 0.0
@@ -533,8 +550,11 @@ class AsterD51Thermo1D:
             sh_delta_c = 28.0 * draft_eff
             smokebox_vac_pa = 140.0 * (draft_eff - 0.12)
 
+        theta_grade_only = max(-0.30, min(0.30, pitch_rad + math.radians(ctrl.grade_deg)))
+        wick_head_factor = max(0.75, min(1.22, 1.0 - 0.32 * math.tan(theta_grade_only)))
+
         if ctrl.burner_lit and self.sump_fuel_ml > 0.0:
-            burn_ml_s = 0.108 * (0.55 + 0.45 * draft_eff)
+            burn_ml_s = 0.108 * (0.55 + 0.45 * draft_eff) * wick_head_factor
             used_ml = min(self.sump_fuel_ml, burn_ml_s * dt_th)
             self.sump_fuel_ml -= used_ml
             mdot_alc_kg_s = (used_ml / dt_th) * 789e-6 if dt_th > 0 else 0.0
@@ -542,8 +562,21 @@ class AsterD51Thermo1D:
         else:
             q_comb_w = 0.0
 
-        target_sh_c = self.T_boiler_c + (sh_delta_c if ctrl.burner_lit else 0.0)
-        self.T_superheat_c += min(1.0, 1.5 * dt_th) * (target_sh_c - self.T_superheat_c)
+        # 17-5 双 U 四程过热器 (插于上排 2 根 ø11.5mm 烟管内, 504mm/47.5cm² SUS304 管壁热容 ~7.0 J/K) 对流换热微分方程
+        t_flue_gas_c = self.T_boiler_c + (1.32 * sh_delta_c if ctrl.burner_lit else 0.0)
+        g_gas_to_sh = 4.2 * (0.25 + 0.75 * draft_eff)
+        mdot_cp_steam = mdot_reg * 2080.0
+        if mdot_cp_steam > 1e-5:
+            u_sh_in = 1.8 + 4200.0 * mdot_reg
+            eps_sh = 1.0 - math.exp(-min(12.0, u_sh_in / mdot_cp_steam))
+            q_sh_to_steam = eps_sh * mdot_cp_steam * (self.T_sh_wall_c - self.T_boiler_c)
+            target_sh_c = self.T_boiler_c + eps_sh * (self.T_sh_wall_c - self.T_boiler_c)
+        else:
+            q_sh_to_steam = 0.25 * (self.T_sh_wall_c - self.T_boiler_c)
+            target_sh_c = 0.35 * self.T_boiler_c + 0.65 * self.T_sh_wall_c
+        dT_sh_wall = (g_gas_to_sh * (t_flue_gas_c - self.T_sh_wall_c) - q_sh_to_steam) / 7.0
+        self.T_sh_wall_c = max(25.0, min(360.0, self.T_sh_wall_c + dT_sh_wall * dt_th))
+        self.T_superheat_c += min(1.0, 2.5 * dt_th) * (target_sh_c - self.T_superheat_c)
 
         # --- 6. 轴动给水泵 (6-5) + 旁通阀 (4-17) 分流 + 手动泵补水 ---
         v_pump_m3_s = 0.85 * self.A_axle_pump * max(0.0, -v_pump_ram) if self.tender_water_ml > 0.5 else 0.0

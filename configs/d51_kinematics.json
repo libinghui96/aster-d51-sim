@@ -75,16 +75,16 @@
       "main_rod_center_abs_y": 32.5,
       "valve_gear_plane_abs_y": 36.0,
       "return_crank_web_dy": -1.45,
-      "eccentric_rod_rear_dy": 0.15,
-      "eccentric_rod_front_lap_dy": -1.4,
+      "eccentric_rod_rear_dy": 0.45,
+      "eccentric_rod_front_lap_dy": -1.15,
       "expansion_link_body_dy": 0.0,
-      "expansion_link_tail_ear_dy": 0.25,
-      "stepped_pin_2_2_head_dy": 1.55,
-      "stepped_pin_2_2_nut_dy": -2.4,
-      "radius_rod_bar_dy": -1.7,
+      "expansion_link_tail_ear_dy": 0.35,
+      "stepped_pin_2_2_head_dy": 2.35,
+      "stepped_pin_2_2_nut_dy": -1.9,
+      "radius_rod_bar_dy": -1.95,
       "comb_lever_web_dy": 0.0,
       "union_link_clevis_dy": 0.0,
-      "lift_link_bot_clevis_dy": -1.7
+      "lift_link_bot_clevis_dy": -1.95
     }
   },
   "boiler_and_aux": {

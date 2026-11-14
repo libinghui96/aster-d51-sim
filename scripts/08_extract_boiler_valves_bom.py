@@ -215,10 +215,10 @@ def build_boiler_piping_spec(
     inner_fb_x_rear = -107.5
     inner_fb_x_front = -47.0
     inner_fb_len = inner_fb_x_front - inner_fb_x_rear  # 60.5 mm
-    inner_fb_w = 38.0
-    inner_fb_floor_z = 19.5
+    inner_fb_w = 36.0
+    inner_fb_floor_z = 20.5
     crown_sheet_z = 47.5
-    inner_fb_h = crown_sheet_z - inner_fb_floor_z   # 28.0 mm
+    inner_fb_h = crown_sheet_z - inner_fb_floor_z   # 27.0 mm
     copper_sheet_t = 1.2
 
     flue_len = x_sb_rear - inner_fb_x_front         # 139.0 mm
@@ -621,6 +621,197 @@ def build_boiler_piping_spec(
                 "ports_total": 4,
                 "orifice_dia_mm": 1.2,
                 "discharge_coeff_cd": 0.62,
+            },
+        },
+        "topology_and_port_mating_contracts": {
+            "single_solid_mesh_invariant": {
+                "enforce_all_meshes_single_solid": True,
+                "max_connected_components": 1,
+                "vertex_weld_tol_mm": 1e-4,
+                "rationale": "Any STL with cc > 1 has floating disconnected sub-parts or unvented phantom cavities invisible to boundary_edges == 0.",
+            },
+            "internal_enclosure_contracts": [
+                {
+                    "id": "superheater_and_regulator_inside_boiler",
+                    "mesh": "superheater_piping",
+                    "x_window_mm": [-106.0, 88.0],
+                    "z_min_mm": 30.0,
+                    "axis_z_mm": 44.8,
+                    "max_radius_mm": 27.3,
+                },
+                {
+                    "id": "safety_valve_tie_inside_boiler",
+                    "mesh": "boiler_aux_valves",
+                    "x_window_mm": [-106.0, -42.0],
+                    "z_min_mm": 30.0,
+                    "axis_z_mm": 44.8,
+                    "max_radius_mm": 27.3,
+                },
+            ],
+            "cross_body_port_mating_contracts": {
+                "max_gap_mm": 0.50,
+                "xml_targets": ["models/d51_full.xml", "models/d51_r2m.xml"],
+                "ports": [
+                    {
+                        "id": "steam_inlet_7_9_to_1_20_L",
+                        "fluid_loop": "main_steam",
+                        "geom_a": "superheater_piping_vis",
+                        "geom_b": "cyl_housing_L",
+                        "roi_a_local_mm": [[118.0, 22.0, 18.0], [134.0, 36.0, 30.0]],
+                    },
+                    {
+                        "id": "steam_inlet_7_9_to_1_20_R",
+                        "fluid_loop": "main_steam",
+                        "geom_a": "superheater_piping_vis",
+                        "geom_b": "cyl_housing_R",
+                        "roi_a_local_mm": [[118.0, -36.0, 18.0], [134.0, -22.0, 30.0]],
+                    },
+                    {
+                        "id": "steam_exhaust_7_8_L",
+                        "fluid_loop": "exhaust_steam",
+                        "geom_a": "superheater_piping_vis",
+                        "geom_b": "cyl_housing_L",
+                        "roi_a_local_mm": [[126.0, 18.0, 10.0], [134.0, 23.0, 15.5]],
+                    },
+                    {
+                        "id": "steam_exhaust_7_8_R",
+                        "fluid_loop": "exhaust_steam",
+                        "geom_a": "superheater_piping_vis",
+                        "geom_b": "cyl_housing_R",
+                        "roi_a_local_mm": [[126.0, -23.0, 10.0], [134.0, -18.0, 15.5]],
+                    },
+                    {
+                        "id": "chimney_petticoat_18_28_to_smokebox_stack",
+                        "fluid_loop": "flue_gas_ejector",
+                        "geom_a": "superheater_piping_vis",
+                        "geom_b": "boiler_Super_vis",
+                        "roi_a_local_mm": [[120.0, -14.0, 70.0], [140.0, 14.0, 93.0]],
+                    },
+                    {
+                        "id": "superheater_17_5_to_front_tubeplate",
+                        "fluid_loop": "main_steam",
+                        "geom_a": "superheater_piping_vis",
+                        "geom_b": "boiler_copper_core_vis",
+                        "roi_a_local_mm": [[86.0, -20.0, 36.0], [98.0, 20.0, 60.0]],
+                    },
+                    {
+                        "id": "lubricator_4_2_capillary_to_steam_tee",
+                        "fluid_loop": "displacement_oil",
+                        "geom_a": "displacement_lubricator_vis",
+                        "geom_b": "superheater_piping_vis",
+                        "roi_a_local_mm": [[116.0, -5.0, 14.0], [134.0, 5.0, 28.0]],
+                    },
+                    {
+                        "id": "feedwater_6_8_to_rear_upper_clack_13_7",
+                        "fluid_loop": "axle_pump_feedwater",
+                        "geom_a": "feedwater_piping_vis",
+                        "geom_b": "boiler_copper_core_vis",
+                        "roi_a_local_mm": [[-116.0, -10.0, 50.0], [-104.0, 2.0, 62.0]],
+                    },
+                    {
+                        "id": "feedwater_13_11_to_firebox_bottom_clack_13_2",
+                        "fluid_loop": "hand_pump_feedwater",
+                        "geom_a": "feedwater_piping_vis",
+                        "geom_b": "boiler_copper_core_vis",
+                        "roi_a_local_mm": [[-116.0, -10.0, 14.0], [-96.0, 10.0, 28.0]],
+                    },
+                    {
+                        "id": "umbilical_return_loco_union_4_15",
+                        "fluid_loop": "axle_pump_bypass_return",
+                        "geom_a": "feedwater_piping_vis",
+                        "geom_b": "umb_hose_return",
+                        "roi_a_local_mm": [[-153.0, -11.0, 0.5], [-147.0, -5.8, 6.5]],
+                    },
+                    {
+                        "id": "umbilical_return_tender_socket_31_14",
+                        "fluid_loop": "axle_pump_bypass_return",
+                        "geom_a": "umb_hose_return",
+                        "geom_b": "tender_internals_vis",
+                        "roi_a_local_mm": None,
+                        "roi_b_local_mm": [[108.0, -11.0, 4.5], [116.0, -5.8, 10.5]],
+                    },
+                    {
+                        "id": "umbilical_fuel_loco_union_23_1",
+                        "fluid_loop": "alcohol_fuel",
+                        "geom_a": "alcohol_burner_vis",
+                        "geom_b": "umb_hose_fuel",
+                        "roi_a_local_mm": [[-153.0, -2.5, 0.5], [-147.0, 2.5, 6.5]],
+                    },
+                    {
+                        "id": "umbilical_fuel_tender_socket_34_2",
+                        "fluid_loop": "alcohol_fuel",
+                        "geom_a": "umb_hose_fuel",
+                        "geom_b": "tender_internals_vis",
+                        "roi_a_local_mm": None,
+                        "roi_b_local_mm": [[108.0, -2.5, 4.5], [116.0, 2.5, 10.5]],
+                    },
+                    {
+                        "id": "umbilical_hand_loco_union_13_11",
+                        "fluid_loop": "hand_pump_feedwater",
+                        "geom_a": "feedwater_piping_vis",
+                        "geom_b": "umb_hose_hand",
+                        "roi_a_local_mm": [[-153.0, 1.2, 0.5], [-147.0, 6.0, 6.5]],
+                    },
+                    {
+                        "id": "umbilical_hand_tender_socket_31_13",
+                        "fluid_loop": "hand_pump_feedwater",
+                        "geom_a": "umb_hose_hand",
+                        "geom_b": "tender_internals_vis",
+                        "roi_a_local_mm": None,
+                        "roi_b_local_mm": [[108.0, 1.2, 4.5], [116.0, 6.0, 10.5]],
+                    },
+                    {
+                        "id": "umbilical_suction_loco_union_6_10",
+                        "fluid_loop": "axle_pump_suction",
+                        "geom_a": "feedwater_piping_vis",
+                        "geom_b": "umb_hose_suction",
+                        "roi_a_local_mm": [[-153.0, 5.8, 0.5], [-147.0, 11.0, 6.5]],
+                    },
+                    {
+                        "id": "umbilical_suction_tender_socket_31_12",
+                        "fluid_loop": "axle_pump_suction",
+                        "geom_a": "umb_hose_suction",
+                        "geom_b": "tender_internals_vis",
+                        "roi_a_local_mm": None,
+                        "roi_b_local_mm": [[108.0, 5.8, 4.5], [116.0, 11.0, 10.5]],
+                    },
+                    {
+                        "id": "safety_valves_28_6_to_boiler_shell",
+                        "fluid_loop": "safety_relief",
+                        "geom_a": "boiler_aux_valves_vis",
+                        "geom_b": "boiler_copper_core_vis",
+                        "roi_a_local_mm": [[-44.0, -10.0, 66.0], [-28.0, 10.0, 78.0]],
+                    },
+                    {
+                        "id": "drain_cocks_1_16_L_to_cyl_L",
+                        "fluid_loop": "condensate_blowdown",
+                        "geom_a": "drain_cock_vis",
+                        "geom_b": "cyl_housing_L",
+                        "roi_a_local_mm": [[-10.0, 24.0, -1.0], [10.0, 36.0, 4.0]],
+                    },
+                    {
+                        "id": "drain_cocks_1_16_R_to_cyl_R",
+                        "fluid_loop": "condensate_blowdown",
+                        "geom_a": "drain_cock_vis",
+                        "geom_b": "cyl_housing_R",
+                        "roi_a_local_mm": [[-10.0, -36.0, -1.0], [10.0, -24.0, 4.0]],
+                    },
+                    {
+                        "id": "drawbar_8_20_front_pin_to_loco_pin",
+                        "fluid_loop": "mechanical_drawbar",
+                        "geom_a": "drawbar_eye_f_vis",
+                        "geom_b": "loco_drawbar_pin_vis",
+                        "roi_a_local_mm": None,
+                    },
+                    {
+                        "id": "drawbar_8_20_rear_pin_to_tender_clevis_31_2",
+                        "fluid_loop": "mechanical_drawbar",
+                        "geom_a": "drawbar_eye_r_vis",
+                        "geom_b": "tender_internals_vis",
+                        "roi_a_local_mm": None,
+                        "roi_b_local_mm": [[104.0, -8.0, -6.0], [120.0, 8.0, 3.0]],
+                    },
+                ],
             },
         },
     }

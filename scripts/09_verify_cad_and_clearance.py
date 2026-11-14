@@ -9,7 +9,8 @@ Aster Hobby JNR D51 (1/32, Gauge 1 45mm) 自动化 CAD 拓扑、BOM 真值、运
   - Gate 2: 全车 54 个 STL 100% 流形水密性 (boundary_edges == 0)、正体积、三角形预算、烟室连续非空切片与微米级左右对称性；
   - Gate 3: 月牙板圆弧槽与 MuJoCo j_die_shift 铰链轨迹零角度偏差 (< 0.05° / < 0.02mm)、单剪偏心杆同轴台阶销闭合、独立亮面单滑杆与 7 大内脏材质拆分；
   - Gate 6: 车轮外侧零水管硬约束 (|Y| <= 11.0mm) 及 360° (每 10°) × [-1.0, 0.0, +1.0] 全行程三维三角面采样净空 (>= 0.50 mm)；
-  - Gate 8: 三级精密闭环重合残差 (< 0.02 mm)、2.0N 横向力下第 3 动轮轴向游隙自由横动 (>= 0.15 mm)、逆转拉杆耦合与 1.0 kgf/cm² 正反转冷态气密自启动 / 3.8 kgf/cm² 中立位驻车闭锁。
+  - Gate 8: 三级精密闭环重合残差 (< 0.02 mm)、2.0N 横向力下第 3 动轮轴向游隙自由横动 (>= 0.15 mm)、逆转拉杆耦合与 1.0 kgf/cm² 正反转冷态气密自启动 / 3.8 kgf/cm² 中立位驻车闭锁；
+  - Gate 9: 1D-3D 拓扑—几何连续性门禁：全车 54 个 STL 100% 单连通分量 (connected_components == 1，杜绝悬空碎块与封闭幽灵空腔)、炉内管路包络不越界、全车 18 个跨刚体/跨网格流体与机械端口在直线及 R2m 弯道双姿态下零断口对接 (gap <= 0.50 mm)。
 
 任一门禁不达标即输出 FAIL 并返回非零退出码。
 """
@@ -79,6 +80,39 @@ def check_watertight_and_volume(tris: np.ndarray) -> Tuple[int, float]:
     cross = np.cross(tris[:, 1], tris[:, 2])
     vol = float(np.sum(np.einsum("ij,ij->i", tris[:, 0], cross)) / 6.0)
     return unmatched, vol
+
+
+def count_connected_components(tris: np.ndarray, tol_mm: float = 1e-4) -> int:
+    """
+    通过共享量化顶点并查集 (Union-Find) 统计 STL 三角网格的三维连通分量数：
+      - 单独检查 boundary_edges == 0 无法发现“两个相距数毫米的闭合圆管断成两截”或“未开孔的封闭内腔”；
+      - 强制 connected_components == 1 可从拓扑上彻底根除零件内部悬空断管与幽灵空腔。
+    """
+    if len(tris) == 0:
+        return 0
+    scale = 1.0 / max(tol_mm, 1e-7)
+    pts = np.round(tris.reshape(-1, 3) * scale).astype(np.int64)
+    _, inv = np.unique(pts, axis=0, return_inverse=True)
+    f = inv.reshape(len(tris), 3)
+    n_v = int(inv.max()) + 1
+
+    parent = list(range(n_v))
+
+    def _find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for u, v, w in f.tolist():
+        ru, rv, rw = _find(u), _find(v), _find(w)
+        if ru != rv:
+            parent[rv] = ru
+        if ru != rw:
+            parent[rw] = ru
+
+    roots = {_find(v) for v in range(n_v)}
+    return len(roots)
 
 
 def sample_triangle_surface(tris_m: np.ndarray, max_spacing_m: float = 0.00085) -> np.ndarray:
@@ -301,7 +335,7 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
         sb_cnt = int(np.sum((xs >= 92.0) & (xs <= 162.0)))
         msgs.append(f"PASS: boiler_superstructure.stl has continuous non-zero vertices in ALL 136×2mm X-bins [-110, +162]mm (smokebox verts={sb_cnt:,})")
 
-    # 中心对称网格 |min_y + max_y| < 1e-3 mm 校验
+    # 中心对称网格 |min_y + max_y| < 1e-3 mm 校验 + 质心 |com_y| < 1e-2 mm 校验
     sym_names = [
         "boiler_superstructure",
         "boiler_firebox_flues",
@@ -316,8 +350,17 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
         "displacement_lubricator",
         "alcohol_burner",
         "axle_pump_eccentric",
+        "main_rod",
+        "coupling_rod",
+        "coupling_rod_front",
+        "coupling_rod_rear",
+        "combination_lever",
     ]
+    strict_com_sym_names = [n for n in sym_names if n != "boiler_superstructure"]
+    mass_props = json.loads((PROJECT_ROOT / "configs" / "d51_mass_props.json").read_text(encoding="utf-8"))["parts"]
+
     max_sym_err = 0.0
+    max_com_err = 0.0
     bad_sym = []
     for name in sym_names:
         ys = stl_tris_mm[name].reshape(-1, 3)[:, 1]
@@ -325,11 +368,17 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
         max_sym_err = max(max_sym_err, err)
         if err >= 1e-3:
             bad_sym.append((name, err))
+    for name in strict_com_sym_names:
+        com_y_mm = abs(float(mass_props[name]["com_m"][1])) * 1000.0
+        max_com_err = max(max_com_err, com_y_mm)
+        if com_y_mm >= 1e-2:
+            bad_sym.append((f"{name}:com_y", com_y_mm))
 
-    # _L / _R 镜像对校验 (注: 动轮与回动曲柄内置 90° 相位差，校验体积与 Y 包络镜像一致性)
+    # _L / _R 镜像对校验 (注: 动轮与回动曲柄内置 90° 相位差，校验体积与 Y 包络镜像一致性；非曲柄件同时校验质心镜像)
     lr_stems = sorted(
         s[:-2] for s in stl_tris_mm if s.endswith("_L") and (s[:-2] + "_R") in stl_tris_mm
     )
+    quartered_stems = {"driving_wheel", "main_driving_wheel", "return_crank"}
     for base in lr_stems:
         tL = stl_tris_mm[base + "_L"]
         tR = stl_tris_mm[base + "_R"]
@@ -338,14 +387,22 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
         yL = tL.reshape(-1, 3)[:, 1]
         yR = tR.reshape(-1, 3)[:, 1]
         y_mirror_err = max(abs(float(yL.min() + yR.max())), abs(float(yL.max() + yR.min())))
-        if len(tL) != len(tR) or abs(vL - vR) / max(vL, 1e-6) > 1e-3 or y_mirror_err > 1e-2:
-            bad_sym.append((f"{base}_L/R", y_mirror_err))
+        com_lr_err = (
+            0.0
+            if base in quartered_stems
+            else abs(float(mass_props[base + "_L"]["com_m"][1] + mass_props[base + "_R"]["com_m"][1])) * 1000.0
+        )
+        max_com_err = max(max_com_err, com_lr_err)
+        if len(tL) != len(tR) or abs(vL - vR) / max(vL, 1e-6) > 1e-3 or y_mirror_err > 1e-2 or com_lr_err >= 1e-2:
+            bad_sym.append((f"{base}_L/R", max(y_mirror_err, com_lr_err)))
 
     if bad_sym:
         ok = False
         msgs.append(f"FAIL: Symmetry violations: {bad_sym}")
     else:
-        msgs.append(f"PASS: All {len(sym_names)} center-symmetric STLs (max |min_y+max_y|={max_sym_err:.2e} mm) & {len(lr_stems)} L/R mirror pairs verified")
+        msgs.append(
+            f"PASS: All {len(sym_names)} center-symmetric STLs (max |min_y+max_y|={max_sym_err:.2e} mm, max |com_y|={max_com_err:.2e} mm) & {len(lr_stems)} L/R mirror pairs verified"
+        )
 
     return ok, msgs, stl_tris_mm
 
@@ -537,7 +594,9 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
         "wheelset_2",
         "wheelset_3",
         "wheelset_4",
+        "leading_truck_arm",
         "leading_wheelset",
+        "trailing_truck_arm",
         "trailing_wheelset",
         "main_rod_L",
         "main_rod_R",
@@ -582,6 +641,55 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
         ("cyl_housing_R", "slide_valve_R"),
     }
 
+    # 运动刚体间真实铰接销/轴承配合副白名单 (非白名单运动件对必须满足 >= 0.50 mm 全包络无碰撞净空)
+    mating_body_pairs_base: Set[Tuple[str, str]] = {
+        ("leading_truck_arm", "leading_wheelset"),
+        ("trailing_truck_arm", "trailing_wheelset"),
+        ("wheelset_3", "main_rod_L"),
+        ("wheelset_3", "main_rod_R"),
+        ("wheelset_3", "coupling_rod_L"),
+        ("wheelset_3", "coupling_rod_R"),
+        ("wheelset_2", "coupling_rod_L"),
+        ("wheelset_2", "coupling_rod_R"),
+        ("wheelset_2", "coupling_rod_front_L"),
+        ("wheelset_2", "coupling_rod_front_R"),
+        ("wheelset_1", "coupling_rod_front_L"),
+        ("wheelset_1", "coupling_rod_front_R"),
+        ("wheelset_3", "coupling_rod_rear_L"),
+        ("wheelset_3", "coupling_rod_rear_R"),
+        ("wheelset_4", "coupling_rod_rear_L"),
+        ("wheelset_4", "coupling_rod_rear_R"),
+        ("coupling_rod_L", "coupling_rod_front_L"),
+        ("coupling_rod_R", "coupling_rod_front_R"),
+        ("coupling_rod_L", "coupling_rod_rear_L"),
+        ("coupling_rod_R", "coupling_rod_rear_R"),
+        ("wheelset_3", "eccentric_rod_L"),
+        ("wheelset_3", "eccentric_rod_R"),
+        ("wheelset_3", "pump_eccentric_rod"),
+        ("main_rod_L", "piston_crosshead_L"),
+        ("main_rod_R", "piston_crosshead_R"),
+        ("piston_crosshead_L", "union_link_L"),
+        ("piston_crosshead_R", "union_link_R"),
+        ("union_link_L", "comb_lever_L"),
+        ("union_link_R", "comb_lever_R"),
+        ("comb_lever_L", "slide_valve_L"),
+        ("comb_lever_R", "slide_valve_R"),
+        ("comb_lever_L", "radius_rod_L"),
+        ("comb_lever_R", "radius_rod_R"),
+        ("eccentric_rod_L", "expansion_link_L"),
+        ("eccentric_rod_R", "expansion_link_R"),
+        ("expansion_link_L", "die_block_L"),
+        ("expansion_link_R", "die_block_R"),
+        ("die_block_L", "radius_rod_L"),
+        ("die_block_R", "radius_rod_R"),
+        ("radius_rod_L", "lift_link_L"),
+        ("radius_rod_R", "lift_link_R"),
+        ("lift_link_L", "reverser_shaft"),
+        ("lift_link_R", "reverser_shaft"),
+        ("reverser_shaft", "cab_reach_rod"),
+    }
+    mating_body_whitelist = set(mating_body_pairs_base) | {(b, a) for (a, b) in mating_body_pairs_base}
+
     # 构建车架固定静态件 KDTree (滚轮台模式下 loco_frame 固定于世界系原点)
     static_trees: Dict[str, Tuple[cKDTree, np.ndarray, np.ndarray]] = {}
     for gname in static_geoms_to_check:
@@ -615,6 +723,8 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
     min_clear_mm = 1e9
     worst_info = ("", "", 0.0, 0.0)
     per_static_min: Dict[str, Tuple[float, str]] = {g: (1e9, "") for g in static_geoms_to_check}
+    min_mov_clear_mm = 1e9
+    worst_mov_info = ("", "", 0.0, 0.0)
 
     t0 = time.perf_counter()
     for rev_norm in (-1.0, 0.0, +1.0):
@@ -645,6 +755,7 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
             data.qpos[qpos_dc] = 0.0
             mujoco.mj_kinematics(model, data)
 
+            frame_mov_pts: List[Tuple[str, np.ndarray, np.ndarray, np.ndarray]] = []
             for bname, glist in moving_body_geoms.items():
                 pts_chunks = [
                     data.geom_xpos[gid] + mesh_pts_local[mid] @ data.geom_xmat[gid].reshape(3, 3).T
@@ -655,11 +766,11 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
                 m_pts = np.vstack(pts_chunks)
                 m_min = m_pts.min(axis=0)
                 m_max = m_pts.max(axis=0)
+                frame_mov_pts.append((bname, m_pts, m_min, m_max))
 
                 for gname, (st_tree, s_min, s_max) in static_trees.items():
                     if (gname, bname) in mating_geom_body_whitelist:
                         continue
-                    # AABB 快速剪枝 + KDTree 距离上界剪枝 (毫秒级精准捕获最近表面点对)
                     bound_mm = min(15.0, per_static_min[gname][0])
                     gap_xyz = np.maximum(0.0, np.maximum(s_min - m_max, m_min - s_max))
                     if float(np.linalg.norm(gap_xyz)) * 1000.0 >= bound_mm:
@@ -693,21 +804,144 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
                         min_clear_mm = d_dc_mm
                         worst_info = ("drain_cock_vis", bname, deg_now, rev_norm)
 
+            # 检查所有非铰接配合的运动刚体对运动刚体三维表面净空 (>= 0.50 mm)
+            n_mb = len(frame_mov_pts)
+            for i_m in range(n_mb):
+                b1, p1, mn1, mx1 = frame_mov_pts[i_m]
+                t1 = None
+                for j_m in range(i_m + 1, n_mb):
+                    b2, p2, mn2, mx2 = frame_mov_pts[j_m]
+                    if (b1, b2) in mating_body_whitelist:
+                        continue
+                    bound_mv_mm = min(4.0, min_mov_clear_mm)
+                    gap_mv = np.maximum(0.0, np.maximum(mn1 - mx2, mn2 - mx1))
+                    if float(np.linalg.norm(gap_mv)) * 1000.0 >= bound_mv_mm:
+                        continue
+                    if t1 is None:
+                        t1 = cKDTree(p1)
+                    dists_mv, _ = t1.query(p2, distance_upper_bound=bound_mv_mm * 0.001 + 1e-6, workers=1)
+                    d_mv_m = float(np.min(dists_mv))
+                    if not math.isfinite(d_mv_m):
+                        continue
+                    d_mv_mm = d_mv_m * 1000.0
+                    if d_mv_mm < min_mov_clear_mm:
+                        min_mov_clear_mm = d_mv_mm
+                        worst_mov_info = (b1, b2, deg_now, rev_norm)
+
     dt_scan = time.perf_counter() - t0
-    violations = [(g, d, who) for g, (d, who) in per_static_min.items() if d < 0.50]
-    if violations:
+    brake_min_mm, brake_who = per_static_min["chassis_equalizer_brakes_vis"]
+    violations = [(g, d, who) for g, (d, who) in per_static_min.items() if d < (1.50 if g == "chassis_equalizer_brakes_vis" else 0.50)]
+    if violations or min_mov_clear_mm < 0.50:
         ok = False
-        msgs.append(f"FAIL: 360°×3 clearance violations (<0.50mm): {violations}")
+        msgs.append(
+            f"FAIL: 360°×3 clearance violations: static={violations}, min_mov={min_mov_clear_mm:.3f}mm ({worst_mov_info})"
+        )
     else:
         msgs.append(
-            f"PASS: 360°×3 full-envelope surface clearance scan ({dt_scan:.2f}s): global min = {min_clear_mm:.3f} mm >= 0.50 mm "
-            f"(closest: {worst_info[0]} <-> {worst_info[1]} @ θ={worst_info[2]:.0f}°, rev={worst_info[3]:+.1f})"
+            f"PASS: 360°×3 full-envelope scan ({dt_scan:.2f}s): static min={min_clear_mm:.3f}mm >=0.50mm ({worst_info[0]}<->{worst_info[1]}), "
+            f"moving-to-moving min={min_mov_clear_mm:.3f}mm >=0.50mm ({worst_mov_info[0]}<->{worst_mov_info[1]}), brakes min={brake_min_mm:.2f}mm >=1.50mm ({brake_who})"
         )
         summary_pairs = ", ".join(
             f"{k.replace('_vis','')}:{v[0]:.2f}mm"
             for k, v in sorted(per_static_min.items(), key=lambda kv: kv[1][0])[:6]
         )
-        msgs.append(f"      Top-6 tightest clearances: {summary_pairs}")
+        msgs.append(f"      Top-6 tightest static clearances: {summary_pairs}")
+
+    # 6.3 R2m (2000mm) 弯道实车动态热机过弯 + 煤水车转向架/轮对净空与牵引连杆闭环扫描
+    r2m_runner = CoSimRunner(PROJECT_ROOT / "models" / "d51_r2m.xml", preset="hot")
+    rm, rd = r2m_runner.model, r2m_runner.data
+    r2m_mesh_pts: Dict[int, np.ndarray] = {}
+    for mid in range(rm.nmesh):
+        v_adr, v_num = int(rm.mesh_vertadr[mid]), int(rm.mesh_vertnum[mid])
+        f_adr, f_num = int(rm.mesh_faceadr[mid]), int(rm.mesh_facenum[mid])
+        r2m_mesh_pts[mid] = sample_triangle_surface(rm.mesh_vert[v_adr : v_adr + v_num][rm.mesh_face[f_adr : f_adr + f_num]], max_spacing_m=0.00085)
+
+    r2m_runner.ctrl.reverser = 0.75
+    r2m_runner.ctrl.regulator = 0.85
+    r2m_runner.ctrl.drain_cock = False
+
+    tdr_geoms = ["tender_body_vis", "tender_internals_vis"]
+    tdr_bodies = [
+        "tender_bogie_1",
+        "tender_bogie_2",
+        "tender_wheelset_1",
+        "tender_wheelset_2",
+        "tender_wheelset_3",
+        "tender_wheelset_4",
+    ]
+
+    def _r2m_body_pts(bname: str) -> np.ndarray:
+        bid = mujoco.mj_name2id(rm, mujoco.mjtObj.mjOBJ_BODY, bname)
+        gl = [
+            (gid, int(rm.geom_dataid[gid]))
+            for gid in range(rm.ngeom)
+            if int(rm.geom_bodyid[gid]) == bid and int(rm.geom_type[gid]) == mujoco.mjtGeom.mjGEOM_MESH
+        ]
+        return np.vstack([rd.geom_xpos[g] + r2m_mesh_pts[m_i] @ rd.geom_xmat[g].reshape(3, 3).T for g, m_i in gl])
+
+    def _r2m_geom_pts(gname: str) -> np.ndarray:
+        gid = mujoco.mj_name2id(rm, mujoco.mjtObj.mjOBJ_GEOM, gname)
+        m_i = int(rm.geom_dataid[gid])
+        return rd.geom_xpos[gid] + r2m_mesh_pts[m_i] @ rd.geom_xmat[gid].reshape(3, 3).T
+
+    r2m_min_mm = 1e9
+    r2m_worst = ("", "")
+    r2m_brake_min_mm = 1e9
+    r2m_tdr_min_mm = 1e9
+    r2m_max_res_mm = 0.0
+
+    for k_step in range(3000):  # 1.5s live R2m curve run
+        r2m_runner.step_once()
+        if k_step % 50 == 0:
+            r2m_max_res_mm = max(r2m_max_res_mm, _max_connect_residual_mm(rm, rd))
+        if k_step % 300 == 0:
+            fg_trees = {g: (cKDTree(p := _r2m_geom_pts(g)), p.min(axis=0), p.max(axis=0)) for g in static_geoms_to_check}
+            for b in moving_body_names:
+                bp = _r2m_body_pts(b)
+                bmn, bmx = bp.min(axis=0), bp.max(axis=0)
+                for g, (gt, gmn, gmx) in fg_trees.items():
+                    if (g, b) in mating_geom_body_whitelist:
+                        continue
+                    ub_mm = min(4.0, r2m_brake_min_mm if g == "chassis_equalizer_brakes_vis" else r2m_min_mm)
+                    gap = np.maximum(0.0, np.maximum(gmn - bmx, bmn - gmx))
+                    if float(np.linalg.norm(gap)) * 1000.0 >= ub_mm:
+                        continue
+                    dists, _ = gt.query(bp, distance_upper_bound=ub_mm * 0.001 + 1e-6, workers=1)
+                    dm = float(np.min(dists)) * 1000.0
+                    if math.isfinite(dm):
+                        if g == "chassis_equalizer_brakes_vis":
+                            r2m_brake_min_mm = min(r2m_brake_min_mm, dm)
+                        if dm < r2m_min_mm:
+                            r2m_min_mm = dm
+                            r2m_worst = (g, b)
+            tg_trees = {g: (cKDTree(p := _r2m_geom_pts(g)), p.min(axis=0), p.max(axis=0)) for g in tdr_geoms}
+            for b in tdr_bodies:
+                bp = _r2m_body_pts(b)
+                bmn, bmx = bp.min(axis=0), bp.max(axis=0)
+                for g, (gt, gmn, gmx) in tg_trees.items():
+                    ub_mm = min(4.0, r2m_tdr_min_mm)
+                    gap = np.maximum(0.0, np.maximum(gmn - bmx, bmn - gmx))
+                    if float(np.linalg.norm(gap)) * 1000.0 >= ub_mm:
+                        continue
+                    dists, _ = gt.query(bp, distance_upper_bound=ub_mm * 0.001 + 1e-6, workers=1)
+                    dm = float(np.min(dists)) * 1000.0
+                    if math.isfinite(dm):
+                        r2m_tdr_min_mm = min(r2m_tdr_min_mm, dm)
+                        if dm < r2m_min_mm:
+                            r2m_min_mm = dm
+                            r2m_worst = (g, b)
+
+    if r2m_min_mm < 0.50 or r2m_tdr_min_mm < 0.50 or r2m_brake_min_mm < 1.50 or r2m_max_res_mm >= 0.02:
+        ok = False
+        msgs.append(
+            f"FAIL: R2m live curve scan failed: min={r2m_min_mm:.3f}mm ({r2m_worst}), tender_min={r2m_tdr_min_mm:.3f}mm, "
+            f"brake_min={r2m_brake_min_mm:.3f}mm, max_res={r2m_max_res_mm:.5f}mm"
+        )
+    else:
+        msgs.append(
+            f"PASS: R2m (2000mm) live curve envelope: min={r2m_min_mm:.3f}mm >=0.50mm ({r2m_worst[0]}<->{r2m_worst[1]}), "
+            f"tender bogie/wheel min={r2m_tdr_min_mm:.2f}mm, brakes>={min(4.0, r2m_brake_min_mm):.2f}mm, max <connect> residual={r2m_max_res_mm:.5f}mm (<0.02mm)"
+        )
 
     return ok, msgs
 
@@ -817,8 +1051,10 @@ def verify_gate_8() -> Tuple[bool, List[str]]:
     else:
         msgs.append(f"PASS: Tier-3 <equality><joint> cab_reach_rod tracking error = {max_rr_err_mm:.4f} mm")
 
-    # 8.4 热流-多体耦合试车：3.8 kgf/cm² 中立位锁止 + 1.0 kgf/cm² 冷态气密正反转顺畅自启动
-    def run_coupled_test(p_kgf: float, rev_norm: float, dur_s: float = 1.6, cold_air: bool = False) -> Tuple[float, float]:
+    # 8.4 热流-多体耦合试车：3.8 kgf/cm² 中立位锁止 + 1.0 kgf/cm² 冷态气密正反转顺畅自启动 + 90° 四拍交替排气校验
+    def run_coupled_test(
+        p_kgf: float, rev_norm: float, dur_s: float = 1.6, cold_air: bool = False, track_beats: bool = False
+    ) -> Tuple[float, float, List[Tuple[float, str, str]]]:
         runner = CoSimRunner(PROJECT_ROOT / "models" / "d51_full.xml", preset="hot")
         target_p = 101325.0 + p_kgf * 98066.5
         if cold_air:
@@ -841,9 +1077,19 @@ def verify_gate_8() -> Tuple[bool, List[str]]:
         for _ in range(250):
             runner.step_once()
 
+        jid_w3_loc = mujoco.mj_name2id(runner.model, mujoco.mjtObj.mjOBJ_JOINT, "j_wheel_3")
+        qpos_w3_loc = int(runner.model.jnt_qposadr[jid_w3_loc])
+        ee = float(runner.thermo.calib.exhaust_lap)
+        qc_L = float(runner.thermo.calib.q_valve_center_L)
+        qc_R = float(runner.thermo.calib.q_valve_center_R)
+
         runner.ctrl.regulator = 0.85
         n_steps = int(round(dur_s / runner.model.opt.timestep))
         max_dyn_res = 0.0
+        beats: List[Tuple[float, str, str]] = []
+        prev_xvL = float(runner.data.sensordata[runner.s_vL]) - qc_L
+        prev_xvR = float(runner.data.sensordata[runner.s_vR]) - qc_R
+
         for k in range(n_steps):
             if cold_air:
                 runner.thermo.P_boiler = target_p
@@ -851,24 +1097,251 @@ def verify_gate_8() -> Tuple[bool, List[str]]:
             runner.step_once()
             if k % 100 == 0:
                 max_dyn_res = max(max_dyn_res, _max_connect_residual_mm(runner.model, runner.data))
+            if track_beats:
+                xvL = float(runner.data.sensordata[runner.s_vL]) - qc_L
+                xvR = float(runner.data.sensordata[runner.s_vR]) - qc_R
+                if k > 800:  # spin-up 稳定后统计四拍交替排气开启角
+                    deg_w = math.degrees(float(runner.data.qpos[qpos_w3_loc]))
+                    if prev_xvL <= ee and xvL > ee:
+                        beats.append((deg_w, "L", "head"))
+                    elif prev_xvL >= -ee and xvL < -ee:
+                        beats.append((deg_w, "L", "crank"))
+                    if prev_xvR <= ee and xvR > ee:
+                        beats.append((deg_w, "R", "head"))
+                    elif prev_xvR >= -ee and xvR < -ee:
+                        beats.append((deg_w, "R", "crank"))
+                prev_xvL, prev_xvR = xvL, xvR
 
-        return float(runner.data.sensordata[runner.s_w3]), max_dyn_res
+        return float(runner.data.sensordata[runner.s_w3]), max_dyn_res, beats
 
-    om_N, res_N = run_coupled_test(3.8, 0.0, dur_s=1.2, cold_air=False)
-    om_F, res_F = run_coupled_test(1.0, +0.85, dur_s=1.5, cold_air=True)
-    om_R, res_R = run_coupled_test(1.0, -0.85, dur_s=1.5, cold_air=True)
+    om_N, res_N, _ = run_coupled_test(3.8, 0.0, dur_s=2.0, cold_air=False)
+    om_F, res_F, beats_F = run_coupled_test(1.0, +0.85, dur_s=1.5, cold_air=True, track_beats=True)
+    om_R, res_R, _ = run_coupled_test(1.0, -0.85, dur_s=1.5, cold_air=True)
     max_dyn = max(res_N, res_F, res_R)
 
-    if abs(om_N) > 0.35 or om_F < 1.5 or om_R > -1.5 or max_dyn >= 0.02:
+    # 核验每转 4 次 L/R 严格交替排气及 90° 正交曲柄相位差
+    beats_ok = len(beats_F) >= 6 and all(beats_F[i][1] != beats_F[i - 1][1] for i in range(1, len(beats_F)))
+    beat_diffs = [beats_F[i][0] - beats_F[i - 1][0] for i in range(1, len(beats_F))]
+    mean_beat_deg = float(np.mean(beat_diffs)) if beat_diffs else 0.0
+    quarter_lags = []
+    for ch_tag in ("head", "crank"):
+        l_angs = [b[0] for b in beats_F if b[1] == "L" and b[2] == ch_tag]
+        r_angs = [b[0] for b in beats_F if b[1] == "R" and b[2] == ch_tag]
+        for ra in r_angs:
+            later_l = [la - ra for la in l_angs if 45.0 < (la - ra) < 135.0]
+            if later_l:
+                quarter_lags.append(later_l[0])
+    max_q_err_deg = max((abs(q - 90.0) for q in quarter_lags), default=999.0)
+    beats_ok = beats_ok and abs(mean_beat_deg - 90.0) <= 1.5 and max_q_err_deg <= 1.5
+
+    if abs(om_N) > 0.05 or om_F < 1.5 or om_R > -1.5 or max_dyn >= 0.02 or not beats_ok:
         ok = False
         msgs.append(
-            f"FAIL: Coupled valve-timing test: om_N={om_N:+.3f} rad/s, om_F@1kgf={om_F:+.2f} rad/s, om_R@1kgf={om_R:+.2f} rad/s, max_res={max_dyn:.4f}mm"
+            f"FAIL: Coupled valve-timing test: om_N={om_N:+.3f} rad/s (<=0.05), om_F@1kgf={om_F:+.2f} rad/s, om_R@1kgf={om_R:+.2f} rad/s, "
+            f"mean_beat={mean_beat_deg:.2f}°, quarter_err={max_q_err_deg:.2f}°, max_res={max_dyn:.4f}mm"
         )
     else:
         msgs.append(
             f"PASS: Coupled valve timing & air-test: 3.8 kgf/cm² Neutral ω={om_N:+.3f} rad/s (locked); "
-            f"1.0 kgf/cm² Air-Test Forward ω={om_F:+.2f} rad/s, Reverse ω={om_R:+.2f} rad/s; dynamic <connect> max residual={max_dyn:.5f} mm (<0.02mm)"
+            f"1.0 kgf/cm² Air-Test Forward ω={om_F:+.2f} rad/s, Reverse ω={om_R:+.2f} rad/s; "
+            f"4-beat alternating exhaust mean={mean_beat_deg:.2f}° (R->L quartering Δ=90.0°±{max_q_err_deg:.2f}°); "
+            f"dynamic <connect> max residual={max_dyn:.5f} mm (<0.02mm)"
         )
+
+    return ok, msgs
+
+
+# ==============================================================================
+# Gate 9: 1D-3D 拓扑—几何连续性、单网格单连通分量与跨刚体全端口零断口对接门禁
+# ==============================================================================
+
+def _sample_geom_world_pts_for_port(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    gid: int,
+    stl_pts_cad_m_cache: Dict[str, np.ndarray],
+    roi_local_mm: List[List[float]] | None = None,
+) -> np.ndarray:
+    """将网格或原生几何体表面加密采样后精确映射至 MuJoCo 世界系 (m)，支持 CAD 局部 ROI 裁剪。"""
+    gtype = int(model.geom_type[gid])
+    xpos = data.geom_xpos[gid]
+    xmat = data.geom_xmat[gid].reshape(3, 3)
+
+    if gtype == int(mujoco.mjtGeom.mjGEOM_MESH):
+        mid = int(model.geom_dataid[gid])
+        mname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MESH, mid) or ""
+        stl_key = mname[2:] if mname.startswith("m_") else mname
+        pts_cad_m = stl_pts_cad_m_cache[stl_key]
+        if roi_local_mm is not None:
+            lo_m = np.asarray(roi_local_mm[0], dtype=np.float64) * 0.001
+            hi_m = np.asarray(roi_local_mm[1], dtype=np.float64) * 0.001
+            mask = np.all((pts_cad_m >= lo_m) & (pts_cad_m <= hi_m), axis=1)
+            pts_cad_m = pts_cad_m[mask]
+        if len(pts_cad_m) == 0:
+            return np.empty((0, 3), dtype=np.float64)
+        rmat_mesh = np.zeros(9, dtype=np.float64)
+        mujoco.mju_quat2Mat(rmat_mesh, model.mesh_quat[mid])
+        pts_mj = (pts_cad_m - model.mesh_pos[mid]) @ rmat_mesh.reshape(3, 3)
+        return xpos + pts_mj @ xmat.T
+
+    if gtype == int(mujoco.mjtGeom.mjGEOM_BOX):
+        sx, sy, sz = [float(v) for v in model.geom_size[gid][:3]]
+        c = np.array(
+            [
+                [-sx, -sy, -sz], [+sx, -sy, -sz], [+sx, +sy, -sz], [-sx, +sy, -sz],
+                [-sx, -sy, +sz], [+sx, -sy, +sz], [+sx, +sy, +sz], [-sx, +sy, +sz],
+            ],
+            dtype=np.float64,
+        )
+        quads = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (2, 3, 7, 6), (0, 3, 7, 4), (1, 2, 6, 5)]
+        tris = []
+        for a, b, d_idx, e in quads:
+            tris.append([c[a], c[b], c[d_idx]])
+            tris.append([c[a], c[d_idx], c[e]])
+        pts_loc = sample_triangle_surface(np.asarray(tris, dtype=np.float64), max_spacing_m=0.00045)
+        return xpos + pts_loc @ xmat.T
+
+    if gtype == int(mujoco.mjtGeom.mjGEOM_CYLINDER):
+        rad, h_half = float(model.geom_size[gid][0]), float(model.geom_size[gid][1])
+        thetas = np.linspace(0.0, 2.0 * math.pi, 28, endpoint=False)
+        zs = np.linspace(-h_half, +h_half, max(5, int(math.ceil(2.0 * h_half / 0.00045)) + 1))
+        pts = []
+        for z in zs:
+            for th in thetas:
+                pts.append([rad * math.cos(th), rad * math.sin(th), z])
+        for z_cap in (-h_half, +h_half):
+            pts.append([0.0, 0.0, z_cap])
+            n_r = max(5, int(math.ceil(rad / 0.00040)))
+            for r_sub in np.linspace(rad / n_r, rad, n_r):
+                for th in thetas:
+                    pts.append([r_sub * math.cos(th), r_sub * math.sin(th), z_cap])
+        pts_loc = np.asarray(pts, dtype=np.float64)
+        return xpos + pts_loc @ xmat.T
+
+    raise ValueError(f"Unsupported geom type {gtype} for port mating gate")
+
+
+def verify_gate_9(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
+    msgs: List[str] = []
+    ok = True
+
+    pip_cfg = json.loads((PROJECT_ROOT / "configs" / "d51_boiler_piping.json").read_text(encoding="utf-8"))
+    contracts = pip_cfg.get("topology_and_port_mating_contracts", {})
+    if not contracts:
+        return False, ["FAIL: Missing topology_and_port_mating_contracts in configs/d51_boiler_piping.json"]
+
+    # 9.1 全车 54 个 STL 单连通分量门禁 (connected_components == 1)
+    cc_spec = contracts["single_solid_mesh_invariant"]
+    max_cc = int(cc_spec["max_connected_components"])
+    tol_mm = float(cc_spec.get("vertex_weld_tol_mm", 1e-4))
+    multi_cc_meshes: List[Tuple[str, int]] = []
+    for name, tris in sorted(stl_tris_mm.items()):
+        cc = count_connected_components(tris, tol_mm=tol_mm)
+        if cc != max_cc:
+            multi_cc_meshes.append((name, cc))
+    if multi_cc_meshes:
+        ok = False
+        msgs.append(f"FAIL: Disconnected/multi-component STLs detected (expected cc=={max_cc}): {multi_cc_meshes}")
+    else:
+        msgs.append(f"PASS: All {len(stl_tris_mm)}/54 STLs are single continuous solids (connected_components == 1, zero floating fragments/voids)")
+
+    # 9.2 炉内受压管路不越界包络核验 (防止 X-Ray 透视时内部管路刺出紫铜炉壳)
+    enc_failures = []
+    for enc in contracts.get("internal_enclosure_contracts", []):
+        m_key = enc["mesh"]
+        x0, x1 = [float(v) for v in enc["x_window_mm"]]
+        z_min = float(enc["z_min_mm"])
+        z_ax = float(enc["axis_z_mm"])
+        r_lim = float(enc["max_radius_mm"])
+        v = sample_triangle_surface(stl_tris_mm[m_key], max_spacing_m=0.80)
+        sel = v[(v[:, 0] >= x0) & (v[:, 0] <= x1) & (v[:, 2] >= z_min)]
+        if len(sel) == 0:
+            enc_failures.append((enc["id"], "empty_window"))
+            continue
+        r_max = float(np.max(np.hypot(sel[:, 1], sel[:, 2] - z_ax)))
+        if r_max > r_lim:
+            enc_failures.append((enc["id"], round(r_max, 3), r_lim))
+    if enc_failures:
+        ok = False
+        msgs.append(f"FAIL: Internal boiler pipe enclosure violated: {enc_failures}")
+    else:
+        msgs.append("PASS: Internal regulator (13-9), 4-pass superheater (17-5) & safety-valve tie strictly enclosed inside boiler copper shell")
+
+    # 9.3 跨刚体/跨网格 1D-3D 全端口零断口对接核验 (同时覆盖直线滚轮台与 R2m 弯道双姿态!)
+    port_spec = contracts["cross_body_port_mating_contracts"]
+    max_gap_mm = float(port_spec["max_gap_mm"])
+    ports = port_spec["ports"]
+
+    # 仅对参与端口核验的网格做 0.45mm 高密表面采样缓存
+    needed_stl_keys: Set[str] = set()
+    for xml_rel in port_spec["xml_targets"]:
+        xml_path = PROJECT_ROOT / xml_rel
+        if not xml_path.exists():
+            ok = False
+            msgs.append(f"FAIL: Missing XML target {xml_rel} for Gate 9 port check")
+            return ok, msgs
+        m_tmp = mujoco.MjModel.from_xml_path(str(xml_path))
+        for p in ports:
+            for g_tag in ("geom_a", "geom_b"):
+                gid = mujoco.mj_name2id(m_tmp, mujoco.mjtObj.mjOBJ_GEOM, p[g_tag])
+                if gid >= 0 and int(m_tmp.geom_type[gid]) == int(mujoco.mjtGeom.mjGEOM_MESH):
+                    mid = int(m_tmp.geom_dataid[gid])
+                    mnm = mujoco.mj_id2name(m_tmp, mujoco.mjtObj.mjOBJ_MESH, mid) or ""
+                    needed_stl_keys.add(mnm[2:] if mnm.startswith("m_") else mnm)
+
+    stl_pts_cad_m_cache: Dict[str, np.ndarray] = {
+        k: sample_triangle_surface(stl_tris_mm[k] * 0.001, max_spacing_m=0.00045)
+        for k in needed_stl_keys
+    }
+
+    for xml_rel in port_spec["xml_targets"]:
+        model = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / xml_rel))
+        data = mujoco.MjData(model)
+        mujoco.mj_forward(model, data)
+
+        tree_b_cache: Dict[Tuple[int, str], cKDTree] = {}
+        worst_gap_mm = 0.0
+        worst_port_id = ""
+        port_errors = []
+
+        for p in ports:
+            pid = p["id"]
+            ga = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, p["geom_a"])
+            gb = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, p["geom_b"])
+            if ga < 0 or gb < 0:
+                port_errors.append((pid, f"missing_geom({p['geom_a']},{p['geom_b']})"))
+                continue
+
+            pts_a = _sample_geom_world_pts_for_port(model, data, ga, stl_pts_cad_m_cache, p.get("roi_a_local_mm"))
+            if len(pts_a) == 0:
+                port_errors.append((pid, "empty_roi_a"))
+                continue
+
+            roi_b = p.get("roi_b_local_mm")
+            b_key = (gb, json.dumps(roi_b))
+            if b_key not in tree_b_cache:
+                pts_b = _sample_geom_world_pts_for_port(model, data, gb, stl_pts_cad_m_cache, roi_b)
+                if len(pts_b) == 0:
+                    port_errors.append((pid, "empty_roi_b"))
+                    continue
+                tree_b_cache[b_key] = cKDTree(pts_b)
+
+            dists, _ = tree_b_cache[b_key].query(pts_a, k=1)
+            gap_mm = float(np.min(dists)) * 1000.0
+            if gap_mm > worst_gap_mm:
+                worst_gap_mm = gap_mm
+                worst_port_id = pid
+            if gap_mm > max_gap_mm:
+                port_errors.append((pid, f"gap={gap_mm:.3f}mm > {max_gap_mm:.2f}mm"))
+
+        if port_errors:
+            ok = False
+            msgs.append(f"FAIL [{xml_rel}]: Broken/disconnected 1D-3D ports: {port_errors}")
+        else:
+            msgs.append(
+                f"PASS [{xml_rel}]: All {len(ports)}/{len(ports)} cross-body fluid & mechanical ports mated continuously "
+                f"(worst gap={worst_gap_mm:.3f} mm <= {max_gap_mm:.2f} mm at {worst_port_id})"
+            )
 
     return ok, msgs
 
@@ -917,9 +1390,15 @@ def main() -> int:
         print(f"  - {m}")
     all_ok &= g8_ok
 
+    g9_ok, g9_msgs = verify_gate_9(stl_tris_mm)
+    print(f"\n[Gate 9] 1D-3D Single-Solid Continuity & 22-Port Cross-Body Mating -> {'PASS' if g9_ok else 'FAIL'}")
+    for m in g9_msgs:
+        print(f"  - {m}")
+    all_ok &= g9_ok
+
     print("\n" + "=" * 88)
     if all_ok:
-        print(" [ALL GATES PASSED] P0-C (V2-MECH-TRUE) + P0-D (V2-PIPING-LUBE-TRUE) VERIFIED 100%")
+        print(" [ALL GATES 1-9 PASSED] P0-C + P0-D + P1-A (1D-3D CONTINUITY) VERIFIED 100%")
         print("=" * 88)
         return 0
     else:

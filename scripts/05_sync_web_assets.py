@@ -26,6 +26,10 @@ def main():
 
     mesh_src = src_models / "meshes"
     if mesh_src.exists():
+        valid_stls = {stl.name for stl in mesh_src.glob("*.stl")}
+        for old_stl in dst_meshes.glob("*.stl"):
+            if old_stl.name not in valid_stls:
+                old_stl.unlink()
         for stl in sorted(mesh_src.glob("*.stl")):
             shutil.copy2(stl, dst_meshes / stl.name)
             manifest["meshes"].append(stl.name)
