@@ -39,6 +39,7 @@
   2. **跨浮动轮对真实销套游隙**：凡跨越“浮动动轮（含轴箱横动 `j_lat_y` / 垂向悬挂 `j_susp_z`）↔ 固定车架”边界的连杆（主连杆大头 `7-11`、偏心杆 `2-12/19`、耦合连杆 `7-12/15`、轴动泵偏心环 `6-3`），必须在曲柄销侧还原原厂 `±0.25~0.4 mm` 受限轴向浮动游隙或微球面顺应度，严禁 `<connect>` 横向分量反向拽死动轮过弯横动；
   3. **齿轮啮合与定比操纵副**：对气缸排液阀齿轮旋塞 (`1-16 / 1-17`) 及逆转长拉杆定比联动 (`8-12 / 8-18`)，允许采用零齿隙 `<equality><joint .../>` 多项式耦合约束。
   4. **1D-3D 拓扑—几何连续性与跨刚体全端口零断口门禁 (`Gate 9`)**：由于 1D 集总热流网络沿逻辑拓扑图积分，单独检查 `boundary_edges == 0` 无法捕获三维断管或悬空碎块；因此每次提交必须通过 `scripts/09_verify_cad_and_clearance.py` 的 **Gate 9**：① 全车所有 `.stl` 必须为单连通固体 (`connected_components == 1`)；② `configs/*_boiler_piping.json` 声明的全部跨刚体/跨网格流体与机械端口在直线及最小曲线半径 (`R2m`) 双姿态下表面局部 ROI 对接间隙必须 `<= 0.50 mm`（跨车柔性软管须随牵引杆铰接摆动，严禁悬空硬伸）。
+  5. **「三层黄金分工」物理—算子—认知混合架构铁律 (`Gate 10`)**：严禁在 3D 热流仿真中手写 `if not airtight: *= 0.05` 等经验漏气系数，亦严禁让大语言模型参与高频 PDE 数值积分或用黑盒网络替代质量/能量守恒律！统一采用：① **L1 解析守恒底座（`2000 Hz`）**：IAPWS-IF97 水/水蒸气状态方程 $(v, u) \mapsto (P, T_{\text{sat}}, x)$ + 有限体积比焓相变严格守恒；② **L2 轻量级 3D PINO 几何算子层（`250 Hz`, `< 0.8 ms`, `BF16`）**：仅对三维结构边界决定结果的燃烧—5烟管—烟室射流与滑阀—气缸窄缝流训练百万参数级 Factorized 3D FNO（大气破口通过 $p|_{\Gamma_{\text{atm}}} = p_{\text{atm}}$ 硬投影自然涌现负压坍塌与熄火）；③ **L3 本地 LLM 慢速认知副驾（`0.5 Hz` 异步）**：由 Ollama `bonsai-2:27b` 异步提供故障根因诊断与操纵建议。
 
 ---
 
@@ -52,6 +53,7 @@
 - R2m vs R3m 先导支点过弯脱线分析：`python scripts/04_analyze_r2m_derailment.py`
 - RTX 5080 烟室 3D CFD 标定查找表生成：`python scripts/06_gpu_smokebox_cfd.py`
 - RTX 5080 并行参数辨识与自动司炉寻优：`python scripts/07_gpu_fireman_opt.py`
+- RTX 5080 离线收敛 3D PDE 数据生成与轻量级 3D PINO 双算子训练：`python scripts/10_train_pino_surrogate.py`
 - 启动 3D 交互热机联调（热炉即发）：`python -m sim.run_cosim --xml models/d51_full.xml --preset hot`
 - 启动 RTX 5080 571万体素真 3D 零件级多相热流联调：`python -m sim.run_cosim --xml models/d51_full.xml --preset hot --gpu-3d`
 - 启动本地 RTX 5080 Live 3D WebSocket 推流桥（供浏览器 60 FPS 直连）：`python -m sim.gpu_3d_server --scene roller --preset hot`

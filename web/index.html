@@ -45,6 +45,14 @@
     button.active { background: #b85c00; border-color: #ffa657; color: #fff; }
     button.ai-active { background: #1f6feb; border-color: #79c0ff; color: #fff; box-shadow: 0 0 10px rgba(56, 139, 253, 0.45); }
     .badge-warn { color: #ff7b72; font-weight: 700; font-size: 12px; min-height: 17px; line-height: 1.35; }
+    .copilot-box {
+      display: none; margin-top: 2px; padding: 7px 9px; border-radius: 6px;
+      background: rgba(31, 111, 235, 0.14); border: 1px solid rgba(121, 192, 255, 0.30);
+      font-size: 11.5px; line-height: 1.4; color: #c9d1d9;
+    }
+    .copilot-box.caution { background: rgba(210, 153, 34, 0.16); border-color: rgba(227, 179, 65, 0.42); }
+    .copilot-box.critical { background: rgba(248, 81, 73, 0.18); border-color: rgba(255, 123, 114, 0.55); }
+    .copilot-head { display: flex; justify-content: space-between; font-weight: 700; color: #79c0ff; margin-bottom: 2px; }
   </style>
 </head>
 <body>
@@ -95,6 +103,10 @@
     <div class="gauge-row"><span>燃料アルコール / 炭水車水</span><span id="txt-tanks" class="val-mono">130 ml | 320 ml</span></div>
     <div class="gauge-row"><span>左右ピストン有効推力</span><span id="txt-forces" class="val-mono">L: 0.0N | R: 0.0N</span></div>
     <div class="gauge-row"><span>乾き度 x / 当量比 φ / 油膜</span><span id="txt-fluid3d" class="val-mono">x=0.95 | φ=1.00 | 3.8μm</span></div>
+    <div id="copilot-box" class="copilot-box">
+      <div class="copilot-head"><span id="txt-copilot-model">L3 Bonsai-2:27B</span><span id="txt-copilot-lvl">NOMINAL</span></div>
+      <div id="txt-copilot-body"></div>
+    </div>
     <div id="txt-alarm" class="badge-warn"></div>
   </div>
 

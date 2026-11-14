@@ -24,13 +24,15 @@ import json
 import mimetypes
 import time
 from pathlib import Path
-from typing import Any, Dict, Set
+from dataclasses import asdict
+from typing import Any, Dict, Optional, Set
 
 from aiohttp import WSMsgType, web
 import mujoco
 import torch
 
 from sim.auto_fireman import AutoFiremanAgent
+from sim.bonsai_copilot import AsyncBonsaiCopilot, CopilotDiagnosis
 from sim.run_cosim import CoSimRunner
 from sim.thermo_1d import CabControls, ThermoTelemetry
 
@@ -48,7 +50,13 @@ mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("model/stl", ".stl")
 
 
-def pack_frame_payload(scene_name: str, runner: CoSimRunner, tel: ThermoTelemetry, auto_fireman: bool) -> str:
+def pack_frame_payload(
+    scene_name: str,
+    runner: CoSimRunner,
+    tel: ThermoTelemetry,
+    auto_fireman: bool,
+    copilot_diag: Optional[CopilotDiagnosis] = None,
+) -> str:
     sp = runner.thermo.spatial
     b64_slice = base64.b64encode(bytes(sp.midplane_temp_u8)).decode("ascii") if sp.midplane_temp_u8 else ""
     qpos_list = [round(float(x), 6) for x in runner.data.qpos]
@@ -97,6 +105,9 @@ def pack_frame_payload(scene_name: str, runner: CoSimRunner, tel: ThermoTelemetr
             "valveFrictionR": round(tel.valve_friction_R, 3),
             "smokeboxVacuumPa": round(tel.smokebox_vacuum_pa, 1),
             "lutActive": bool(tel.lut_active),
+            "pinoActive": bool(tel.pino_active),
+            "steamDrynessDome": round(tel.steam_dryness_dome, 4),
+            "steamDrynessChest": round(tel.steam_dryness_chest, 4),
             "heatInputW": round(tel.heat_input_w, 1),
             "feedwaterGS": round(tel.feedwater_g_s, 3),
             "steamGenGS": round(tel.steam_gen_g_s, 3),
@@ -108,6 +119,7 @@ def pack_frame_payload(scene_name: str, runner: CoSimRunner, tel: ThermoTelemetr
         },
         "spatial": {
             "gpuActive": bool(sp.gpu_active),
+            "pinoActive": bool(sp.pino_active),
             "gpuName": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
             "totalVoxels": int(sp.total_voxels),
             "gpuStepMs": float(sp.gpu_step_ms),
@@ -138,17 +150,19 @@ def pack_frame_payload(scene_name: str, runner: CoSimRunner, tel: ThermoTelemetr
             "lubeWaterFrac": float(sp.lube_water_frac),
             "midplaneTempB64": b64_slice,
         },
+        "copilot": copilot_diag.to_dict() if copilot_diag is not None else None,
     }
     return json.dumps(payload, separators=(",", ":"))
 
 
 class GPU3DRealtimeBridge:
-    def __init__(self, scene: str = "roller", preset: str = "hot"):
+    def __init__(self, scene: str = "roller", preset: str = "hot", enable_copilot: bool = True):
         self.scene = scene if scene in SCENE_XML_MAP else "roller"
         self.preset = preset
         self.runner = CoSimRunner(SCENE_XML_MAP[self.scene], preset=preset, use_gpu_3d=True)
         self.af_agent = AutoFiremanAgent()
         self.auto_fireman = False
+        self.copilot = AsyncBonsaiCopilot(enabled=enable_copilot)
         self.clients: Set[web.WebSocketResponse] = set()
         self.last_tel: ThermoTelemetry = self.runner.step_once()
 
@@ -227,7 +241,11 @@ class GPU3DRealtimeBridge:
         peer = request.remote or "browser"
         print(f"[WS-3D] 浏览器客户端已连接: {peer} (在线数={len(self.clients)})")
         try:
-            await ws.send_str(pack_frame_payload(self.scene, self.runner, self.last_tel, self.auto_fireman))
+            await ws.send_str(
+                pack_frame_payload(
+                    self.scene, self.runner, self.last_tel, self.auto_fireman, self.copilot.get_latest_diagnosis()
+                )
+            )
             async for msg in ws:
                 if msg.type == WSMsgType.TEXT:
                     self.handle_message(msg.data)
@@ -251,6 +269,8 @@ class GPU3DRealtimeBridge:
                     "status": "ok",
                     "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
                     "voxels": int(self.runner.thermo.total_voxels),
+                    "pino_active": bool(self.runner.thermo.pino_loaded),
+                    "copilot_model": self.copilot.get_latest_diagnosis().model_name,
                     "clients": len(self.clients),
                 }
             )
@@ -296,7 +316,12 @@ class GPU3DRealtimeBridge:
             if self.auto_fireman:
                 self.af_agent.update(steps_per_frame * dt_mj, tel, self.runner.ctrl)
 
-            frame_json = pack_frame_payload(self.scene, self.runner, tel, self.auto_fireman)
+            self.copilot.submit_telemetry_nonblocking(
+                asdict(tel), asdict(self.runner.ctrl), self.runner.thermo.spatial.to_dict()
+            )
+            frame_json = pack_frame_payload(
+                self.scene, self.runner, tel, self.auto_fireman, self.copilot.get_latest_diagnosis()
+            )
             stale: list[web.WebSocketResponse] = []
             for ws in list(self.clients):
                 if ws.closed:
@@ -314,7 +339,7 @@ class GPU3DRealtimeBridge:
 
 
 async def async_main(args: argparse.Namespace) -> None:
-    bridge = GPU3DRealtimeBridge(scene=args.scene, preset=args.preset)
+    bridge = GPU3DRealtimeBridge(scene=args.scene, preset=args.preset, enable_copilot=not args.no_copilot)
     gpu_str = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
 
     app = web.Application()
@@ -328,8 +353,8 @@ async def async_main(args: argparse.Namespace) -> None:
     await site.start()
 
     print("=" * 78)
-    print("  Aster D51 RTX 5080 Live 3D Thermo-Fluid Server Ready!")
-    print(f"  GPU Device   : {gpu_str} ({bridge.runner.thermo.total_voxels:,} 3D STL Voxels)")
+    print("  Aster D51 RTX 5080 Live 3D Thermo-Fluid + PINO + Bonsai-2:27B Server Ready!")
+    print(f"  GPU Device   : {gpu_str} ({bridge.runner.thermo.total_voxels:,} 3D STL Voxels, PINO={bridge.runner.thermo.pino_loaded})")
     print(f"  Web 3D UI    : http://{args.host}:{args.port}/   (浏览器直接打开即可！)")
     print(f"  WebSocket URL: ws://{args.host}:{args.port}/ws   (兼容 Vite 5173 自动直连)")
     print("=" * 78)
@@ -338,6 +363,7 @@ async def async_main(args: argparse.Namespace) -> None:
     try:
         await sim_task
     finally:
+        bridge.copilot.shutdown()
         sim_task.cancel()
         for ws in list(bridge.clients):
             await ws.close()
@@ -351,6 +377,7 @@ def main() -> None:
     parser.add_argument("--scene", choices=["roller", "curve"], default="roller")
     parser.add_argument("--preset", choices=["cold", "hot"], default="hot")
     parser.add_argument("--fps", type=float, default=60.0)
+    parser.add_argument("--no-copilot", action="store_true", help="禁用异步本地 Ollama bonsai-2:27b L3 诊断副驾")
     args = parser.parse_args()
     try:
         asyncio.run(async_main(args))

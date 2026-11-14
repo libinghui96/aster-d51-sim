@@ -820,7 +820,9 @@ async function main() {
       const badgeEl = document.getElementById("badge-cfd")!;
       if (sp.gpuActive) {
         const mVox = (sp.totalVoxels / 1e6).toFixed(2);
-        badgeEl.textContent = `RTX 5080 LIVE 3D · ${mVox}M VOX`;
+        badgeEl.textContent = sp.pinoActive
+          ? `RTX 5080 PINO+IAPWS · ${mVox}M`
+          : `RTX 5080 LIVE 3D · ${mVox}M VOX`;
         badgeEl.classList.add("live-3d");
       } else {
         badgeEl.textContent = out.lutActive ? "RTX 5080 CFD LUT" : "1D ANALYTIC";
@@ -851,6 +853,22 @@ async function main() {
       const shExitDry = sp.shProfileDryness[sp.shProfileDryness.length - 1] ?? sp.steamDrynessDome;
       document.getElementById("txt-fluid3d")!.textContent =
         `x=${sp.steamDrynessDome.toFixed(2)}→${shExitDry.toFixed(2)} | φ=${sp.airFuelPhi.toFixed(2)} | ${sp.oilFilmUm.toFixed(1)}μm`;
+
+      const copBox = document.getElementById("copilot-box") as HTMLElement;
+      const cop = useLiveGpu && latestWsFrame?.copilot ? latestWsFrame.copilot : null;
+      if (cop && cop.headline) {
+        copBox.style.display = "block";
+        const lvl = String(cop.status_level || "NOMINAL").toUpperCase();
+        copBox.classList.toggle("caution", lvl === "CAUTION");
+        copBox.classList.toggle("critical", lvl === "CRITICAL");
+        document.getElementById("txt-copilot-model")!.textContent =
+          cop.available ? `L3 ${cop.model_name} (${Math.round(cop.latency_ms ?? 0)}ms)` : "L3 Physics Copilot";
+        document.getElementById("txt-copilot-lvl")!.textContent = lvl;
+        document.getElementById("txt-copilot-body")!.textContent =
+          `${cop.headline}${cop.recommended_action ? " — " + cop.recommended_action : ""}`;
+      } else {
+        copBox.style.display = "none";
+      }
 
       let alarmMsg = "";
       if (out.hydrolockL || out.hydrolockR) {

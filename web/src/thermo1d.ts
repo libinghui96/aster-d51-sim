@@ -44,6 +44,7 @@ export interface SmokeboxLutJson {
 
 export interface SpatialFluidState {
   gpuActive: boolean;
+  pinoActive?: boolean;
   gpuName: string;
   totalVoxels: number;
   gpuStepMs: number;

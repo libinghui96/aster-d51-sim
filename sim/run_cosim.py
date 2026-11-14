@@ -21,7 +21,9 @@ from typing import Any, List, Optional
 import mujoco
 import numpy as np
 
+from dataclasses import asdict
 from sim.auto_fireman import AutoFiremanAgent
+from sim.bonsai_copilot import AsyncBonsaiCopilot
 from sim.thermo_1d import AsterD51Thermo1D, CabControls, CylinderCalibration, ThermoTelemetry
 
 # GLFW 按键编码 (已避开 MuJoCo Viewer 内置渲染快捷键)
@@ -125,6 +127,7 @@ def render_dashboard(
     ctrl: CabControls,
     auto_fireman_on: bool = False,
     spatial_3d: Optional[Any] = None,
+    copilot_diag: Optional[Any] = None,
 ) -> str:
     """生成 ANSI 终端实时驾驶台仪表盘"""
     sv_tag = "!! POPPING !!" if tel.safety_valve_open else "CLOSED       "
@@ -135,11 +138,11 @@ def render_dashboard(
     rev_mode = "NEUTRAL (N)" if abs(ctrl.reverser) < 0.05 else (
         f"FWD +{ctrl.reverser*100:3.0f}%" if ctrl.reverser > 0 else f"REV {ctrl.reverser*100:4.0f}%"
     )
-    eng_tag = (
-        f"RTX 5080 3D ({spatial_3d.total_voxels/1e6:.2f}M vox @ {spatial_3d.gpu_step_ms:.1f}ms)"
-        if spatial_3d is not None
-        else "1D Lumped + CFD LUT"
-    )
+    if spatial_3d is not None:
+        pino_str = "PINO+IAPWS" if getattr(spatial_3d, "pino_active", False) else "IAPWS"
+        eng_tag = f"RTX 5080 3D {pino_str} ({spatial_3d.total_voxels/1e6:.2f}M vox @ {spatial_3d.gpu_step_ms:.1f}ms)"
+    else:
+        eng_tag = "1D IAPWS + CFD LUT"
 
     lines = [
         "\033[H\033[J" + "=" * 78,
@@ -147,7 +150,7 @@ def render_dashboard(
         "=" * 78,
         f"  圧力計 (PG-ø20) : {bar_gauge(tel.boiler_pressure_kgf, 0, 5.0)} {tel.boiler_pressure_kgf:4.2f} / 5.00 kgf/cm² [SV: {sv_tag}]",
         f"  水面計 (11-7)   : {bar_gauge(tel.water_level_pct, 0, 100)} {tel.water_level_pct:4.1f} %  (実水位:{tel.true_water_level_pct:4.1f}% | 頂板水深:{tel.crown_submerged_mm:+5.1f}mm)",
-        f"  蒸気室 / 銅火室 : {tel.steam_chest_kgf:4.2f} kgf/cm²  |  T_boil: {tel.boiler_temp_c:5.1f}°C  |  T_crown: {tel.crown_temp_c:5.1f}°C  |  T_sh: {tel.superheat_temp_c:5.1f}°C",
+        f"  蒸気室 / 銅火室 : {tel.steam_chest_kgf:4.2f} kgf/cm²  |  T_boil: {tel.boiler_temp_c:5.1f}°C  |  T_crown: {tel.crown_temp_c:5.1f}°C  |  T_sh: {tel.superheat_temp_c:5.1f}°C (x={tel.steam_dryness_dome:.2f}->{tel.steam_dryness_chest:.2f})",
         f"  燃料アルコール  : {tel.alcohol_ml:5.1f} / 130 ml |  炭水車水槽: {tel.tender_water_ml:5.1f} ml | 油:{tel.lubricator_oil_pct:4.1f}% | シール:{tel.seal_health*100:3.0f}%",
         f"  シリンダ・煙室  : 壁温 {tel.cyl_wall_temp_c:5.1f}°C | 凝結水 {tel.condensate_g:4.2f}g | 煙室負圧 {tel.smokebox_vacuum_pa:4.0f}Pa | F_L={tel.force_L:+5.1f}N F_R={tel.force_R:+5.1f}N",
         f"  走行・給水収支  : 動輪 {tel.wheel_rpm:+6.1f} RPM ({tel.scale_speed_kmh:5.1f} km/h) | 蒸発 {tel.steam_gen_g_s:4.2f} g/s | 給水 {tel.feedwater_g_s:4.2f} g/s",
@@ -157,6 +160,10 @@ def render_dashboard(
             f"  3D 流体場プローブ: 空燃比 φ={spatial_3d.air_fuel_phi:4.2f} (火炎傾角 {spatial_3d.flame_tilt_deg:4.1f}°) | "
             f"過熱乾き度 x={spatial_3d.sh_profile_dryness[0]:.2f}->{spatial_3d.sh_profile_dryness[-1]:.2f} | "
             f"煙管貫通 {spatial_3d.open_flue_count}/5"
+        )
+    if copilot_diag is not None:
+        lines.append(
+            f"  [L3 {copilot_diag.model_name}] [{copilot_diag.status_level}] {copilot_diag.headline} | {copilot_diag.recommended_action}"
         )
     lines.extend(
         [
@@ -192,7 +199,7 @@ class CoSimRunner:
             self.thermo: Any = AsterD51Thermo3DGPU(self.calib)
             print(
                 f"[RTX 5080 3D] 已加载 {self.thermo.total_voxels:,} 体素五大零件域求解器 "
-                f"(STL 体素化耗时 {self.thermo.voxelize_init_ms:.1f} ms, "
+                f"(STL 体素化耗时 {self.thermo.voxelize_init_ms:.1f} ms, PINO={self.thermo.pino_loaded}, "
                 f"5烟管贯通={self.thermo.open_flue_count}/5, 烟室气密={self.thermo.smokebox_airtight})"
             )
         else:
@@ -295,13 +302,18 @@ class CoSimRunner:
 
 
 def run_interactive(
-    xml_path: Path, preset: str, auto_fireman: bool = False, use_gpu_3d: bool = False
+    xml_path: Path,
+    preset: str,
+    auto_fireman: bool = False,
+    use_gpu_3d: bool = False,
+    enable_copilot: bool = False,
 ) -> None:
     import mujoco.viewer
 
     runner = CoSimRunner(xml_path, preset=preset, use_gpu_3d=use_gpu_3d)
     af_agent = AutoFiremanAgent()
     af_enabled = auto_fireman
+    copilot = AsyncBonsaiCopilot(enabled=enable_copilot) if enable_copilot else None
 
     def on_key(keycode: int) -> None:
         nonlocal af_enabled
@@ -372,8 +384,17 @@ def run_interactive(
             now = time.perf_counter()
             if tel is not None and (now - last_print) >= 0.10:
                 sp = getattr(runner.thermo, "spatial", None)
+                diag = None
+                if copilot is not None:
+                    copilot.submit_telemetry_nonblocking(
+                        asdict(tel), asdict(runner.ctrl), sp.to_dict() if sp is not None else None
+                    )
+                    diag = copilot.get_latest_diagnosis()
                 sys.stdout.write(
-                    render_dashboard(tel, runner.ctrl, auto_fireman_on=af_enabled, spatial_3d=sp) + "\n"
+                    render_dashboard(
+                        tel, runner.ctrl, auto_fireman_on=af_enabled, spatial_3d=sp, copilot_diag=diag
+                    )
+                    + "\n"
                 )
                 sys.stdout.flush()
                 last_print = now
@@ -382,6 +403,8 @@ def run_interactive(
             sleep_s = (1.0 / 60.0) - elapsed
             if sleep_s > 0:
                 time.sleep(sleep_s)
+    if copilot is not None:
+        copilot.shutdown()
 
 
 def run_headless_demo(xml_path: Path, out_png: Path, use_gpu_3d: bool = False) -> None:
@@ -483,7 +506,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Aster D51 1D-3D 实时热机联合仿真器")
     parser.add_argument("--xml", type=Path, default=Path("models/d51_full.xml"))
     parser.add_argument("--preset", choices=["cold", "hot"], default="cold")
-    parser.add_argument("--gpu-3d", action="store_true", help="启用本地 RTX 5080 571万体素五大零件域真 3D 多相热流求解器")
+    parser.add_argument("--gpu-3d", action="store_true", help="启用本地 RTX 5080 571万体素五大零件域真 3D 多相热流 + PINO 求解器")
+    parser.add_argument("--copilot", action="store_true", help="启用异步本地 Ollama bonsai-2:27b L3 机务诊断副驾")
     parser.add_argument("--auto-fireman", action="store_true", help="启动时默认开启 RTX 5080 标定 AI 自动司炉巡航")
     parser.add_argument("--headless-demo", action="store_true", help="无 GUI 自动运行标准试车流程并输出曲线图")
     parser.add_argument("--out-plot", type=Path, default=Path("logs/d51_telemetry.png"))
@@ -495,7 +519,13 @@ def main() -> None:
     if args.headless_demo:
         run_headless_demo(args.xml, args.out_plot, use_gpu_3d=args.gpu_3d)
     else:
-        run_interactive(args.xml, args.preset, auto_fireman=args.auto_fireman, use_gpu_3d=args.gpu_3d)
+        run_interactive(
+            args.xml,
+            args.preset,
+            auto_fireman=args.auto_fireman,
+            use_gpu_3d=args.gpu_3d,
+            enable_copilot=args.copilot,
+        )
 
 
 if __name__ == "__main__":
