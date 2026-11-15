@@ -1,55 +1,93 @@
 {
   "gpu_device": "NVIDIA GeForce RTX 5080",
-  "total_training_time_sec": 4657.4,
-  "total_parameters": 915953,
+  "arch_version": "d51_pino_v2_4op",
+  "total_training_time_sec": 23.94,
+  "total_parameters": 1275020,
   "burner_params": 744102,
   "cylinder_params": 171851,
-  "weights_size_mb": 1.78,
-  "burner_Samples": 1280,
-  "cylinder_samples": 1280,
+  "cab_manifold_params": 158652,
+  "tender_hydraulic_params": 200415,
+  "weights_size_mb": 2.48,
   "burner_validation": {
-    "val_field_loss": 0.00548,
-    "r2_smokebox_vacuum": 0.9996,
-    "r2_boiler_heat_w": 0.997,
-    "r2_grate_air_gs": 0.9961,
-    "pde_residual": 0.00701
+    "val_field_loss": 0.00913,
+    "r2_smokebox_vacuum": 0.9983,
+    "r2_boiler_heat_w": 0.99,
+    "r2_grate_air_gs": 0.9989,
+    "pde_residual": 0.01732
   },
   "cylinder_validation": {
-    "val_cyl_loss": 0.00388,
-    "r2_port_cd": 0.9485,
-    "r2_cond_nusselt": 0.9773
+    "val_cyl_loss": 0.0021,
+    "r2_port_cd": 0.9318,
+    "r2_cond_nusselt": 0.9964
+  },
+  "cab_manifold_validation": {
+    "val_cab_loss": 0.00011,
+    "r2_regulator_flow": 1.0,
+    "r2_sight_glass_meniscus": 1.0,
+    "r2_pg20_bourdon": 1.0
+  },
+  "tender_hydraulic_validation": {
+    "val_tender_loss": 0.00146,
+    "r2_boiler_feed": 1.0,
+    "r2_bypass_return_31_14": 1.0,
+    "r2_bottom_drain_31_9": 1.0,
+    "r2_mariotte_vac_and_fuel": 1.0
   },
   "gate10_zero_if_emergence": {
     "gate10_emergence_pass": true,
-    "rtx5080_bf16_combined_infer_ms": 4.128,
+    "gate17_cab_tender_emergence_pass": true,
+    "rtx5080_bf16_combined_infer_ms": 5.245,
     "intact_5flue_airtight": {
-      "vacuum_pa": 42.74,
-      "grate_air_gs": 1.023,
-      "q_boiler_w": 648.64,
-      "q_sh_w": 15.08,
-      "mean_o2_fb": 0.1193
+      "vacuum_pa": 43.15,
+      "grate_air_gs": 1.029,
+      "q_boiler_w": 504.06,
+      "q_sh_w": 12.65,
+      "mean_o2_fb": 0.1439
+    },
+    "firebox_door_12_1_open_secondary_air": {
+      "vacuum_pa": 44.24,
+      "grate_air_gs": 1.006,
+      "q_boiler_w": 335.52,
+      "q_sh_w": 10.79,
+      "mean_o2_fb": 0.1507
     },
     "smokebox_door_breach_no_if_rule": {
-      "vacuum_pa": 4.4,
-      "grate_air_gs": 0.286,
-      "q_boiler_w": 193.64,
-      "q_sh_w": 3.05,
-      "mean_o2_fb": 0.113
+      "vacuum_pa": 4.47,
+      "grate_air_gs": 0.297,
+      "q_boiler_w": 165.94,
+      "q_sh_w": 3.41,
+      "mean_o2_fb": 0.1324
     },
-    "vacuum_collapse_pct_on_breach": 89.7,
+    "vacuum_collapse_pct_on_breach": 89.6,
     "three_flues_plugged_no_if_rule": {
-      "vacuum_pa": 43.32,
-      "grate_air_gs": 0.609,
-      "q_boiler_w": 405.83,
-      "q_sh_w": 5.54,
-      "mean_o2_fb": 0.117
+      "vacuum_pa": 43.44,
+      "grate_air_gs": 0.757,
+      "q_boiler_w": 399.38,
+      "q_sh_w": 4.74,
+      "mean_o2_fb": 0.142
     },
     "all_five_flues_plugged_no_if_rule": {
-      "vacuum_pa": 43.82,
-      "grate_air_gs": 0.061,
-      "q_boiler_w": 42.03,
-      "q_sh_w": 0.03,
-      "mean_o2_fb": 0.1147
-    }
+      "vacuum_pa": 43.74,
+      "grate_air_gs": 0.441,
+      "q_boiler_w": 260.74,
+      "q_sh_w": 0.17,
+      "mean_o2_fb": 0.1399
+    },
+    "cab_sight_glass_static_vs_purge_pct": [
+      54.98,
+      10.86
+    ],
+    "tender_handpump_boiler_ml_s_byp_open_vs_shut": [
+      0.0,
+      4.855
+    ],
+    "tender_mariotte_vac_kpa_sealed_vs_open": [
+      2.157,
+      0.0
+    ],
+    "tender_fuel_sump_ml_s_sealed_vs_flood": [
+      0.189,
+      2.107
+    ]
   }
 }

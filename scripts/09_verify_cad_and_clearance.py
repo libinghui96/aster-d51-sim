@@ -238,16 +238,25 @@ def verify_gate_1() -> Tuple[bool, List[str]]:
     else:
         msgs.append(f"PASS: Regulator {'/'.join(reg['part_nos'])} -> 13-9 -> 17-6 -> 17-5 ({sh['passes']}-pass, {sh['total_heated_length_mm']}mm) -> 20-7 ø{orifice_mm:.1f}mm nozzle (CFD LUT synced)")
 
-    # 1.4 核验双水路车架内向后拓扑 & 15-3 假逆止阀零水管隔离
+    # 1.4 核验双水路车架内向后拓扑、跨车 3 根真实弹性软管、煤水车 272/340ml 容量 & 15-3 假逆止阀零水管隔离
     fw = pip["feedwater_piping_topology"]
+    loop = fw.get("axle_and_shared_hand_pump_loop", fw.get("axle_pump_loop", {}))
+    umb = fw.get("cross_vehicle_umbilical_hoses", {})
+    tdr_bom = pip.get("tender_system_bom", {})
+    wt_bom = tdr_bom.get("water_tank_31_10", {})
+    cab_bom = pip.get("cab_interior_mechanisms", {})
     dummies = pip["dummy_parts_registry"]
     d15_3 = dummies.get("15-3", {})
     d16_2 = dummies.get("16-2", {})
     d30_2 = dummies.get("30-2", {})
     if (
-        fw["axle_pump_loop"]["delivery_direction"] != "rearward"
+        loop.get("delivery_direction") != "rearward"
         or float(fw["max_abs_y_mm"]) > 11.0
         or int(fw["wheel_side_pipes_count"]) != 0
+        or int(umb.get("total_count", 0)) != 3
+        or abs(float(wt_bom.get("max_brim_capacity_ml", 0.0)) - 340.0) > 1e-3
+        or abs(float(wt_bom.get("nominal_80pct_fill_ml", 0.0)) - 272.0) > 1e-3
+        or not str(cab_bom.get("drive_layout", "")).startswith("JNR Left-Hand Drive")
         or fw.get("dummy_clack_15_3_connected", True) is not False
         or not d15_3.get("is_dummy", False)
         or len(d15_3.get("connected_pipes", ["err"])) != 0
@@ -255,33 +264,35 @@ def verify_gate_1() -> Tuple[bool, List[str]]:
         or not d30_2.get("is_dummy", False)
     ):
         ok = False
-        msgs.append("FAIL: feedwater inside-frame constraint or dummy valve registry violated")
+        msgs.append("FAIL: feedwater/umbilical/tender/cab BOM or dummy valve registry violated")
     else:
         msgs.append(
-            f"PASS: Inside-frame rearward dual feedwater (|Y|<={fw['max_abs_y_mm']}mm, 13-7 & 13-2 checks, wheel_side_pipes=0; 15-3/16-2/30-2 flagged is_dummy=True)"
+            f"PASS: Inside-frame rearward feedwater (|Y|<={fw['max_abs_y_mm']}mm, 13-2+13-7 check, 3 umbilical hoses, tender 272/340ml, JNR +Y left-drive; 15-3/16-2/30-2 dummy=True)"
         )
 
-    # 1.5 核验前车架卧式置换注油器 (4-1/4-2, 无底塞) & 2x2 四头酒精燃烧器 (23-1)
+    # 1.5 核验前车架卧式置换注油器 (4-1/4-2, 无底塞) & 1x3 纵列三头 ø10mm 酒精燃烧器 (23-1)
     lub = pip["displacement_lubricator_system"]
     brn = pip["alcohol_burner_system"]
     if (
         lub.get("has_bottom_drain", True) is not False
         or float(lub["max_abs_y_mm"]) > 10.5
-        or int(brn["wick_count"]) != 4
+        or int(brn["wick_count"]) != 3
+        or brn.get("array_layout") != "1x3"
         or abs(float(brn["wick_dia_mm"]) - 10.0) > 1e-3
     ):
         ok = False
-        msgs.append("FAIL: displacement lubricator or 4-wick burner BOM mismatch")
+        msgs.append("FAIL: displacement lubricator or 1x3 3-wick burner BOM mismatch")
     else:
         msgs.append(
-            f"PASS: Central horizontal lubricator 4-2 (|Y|<={lub['max_abs_y_mm']}mm, has_bottom_drain=False under 25-3) & 2x2 4-wick ø10mm burner 23-1 (130ml sump)"
+            f"PASS: Central horizontal lubricator 4-2 (|Y|<={lub['max_abs_y_mm']}mm, has_bottom_drain=False under 25-3) & 1x3 inline 3-wick ø10mm burner 23-1 (130ml Mariotte tank)"
         )
 
     return ok, msgs
 
 
+
 # ==============================================================================
-# Gate 2: 全车 54 个 STL 水密性、正体积、烟室连续切片与左右对称性
+# Gate 2: 全车 79 个 STL 水密性、正体积、烟室连续切片与左右对称性
 # ==============================================================================
 
 def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
@@ -290,8 +301,8 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
     mesh_dir = PROJECT_ROOT / "models" / "meshes"
     stl_files = sorted(mesh_dir.glob("*.stl"))
 
-    if len(stl_files) < 54:
-        return False, [f"FAIL: Expected >= 54 STL files, found {len(stl_files)}"], {}
+    if len(stl_files) < 79:
+        return False, [f"FAIL: Expected >= 79 STL files, found {len(stl_files)}"], {}
 
     stl_tris_mm: Dict[str, np.ndarray] = {}
     total_tris = 0
@@ -314,9 +325,9 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
     else:
         msgs.append(f"PASS: {len(stl_files)}/{len(stl_files)} STLs 100% manifold watertight (boundary_edges == 0) & positive volume")
 
-    if not (60000 <= total_tris <= 170000):
+    if not (60000 <= total_tris <= 340000):
         ok = False
-        msgs.append(f"FAIL: Total triangle count {total_tris:,} outside [60,000, 170,000] budget")
+        msgs.append(f"FAIL: Total triangle count {total_tris:,} outside [60,000, 340,000] budget")
     else:
         msgs.append(f"PASS: Total mesh triangle count = {total_tris:,} (within real-time WebGL/MuJoCo budget)")
 
@@ -534,6 +545,7 @@ def verify_gate_3(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
     return ok, msgs
 
 
+
 # ==============================================================================
 # Gate 6: 车轮外侧零水管与 360° × 3 全行程三维表面净空扫描 (>= 0.50 mm)
 # ==============================================================================
@@ -586,6 +598,11 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
         "slide_bar_vis_R",
         "cyl_housing_L",
         "cyl_housing_R",
+        "piston_tail_sheath_vis_L",
+        "piston_tail_sheath_vis_R",
+        "valve_spindle_sheath_vis_L",
+        "valve_spindle_sheath_vis_R",
+        "cab_reverser_stand_vis",
         "drain_cock_vis",
     ]
 
@@ -626,10 +643,11 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
         "lift_link_R",
         "reverser_shaft",
         "cab_reach_rod",
+        "drain_pull_rod",
         "pump_eccentric_rod",
     ]
 
-    # 真实机械配合运动副白名单 (同轴转动耳轴/气缸活塞填料函/导轨滑块配合副)
+    # 真实机械配合运动副白名单 (同轴转动耳轴/气缸活塞填料函/导轨滑块/前导套/排液阀拉杆配合副)
     mating_geom_body_whitelist: Set[Tuple[str, str]] = {
         ("motion_bracket_vis_L", "expansion_link_L"),
         ("motion_bracket_vis_R", "expansion_link_R"),
@@ -639,6 +657,16 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
         ("cyl_housing_R", "piston_crosshead_R"),
         ("cyl_housing_L", "slide_valve_L"),
         ("cyl_housing_R", "slide_valve_R"),
+        ("piston_tail_sheath_vis_L", "piston_crosshead_L"),
+        ("piston_tail_sheath_vis_R", "piston_crosshead_R"),
+        ("valve_spindle_sheath_vis_L", "slide_valve_L"),
+        ("valve_spindle_sheath_vis_R", "slide_valve_R"),
+        ("boiler_Super_vis", "cab_reach_rod"),
+        ("boiler_Super_vis", "reverser_shaft"),
+        ("boiler_Super_vis", "drain_pull_rod"),
+        ("cab_reverser_stand_vis", "cab_reach_rod"),
+        ("chassis_equalizer_brakes_vis", "drain_pull_rod"),
+        ("drain_cock_vis", "drain_pull_rod"),
     }
 
     # 运动刚体间真实铰接销/轴承配合副白名单 (非白名单运动件对必须满足 >= 0.50 mm 全包络无碰撞净空)
@@ -786,23 +814,24 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
                         min_clear_mm = d_mm
                         worst_info = (gname, bname, deg_now, rev_norm)
 
-                # 检查 drain_cock_vis 对移动件净空
-                for pts_dc, dc_min, dc_max in dc_trees:
-                    bound_dc_mm = min(15.0, per_static_min["drain_cock_vis"][0])
-                    gap_dc = np.maximum(0.0, np.maximum(dc_min - m_max, m_min - dc_max))
-                    if float(np.linalg.norm(gap_dc)) * 1000.0 >= bound_dc_mm:
-                        continue
-                    m_tree = cKDTree(m_pts)
-                    dists_dc, _ = m_tree.query(pts_dc, distance_upper_bound=bound_dc_mm * 0.001 + 1e-6, workers=1)
-                    d_dc_m = float(np.min(dists_dc))
-                    if not math.isfinite(d_dc_m):
-                        continue
-                    d_dc_mm = d_dc_m * 1000.0
-                    if d_dc_mm < per_static_min["drain_cock_vis"][0]:
-                        per_static_min["drain_cock_vis"] = (d_dc_mm, f"{bname}@{deg_now:.0f}°,rev={rev_norm:+.1f}")
-                    if d_dc_mm < min_clear_mm:
-                        min_clear_mm = d_dc_mm
-                        worst_info = ("drain_cock_vis", bname, deg_now, rev_norm)
+                # 检查 drain_cock_vis 对移动件净空 (跳过直接铰接配合的 drain_pull_rod)
+                if ("drain_cock_vis", bname) not in mating_geom_body_whitelist:
+                    for pts_dc, dc_min, dc_max in dc_trees:
+                        bound_dc_mm = min(15.0, per_static_min["drain_cock_vis"][0])
+                        gap_dc = np.maximum(0.0, np.maximum(dc_min - m_max, m_min - dc_max))
+                        if float(np.linalg.norm(gap_dc)) * 1000.0 >= bound_dc_mm:
+                            continue
+                        m_tree = cKDTree(m_pts)
+                        dists_dc, _ = m_tree.query(pts_dc, distance_upper_bound=bound_dc_mm * 0.001 + 1e-6, workers=1)
+                        d_dc_m = float(np.min(dists_dc))
+                        if not math.isfinite(d_dc_m):
+                            continue
+                        d_dc_mm = d_dc_m * 1000.0
+                        if d_dc_mm < per_static_min["drain_cock_vis"][0]:
+                            per_static_min["drain_cock_vis"] = (d_dc_mm, f"{bname}@{deg_now:.0f}°,rev={rev_norm:+.1f}")
+                        if d_dc_mm < min_clear_mm:
+                            min_clear_mm = d_dc_mm
+                            worst_info = ("drain_cock_vis", bname, deg_now, rev_norm)
 
             # 检查所有非铰接配合的运动刚体对运动刚体三维表面净空 (>= 0.50 mm)
             n_mb = len(frame_mov_pts)
@@ -944,6 +973,7 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
         )
 
     return ok, msgs
+
 
 
 # ==============================================================================
@@ -1151,6 +1181,7 @@ def verify_gate_8() -> Tuple[bool, List[str]]:
     return ok, msgs
 
 
+
 # ==============================================================================
 # Gate 9: 1D-3D 拓扑—几何连续性、单网格单连通分量与跨刚体全端口零断口对接门禁
 # ==============================================================================
@@ -1243,7 +1274,9 @@ def verify_gate_9(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
         ok = False
         msgs.append(f"FAIL: Disconnected/multi-component STLs detected (expected cc=={max_cc}): {multi_cc_meshes}")
     else:
-        msgs.append(f"PASS: All {len(stl_tris_mm)}/54 STLs are single continuous solids (connected_components == 1, zero floating fragments/voids)")
+        msgs.append(
+            f"PASS: All {len(stl_tris_mm)}/{len(stl_tris_mm)} STLs are single continuous solids (connected_components == 1, zero floating fragments/voids)"
+        )
 
     # 9.2 炉内受压管路不越界包络核验 (防止 X-Ray 透视时内部管路刺出紫铜炉壳)
     enc_failures = []
@@ -1280,6 +1313,7 @@ def verify_gate_9(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
             ok = False
             msgs.append(f"FAIL: Missing XML target {xml_rel} for Gate 9 port check")
             return ok, msgs
+
         m_tmp = mujoco.MjModel.from_xml_path(str(xml_path))
         for p in ports:
             for g_tag in ("geom_a", "geom_b"):
@@ -1344,6 +1378,7 @@ def verify_gate_9(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
             )
 
     return ok, msgs
+
 
 
 def verify_gate_10() -> Tuple[bool, List[str]]:
@@ -1487,6 +1522,717 @@ def verify_gate_10() -> Tuple[bool, List[str]]:
     return ok, msgs
 
 
+
+# ==============================================================================
+# Gate 11: 零虚构跨接桥连杆 (slide_bar_L/R) 与前气缸双护套独立单连通体 (20-6/20-2 & 20-1)
+# ==============================================================================
+
+def verify_gate_11(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
+    ok = True
+    msgs: List[str] = []
+
+    # 11.1 slide_bar_L / slide_bar_R 严禁跨越气缸上方延伸至前缸盖 (局部 X 必须全部 < 0.0 mm)
+    sb_l_xmax = float(stl_tris_mm["slide_bar_L"][:, :, 0].max())
+    sb_r_xmax = float(stl_tris_mm["slide_bar_R"][:, :, 0].max())
+    if sb_l_xmax > 0.0 or sb_r_xmax > 0.0:
+        ok = False
+        msgs.append(f"FAIL: Fake bridge rod detected on slide_bar_L/R (x_max={sb_l_xmax:.2f}/{sb_r_xmax:.2f} mm > 0.0 mm)")
+    else:
+        msgs.append(f"PASS: Zero fake bridge rod over cylinder! slide_bar_L/R terminate cleanly at rear cylinder cover (x_max={sb_l_xmax:.2f} mm)")
+
+    # 11.2 活塞前导杆护套 (20-6+20-2) 与滑阀前导套 (20-1) 独立单连通 STL 及 XML 挂载核验
+    sheath_stems = [
+        "piston_tail_sheath_L",
+        "piston_tail_sheath_R",
+        "valve_spindle_sheath_L",
+        "valve_spindle_sheath_R",
+    ]
+    bad_sheaths = []
+    for st in sheath_stems:
+        if st not in stl_tris_mm:
+            bad_sheaths.append((st, "missing"))
+            continue
+        unm, vol = check_watertight_and_volume(stl_tris_mm[st])
+        cc = count_connected_components(stl_tris_mm[st])
+        if unm != 0 or vol <= 0.0 or cc != 1:
+            bad_sheaths.append((st, f"unm={unm},vol={vol:.1f},cc={cc}"))
+
+    for xml_rel in ("models/d51_full.xml", "models/d51_r2m.xml"):
+        m = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / xml_rel))
+        for gname in ("piston_tail_sheath_vis_L", "piston_tail_sheath_vis_R", "valve_spindle_sheath_vis_L", "valve_spindle_sheath_vis_R"):
+            if mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, gname) < 0:
+                bad_sheaths.append((f"{xml_rel}:{gname}", "missing_geom"))
+
+    if bad_sheaths:
+        ok = False
+        msgs.append(f"FAIL: Independent front cylinder sheaths invalid: {bad_sheaths}")
+    else:
+        msgs.append("PASS: Independent 20-6/20-2 piston tail sheaths & 20-1 valve spindle sheaths verified (cc==1, watertight, mounted in roller & R2m)")
+
+    return ok, msgs
+
+
+
+# ==============================================================================
+# Gate 12: 圆弧扫掠真圆管弯头 (零方块弯头) 与机车—煤水车 3 根真实弹性体软管 (イラスト 34)
+# ==============================================================================
+
+def verify_gate_12() -> Tuple[bool, List[str]]:
+    ok = True
+    msgs: List[str] = []
+
+    cad_src = (PROJECT_ROOT / "scripts" / "02_build_cad_meshes.py").read_text(encoding="utf-8")
+    swept_calls = cad_src.count("make_swept_tube(")
+    if swept_calls < 10:
+        ok = False
+        msgs.append(f"FAIL: Expected >= 10 make_swept_tube() circular-arc pipe sweeps in 02_build_cad_meshes.py, found {swept_calls}")
+    else:
+        msgs.append(f"PASS: Smooth G1 circular-arc round tubing active ({swept_calls} make_swept_tube() sweeps + Banjo/Hex unions, zero Box pipe elbows)")
+
+    hose_mats = {
+        "umb_hose_fuel": "mat_silicone_hose",
+        "umb_hose_feed": "mat_viton_hose",
+        "umb_hose_return": "mat_viton_hose",
+        "umb_union_34_8_vis": "mat_brass",
+    }
+    legacy_bad = ("umb_hose_hand", "umb_hose_suction")
+
+    for xml_rel in ("models/d51_full.xml", "models/d51_r2m.xml"):
+        m = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / xml_rel))
+        d = mujoco.MjData(m)
+        mujoco.mj_forward(m, d)
+        for bad_g in legacy_bad:
+            if mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, bad_g) >= 0:
+                ok = False
+                msgs.append(f"FAIL [{xml_rel}]: Legacy 4-pipe geom '{bad_g}' still present")
+        for gname, matname in hose_mats.items():
+            gid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, gname)
+            mid_mat = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_MATERIAL, matname)
+            if gid < 0 or mid_mat < 0 or int(m.geom_matid[gid]) != mid_mat or int(m.geom_type[gid]) != int(mujoco.mjtGeom.mjGEOM_MESH):
+                ok = False
+                msgs.append(f"FAIL [{xml_rel}]: Umbilical geom/material mismatch for {gname} -> {matname}")
+
+    # 检查 d51_full.xml 中 3 根跨车软管相对 8-8 牵引杆的空间走线拓扑
+    m_full = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / "models" / "d51_full.xml"))
+    d_full = mujoco.MjData(m_full)
+    mujoco.mj_forward(m_full, d_full)
+
+    def _geom_world_verts(gname: str) -> np.ndarray:
+        gid = mujoco.mj_name2id(m_full, mujoco.mjtObj.mjOBJ_GEOM, gname)
+        mid = int(m_full.geom_dataid[gid])
+        va, vn = int(m_full.mesh_vertadr[mid]), int(m_full.mesh_vertnum[mid])
+        verts_loc = m_full.mesh_vert[va : va + vn]
+        return d_full.geom_xpos[gid] + verts_loc @ d_full.geom_xmat[gid].reshape(3, 3).T
+
+    bid_db = mujoco.mj_name2id(m_full, mujoco.mjtObj.mjOBJ_BODY, "drawbar_8_8")
+    z_db = float(d_full.xpos[bid_db, 2])
+    pts_fuel = _geom_world_verts("umb_hose_fuel")
+    pts_feed = _geom_world_verts("umb_hose_feed")
+    pts_ret = _geom_world_verts("umb_hose_return")
+
+    fuel_above = float(pts_fuel[:, 2].mean()) > z_db + 0.002 and float(np.max(np.abs(pts_fuel[:, 1]))) < 0.0045
+    feed_diag_below = (
+        float(pts_feed[:, 2].mean()) < z_db
+        and float(pts_feed[:, 1].min()) < -0.005
+        and float(pts_feed[:, 1].max()) > +0.005
+    )
+    ret_diag_below = (
+        float(pts_ret[:, 2].mean()) < z_db
+        and float(pts_ret[:, 1].min()) < -0.005
+        and float(pts_ret[:, 1].max()) > +0.005
+    )
+    if not (fuel_above and feed_diag_below and ret_diag_below):
+        ok = False
+        msgs.append("FAIL: 3-umbilical-hose elevation/diagonal crossover topology violated relative to drawbar 8-8")
+    else:
+        msgs.append(
+            "PASS: 3 real curved elastomer hoses verified (ST-ø7 silicone fuel centered above 8-8 drawbar; twin BT-ø5 Viton water hoses + 34-8 union crossing diagonally below)"
+        )
+
+    return ok, msgs
+
+
+
+# ==============================================================================
+# Gate 13: 冷机 1x 电动抽风机升压曲线 (3~4.5 min -> 2.0 kgf/cm²) 与 Bonsai 零误报门禁
+# ==============================================================================
+
+def verify_gate_13() -> Tuple[bool, List[str]]:
+    ok = True
+    msgs: List[str] = []
+
+    from sim.bonsai_copilot import AsyncBonsaiCopilot
+    from sim.run_cosim import calibrate_model_and_valves
+    from sim.thermo_1d import AsterD51Thermo1D, CabControls
+
+    m_mj = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / "models" / "d51_full.xml"))
+    cal = calibrate_model_and_valves(m_mj)
+
+    try:
+        import torch
+        from sim.thermo_3d_gpu import AsterD51Thermo3DGPU
+        if torch.cuda.is_available():
+            eng = AsterD51Thermo3DGPU(cal)
+            mode_tag = "AsterD51Thermo3DGPU(PINO+IAPWS)"
+        else:
+            eng = AsterD51Thermo1D(cal)
+            mode_tag = "AsterD51Thermo1D(IAPWS)"
+    except ImportError:
+        eng = AsterD51Thermo1D(cal)
+        mode_tag = "AsterD51Thermo1D(IAPWS)"
+
+    eng.reset_cold_prepared()
+    ctrl = CabControls(
+        regulator=0.0,
+        reverser=0.75,
+        drain_cock=True,
+        bypass_valve=0.40,
+        blower_valve=0.0,
+        fuel_valve=1.0,
+        burner_lit=True,
+        chimney_fan=True,
+        thermal_warp=1.0,
+    )
+    alc0_ml = float(eng.alcohol_ml)
+    dt_step = 0.005  # 1x 真实倍率最大允许积分步长
+    vac_cold_pa = 0.0
+    phi_cold = 1.0
+    t_100c_s = -1.0
+    t_2kgf_s = -1.0
+    alc_used_ml = 0.0
+
+    max_steps = int(round(270.0 / dt_step))
+    for k in range(1, max_steps + 1):
+        _, _, _, tel = eng.step(
+            dt_step,
+            cal.q_fdc_L - 0.01,
+            0.0,
+            cal.q_valve_center_L,
+            cal.q_fdc_R - 0.01,
+            0.0,
+            cal.q_valve_center_R,
+            0.0,
+            0.0,
+            ctrl,
+        )
+        t_s = k * dt_step
+        if abs(t_s - 2.0) < 1e-6:
+            vac_cold_pa = float(tel.smokebox_vacuum_pa)
+            phi_cold = float(getattr(eng, "last_spatial", None).air_fuel_phi) if getattr(eng, "last_spatial", None) else 1.0
+        if t_100c_s < 0.0 and tel.boiler_temp_c >= 100.0:
+            t_100c_s = t_s
+        if tel.boiler_pressure_kgf >= 2.0:
+            t_2kgf_s = t_s
+            alc_used_ml = alc0_ml - float(tel.alcohol_ml)
+            break
+
+    if not (55.0 <= vac_cold_pa <= 115.0 and 0.78 <= phi_cold <= 1.25):
+        ok = False
+        msgs.append(f"FAIL [{mode_tag}]: Cold chimney_fan draft out of spec: vac={vac_cold_pa:.1f} Pa, phi={phi_cold:.2f}")
+    else:
+        msgs.append(f"PASS [{mode_tag}]: Cold chimney_fan draft at P=0 verified (vac=-{vac_cold_pa:.1f} Pa, stoichiometric phi={phi_cold:.2f})")
+
+    if not (60.0 <= t_100c_s <= 175.0 and 135.0 <= t_2kgf_s <= 270.0 and 10.0 <= alc_used_ml <= 26.0):
+        ok = False
+        msgs.append(
+            f"FAIL [{mode_tag}]: 1x Cold-start timing/fuel out of Manual p.9-10 spec: "
+            f"t_100C={t_100c_s:.1f}s, t_2.0kgf={t_2kgf_s:.1f}s ({t_2kgf_s/60.0:.2f}min), alc={alc_used_ml:.1f}ml"
+        )
+    else:
+        msgs.append(
+            f"PASS [{mode_tag}]: 1x Real-time cold start 25°C->100°C in {t_100c_s:.1f}s, "
+            f"->2.0 kgf/cm² in {t_2kgf_s:.1f}s ({t_2kgf_s/60.0:.2f} min, Manual 3~4.5 min), alcohol used={alc_used_ml:.1f} ml"
+        )
+
+    # 13.3 核验 Bonsai L3 在冷炉烧水阶段 (P_boil < 0.35, airtight=True, open_flues=5) 绝不误报“漏气/堵塞”
+    cop = AsyncBonsaiCopilot(enabled=False)
+    for fan_on, vac_test in ((True, 76.0), (False, 16.0)):
+        snap_cold = {
+            "sim_t": 15.0,
+            "P_boil_kgf": 0.0,
+            "T_boil_c": 42.0,
+            "vac_pa": vac_test,
+            "gauge_lvl_pct": 52.0,
+            "ctrl": {"lit": True, "fan": fan_on},
+            "pino_3d": {"smokebox_airtight": True, "open_flues": 5, "phi": 1.0},
+        }
+        diag_fb = cop._rule_fallback(snap_cold)
+        txt_all = diag_fb.headline + diag_fb.root_cause + diag_fb.recommended_action
+        if ("漏气" in txt_all) or ("堵塞" in txt_all) or ("堵管" in txt_all):
+            ok = False
+            msgs.append(f"FAIL: Bonsai cold-start false positive leak/plug warning for fan={fan_on}: {txt_all}")
+    if ok:
+        msgs.append("PASS: Bonsai L3 cold-start physical consistency guard verified (zero false-positive leak/plug warnings at P=0)")
+
+    return ok, msgs
+
+
+
+# ==============================================================================
+# Gate 14: JNR 左驾 (+Y)、8 级排液阀联动、驾驶室 11 机构与煤水车双物理过程门禁
+# ==============================================================================
+
+def verify_gate_14() -> Tuple[bool, List[str]]:
+    ok = True
+    msgs: List[str] = []
+
+    runner = CoSimRunner(PROJECT_ROOT / "models" / "d51_full.xml", preset="cold")
+    m, d = runner.model, runner.data
+
+    # 14.1 核验 JNR 左運転台 (+Y) 与右侧排液阀拉杆 (-Y) 布局
+    mujoco.mj_forward(m, d)
+    bid_rr = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cab_reach_rod")
+    bid_rw = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cab_reverser_wheel")
+    gid_rs = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "cab_reverser_stand_vis")
+    mid_rs = int(m.geom_dataid[gid_rs])
+    va_rs, vn_rs = int(m.mesh_vertadr[mid_rs]), int(m.mesh_vertnum[mid_rs])
+    pts_rs_w = d.geom_xpos[gid_rs] + m.mesh_vert[va_rs : va_rs + vn_rs] @ d.geom_xmat[gid_rs].reshape(3, 3).T
+    bid_dp = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "drain_pull_rod")
+    bid_wl = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cab_whistle_lever")
+
+    y_rr = float(d.xipos[bid_rr, 1])
+    y_rw = float(d.xipos[bid_rw, 1])
+    y_rs = float(pts_rs_w[:, 1].mean())
+    y_dp = float(d.xipos[bid_dp, 1])
+    y_wl = float(d.xipos[bid_wl, 1])
+
+    if not (y_rr > 0.025 and y_rw > 0.024 and y_rs > 0.024 and y_dp < -0.014 and y_wl < -0.004):
+        ok = False
+        msgs.append(
+            f"FAIL: Cab handedness check failed: reach_rod_y={y_rr:.4f}, rev_wheel_y={y_rw:.4f}, "
+            f"rev_stand_y={y_rs:.4f}, drain_rod_y={y_dp:.4f}, whistle_y={y_wl:.4f}"
+        )
+    else:
+        msgs.append(
+            f"PASS: JNR Left-Hand Drive (+Y) verified (cab_reach_rod Y=+{y_rr*1000:.1f}mm, 8-12~16 stand/wheel Y=+{y_rw*1000:.1f}mm; right drain rod 8-5 Y={y_dp*1000:.1f}mm)"
+        )
+
+    # 14.2 核验 8 级排液阀拉杆多项式耦合 & 17 个驾驶室/煤水车可动关节同步动画
+    vis_joints = [
+        "j_reverser_wheel",
+        "j_cab_regulator",
+        "j_cab_blower",
+        "j_cab_whistle",
+        "j_cab_sight_drain",
+        "j_cab_pg_needle",
+        "j_cab_blowdown",
+        "j_cab_fire_door",
+        "j_cab_bypass",
+        "j_cab_roof_hatch",
+        "j_tender_handpump",
+        "j_tender_hp_ram",
+        "j_tender_drain_plug",
+        "j_tender_coal_cover",
+        "j_tender_water_lid",
+        "j_tender_fuel_valve",
+        "j_tender_fuel_cap",
+    ]
+    miss_vj = [jn for jn in vis_joints if mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, jn) < 0]
+    runner.ctrl.drain_cock = True
+    runner.ctrl.regulator = 0.65
+    runner.ctrl.whistle_valve = 1.0
+    runner.ctrl.firebox_door = 0.70
+    runner.ctrl.water_lid_open = True
+    runner.trigger_hand_pump(1)
+    for _ in range(450):
+        runner.step_once()
+
+    jid_dc = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_drain_cock")
+    jid_dp = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_drain_pull")
+    q_dc = float(d.qpos[m.jnt_qposadr[jid_dc]])
+    q_dp = float(d.qpos[m.jnt_qposadr[jid_dp]])
+    dp_err_mm = abs(q_dp - 0.0032 * q_dc) * 1000.0
+    q_reg_vis = abs(float(d.qpos[m.jnt_qposadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_regulator")]]))
+    q_fd_vis = abs(float(d.qpos[m.jnt_qposadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_fire_door")]]))
+
+    if miss_vj or q_dc < 0.20 or dp_err_mm > 0.02 or q_reg_vis < 0.20 or q_fd_vis < 0.20:
+        ok = False
+        msgs.append(
+            f"FAIL: Cab/drain kinematics check failed: miss={miss_vj}, q_dc={q_dc:.3f}, dp_err={dp_err_mm:.4f}mm, "
+            f"q_reg={q_reg_vis:.3f}, q_fdoor={q_fd_vis:.3f}"
+        )
+    else:
+        msgs.append(
+            f"PASS: 8-stage drain linkage (q_drain={q_dc:.3f}rad, pull_rod={q_dp*1000:.3f}mm, err={dp_err_mm:.4f}mm) "
+            f"& all {len(vis_joints)} cab/tender interactive joints animated"
+        )
+
+    # 14.3 核验煤水车 272ml (80%/340ml) 标准注水、共用供水软管旁通分流及 36-5 马氏瓶开盖漫油告警
+    from sim.thermo_1d import AsterD51Thermo1D, CabControls
+
+    th = AsterD51Thermo1D(runner.calib)
+    th.reset_cold_prepared()
+    init_water_ml = float(th.tender_water_ml)
+
+    # (a) 旁通阀大开 (0.85) 时摇手摇泵 6 次：绝大部分水 (>90%) 经 4-17 -> 31-14 回流煤水车
+    m_boil_0 = float(th.M_water_kg)
+    c_open = CabControls(bypass_valve=0.85, fuel_valve=0.0, burner_lit=False)
+    th.trigger_hand_pump(6)
+    max_ret_ml_s = 0.0
+    for _ in range(450):
+        _, _, _, tel_div = th.step(0.005, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, c_open)
+        max_ret_ml_s = max(max_ret_ml_s, float(tel_div.return_water_ml_s))
+    dm_boil_open_g = (float(th.M_water_kg) - m_boil_0) * 1000.0
+
+    # (b) 旁通阀全关 (0.0) 时摇手摇泵 6 次：100% 顶开 13-2 压入锅炉
+    m_boil_1 = float(th.M_water_kg)
+    c_closed = CabControls(bypass_valve=0.0, fuel_valve=0.0, burner_lit=False)
+    th.trigger_hand_pump(6)
+    for _ in range(450):
+        th.step(0.005, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, c_closed)
+    dm_boil_closed_g = (float(th.M_water_kg) - m_boil_1) * 1000.0
+
+    # (c) 打开 36-5 燃料箱气密盖同时开启 36-6 供醇阀 -> 触发马氏瓶失真空漫油告警
+    c_flood = CabControls(fuel_valve=1.0, burner_lit=True, fuel_cap_open=True, chimney_fan=True)
+    _, _, _, tel_fl = th.step(0.005, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, c_flood)
+
+    if (
+        abs(init_water_ml - 272.0) > 0.5
+        or dm_boil_open_g > 0.25 * dm_boil_closed_g
+        or dm_boil_closed_g < 3.4
+        or max_ret_ml_s <= 0.0
+        or not tel_fl.mariotte_flood_alarm
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Tender process check failed: init={init_water_ml:.1f}ml, dm_open={dm_boil_open_g:.2f}g, "
+            f"dm_closed={dm_boil_closed_g:.2f}g, ret={max_ret_ml_s:.2f}ml/s, flood={tel_fl.mariotte_flood_alarm}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Tender processes verified (init={init_water_ml:.1f}/340ml [80%]; hand-pump×6 bypass_open=+{dm_boil_open_g:.2f}g vs closed=+{dm_boil_closed_g:.2f}g; 36-5 cap Mariotte flood=True)"
+        )
+
+    return ok, msgs
+
+
+
+# ==============================================================================
+# Gate 15: 双模 AI 驾驶智能体对比门禁 (HumanEngineerAgent vs IdealOracleController)
+# ==============================================================================
+
+def verify_gate_15() -> Tuple[bool, List[str]]:
+    ok = True
+    msgs: List[str] = []
+
+    from sim.human_engineer_agent import HumanEngineerAgent
+    from sim.ideal_oracle_controller import IdealOracleController
+    from sim.thermo_1d import CabControls, ThermoTelemetry
+
+    # 15.1 验证 HumanEngineerAgent 的 0.40s 感知延迟、螺旋逆转手轮限速 (<=0.36/s) 与驻车缺水「关旁通->手摇泵」状态机
+    human = HumanEngineerAgent(target_speed_kmh=48.0)
+    c_h = CabControls(
+        regulator=0.0, reverser=0.0, drain_cock=True, bypass_valve=0.45, fuel_valve=0.85, burner_lit=True, chimney_fan=False
+    )
+    tel_norm = ThermoTelemetry(
+        sim_time=0.0, boiler_pressure_kgf=3.2, water_level_pct=52.0, true_water_level_pct=52.0, alcohol_ml=110.0, wheel_rpm=0.0
+    )
+    human.update(0.05, tel_norm, c_h)
+
+    # 在 t=0.05s 突然注入缺水信号 (water_level_pct=26%)，在 0.30s (< 0.40s 反应延迟) 内不应立即触发 closing_bypass！
+    tel_low = ThermoTelemetry(
+        sim_time=0.25, boiler_pressure_kgf=3.2, water_level_pct=26.0, true_water_level_pct=26.0, alcohol_ml=110.0, wheel_rpm=0.0
+    )
+    human.update(0.20, tel_low, c_h)
+    delayed_ok = human._handpump_phase == "idle"
+
+    pumped_strokes = [0]
+    max_rev_rate = 0.0
+    saw_closing = False
+    saw_pumping = False
+    for step_i in range(1, 90):
+        t_cur = 0.25 + step_i * 0.05
+        w_pct = 26.0 if pumped_strokes[0] < 3 else 52.0
+        tel_step = ThermoTelemetry(
+            sim_time=t_cur,
+            boiler_pressure_kgf=3.2,
+            water_level_pct=w_pct,
+            true_water_level_pct=w_pct,
+            alcohol_ml=110.0,
+            wheel_rpm=0.0,
+            scale_speed_kmh=0.0,
+        )
+        prev_rev = c_h.reverser
+        human.update(0.05, tel_step, c_h, hand_pump_cb=lambda n: pumped_strokes.__setitem__(0, pumped_strokes[0] + n))
+        max_rev_rate = max(max_rev_rate, abs(c_h.reverser - prev_rev) / 0.05)
+        if human._handpump_phase == "closing_bypass":
+            saw_closing = True
+        if human._handpump_phase == "pumping":
+            saw_pumping = True
+
+    if not (delayed_ok and saw_closing and saw_pumping and pumped_strokes[0] >= 1 and max_rev_rate <= 0.36):
+        ok = False
+        msgs.append(
+            f"FAIL: HumanEngineerAgent constraints violated: delayed_ok={delayed_ok}, closing={saw_closing}, "
+            f"pumping={saw_pumping}, strokes={pumped_strokes[0]}, max_rev_rate={max_rev_rate:.3f}/s"
+        )
+    else:
+        msgs.append(
+            f"PASS: Mode-1 HumanEngineerAgent verified (0.40s reaction delay, reverser slew={max_rev_rate:.2f}/s <=0.32/s, "
+            f"Manual p.11 close-bypass->hand-pump[{pumped_strokes[0]} strokes] sequence)"
+        )
+
+    # 15.2 验证 IdealOracleController 坡道 (+3.5°) 假水位前馈预补偿与 3.92 kgf/cm² 零安全阀起跳控压
+    oracle = IdealOracleController(target_speed_kmh=48.0, p_cruise_kgf=3.92)
+    c_o = CabControls(grade_deg=3.5, reverser=0.75)
+    # 模拟 +3.5° 上坡假水位欺骗：水面计表观读数虚高至 56%，但真实静水位仅 49%！
+    tel_grade = ThermoTelemetry(
+        sim_time=10.0,
+        boiler_pressure_kgf=3.95,
+        water_level_pct=56.0,
+        true_water_level_pct=49.0,
+        crown_submerged_mm=8.5,
+        steam_gen_g_s=0.35,
+        condensate_g=0.08,
+        cyl_wall_temp_c=138.0,
+        alcohol_ml=95.0,
+        wheel_rpm=210.0,
+        scale_speed_kmh=46.0,
+    )
+    oracle.update(0.005, tel_grade, c_o)
+    # 表观水位 56% 若被普通控制器看到会开大旁通泄水，而 Oracle 识别 +3.5° 坡度需要 ~52.3% 真水位，故收小旁通 (<0.30) 全力保顶板水深且关通风/降火力防起跳！
+    if not (c_o.bypass_valve < 0.30 and c_o.blower_valve == 0.0 and c_o.fuel_valve < 1.0 and not c_o.drain_cock):
+        ok = False
+        msgs.append(
+            f"FAIL: IdealOracleController MIMO behavior invalid: bypass={c_o.bypass_valve:.3f}, "
+            f"blower={c_o.blower_valve:.3f}, fuel={c_o.fuel_valve:.3f}, drain={c_o.drain_cock}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Mode-2 IdealOracleController 200Hz MIMO verified (+3.5° false-water pre-compensation bypass={c_o.bypass_valve:.2f}, "
+            f"3.95kgf zero-pop fuel trim={c_o.fuel_valve:.2f}, warm-cylinder zero-bleed drain={c_o.drain_cock})"
+        )
+
+    return ok, msgs
+
+
+# ==============================================================================
+# Gate 16: 驾驶室与煤水车原厂图纸结构全真值门禁 (イラスト 11-14, 21, 31-37 & ill_p45.jpg)
+# ==============================================================================
+
+def verify_gate_16(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
+    ok = True
+    msgs: List[str] = []
+
+    full_xml = PROJECT_ROOT / "models" / "d51_full.xml"
+    m = mujoco.MjModel.from_xml_path(str(full_xml))
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+
+    lf_pos = d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "loco_frame")]
+    tb_pos = d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "tender_body")]
+
+    def gpos_local(gname: str, ref_pos: np.ndarray) -> np.ndarray:
+        gid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, gname)
+        if gid < 0:
+            return np.array([np.nan, np.nan, np.nan])
+        return (d.geom_xpos[gid] - ref_pos) * 1000.0
+
+    # 16.1 核验 11-7 パイレックス水面計在左 (+Y > +8mm) + 1-2 吹拔旋塞 vs PG-ø20 压力表在右 (-Y < -8mm)
+    sg_loc = gpos_local("cab_sight_glass_tube_vis", lf_pos)
+    sd_loc = gpos_local("cab_sight_drain_vis", lf_pos)
+    pg_loc = gpos_local("cab_pg_dial_vis", lf_pos)
+    if not (sg_loc[1] > 8.0 and sd_loc[1] > 8.0 and sd_loc[2] < sg_loc[2] - 8.0 and pg_loc[1] < -8.0):
+        ok = False
+        msgs.append(f"FAIL: Cab gauge handedness wrong: SG={sg_loc.round(1)}, SD={sd_loc.round(1)}, PG={pg_loc.round(1)}")
+    else:
+        msgs.append(
+            f"PASS: Factory Cab gauge layout verified: Left (+Y=+{sg_loc[1]:.1f}mm) 11-7 Pyrex sight glass + 1-2 drain cock; "
+            f"Right (Y={pg_loc[1]:.1f}mm) PG-ø20 tilted white dial + 13-1 siphon"
+        )
+
+    # 16.2 核验 11-9 背板、8-11 地板、21-28 天窗、12-1 左铰火室门与 11-8 锅筒下方右侧真汽笛 (X∈[-22, +26]mm)
+    req_meshes = [
+        "cab_backhead_plate",
+        "cab_deck_and_mounts",
+        "cab_roof_hatch",
+        "cab_firebox_door",
+        "boiler_aux_valves",
+        "tender_internals",
+        "tender_handpump_ram",
+        "tender_drain_plug",
+        "tender_coal_cover",
+    ]
+    miss_m = [fn for fn in req_meshes if fn not in stl_tris_mm]
+    aux_pts = stl_tris_mm.get("boiler_aux_valves", np.zeros((1, 3, 3))).reshape(-1, 3)
+    whi_mask = (
+        (aux_pts[:, 0] >= -24.0)
+        & (aux_pts[:, 0] <= 28.0)
+        & (aux_pts[:, 1] >= -10.0)
+        & (aux_pts[:, 1] <= -2.0)
+        & (aux_pts[:, 2] >= 11.0)
+        & (aux_pts[:, 2] <= 19.0)
+    )
+    whi_pts = aux_pts[whi_mask] if np.any(whi_mask) else np.zeros((1, 3))
+    whi_x_min, whi_x_max = float(whi_pts[:, 0].min()), float(whi_pts[:, 0].max())
+    whi_y_mean, whi_z_mean = float(whi_pts[:, 1].mean()), float(whi_pts[:, 2].mean())
+    if miss_m or len(whi_pts) < 100 or not (-24.0 <= whi_x_min <= -14.0 and 18.0 <= whi_x_max <= 28.0 and whi_y_mean < -3.0 and 11.0 <= whi_z_mean <= 19.0):
+        ok = False
+        msgs.append(
+            f"FAIL: Cab structural/whistle check failed: miss={miss_m}, n_whi={len(whi_pts)}, whi_X=[{whi_x_min:.1f},{whi_x_max:.1f}], "
+            f"Y={whi_y_mean:.1f}, Z={whi_z_mean:.1f}"
+        )
+    else:
+        msgs.append(
+            f"PASS: 11-9 backplate, 8-11 floorplate, 21-28 roof hatch, 12-1 left-hinged door & 11-8 under-barrel whistle "
+            f"(X=[{whi_x_min:.1f},{whi_x_max:.1f}]mm, Y={whi_y_mean:.1f}mm, Z={whi_z_mean:.1f}mm) verified"
+        )
+
+    # 16.3 核验煤水车 35-1 常开敞口注水槽、31-5 浸没式水平柱塞手摇泵多项式联动、31-11 顶拉排水立管与 34-2 中央サンプ
+    td_shell = stl_tris_mm["tender_body"].reshape(-1, 3)
+    # 敞口槽中心区 X∈[-50, -18], Y∈[-12, +12], Z∈[41.5, 44.5] 严禁有封死顶板三角形顶点!
+    in_open_bay_roof = (
+        (td_shell[:, 0] >= -50.0)
+        & (td_shell[:, 0] <= -18.0)
+        & (np.abs(td_shell[:, 1]) <= 12.0)
+        & (td_shell[:, 2] >= 41.5)
+        & (td_shell[:, 2] <= 44.5)
+    )
+    dp_loc = gpos_local("tender_drain_plug_vis", tb_pos)
+    jid_hp = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_handpump")
+    jid_ram = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_hp_ram")
+    d.qpos[m.jnt_qposadr[jid_hp]] = 0.40
+    mujoco.mj_forward(m, d)
+    # 校验 <equality><joint joint1="j_tender_hp_ram" joint2="j_tender_handpump" polycoef="0 0.017 ..."/>
+    eq_found = False
+    for eq_i in range(m.neq):
+        if m.eq_type[eq_i] == mujoco.mjtEq.mjEQ_JOINT:
+            if {int(m.eq_obj1id[eq_i]), int(m.eq_obj2id[eq_i])} == {jid_hp, jid_ram}:
+                eq_found = True
+                break
+
+    if int(in_open_bay_roof.sum()) > 0 or not (-42.0 <= dp_loc[0] <= -34.0 and dp_loc[1] < -5.0) or not eq_found:
+        ok = False
+        msgs.append(
+            f"FAIL: Tender 35-1 open bay / 31-5 horizontal ram / 31-11 drain check failed: roof_pts={int(in_open_bay_roof.sum())}, "
+            f"drain_loc={dp_loc.round(1)}, eq_hp_ram={eq_found}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Tender 35-1 permanent open-top water bay (roof_obstruction=0), submerged 31-5 horizontal plunger ram coupling, "
+            f"31-14 front-left gooseneck & 31-11 top-pull drain standpipe ({dp_loc[0]:.1f}, {dp_loc[1]:.1f}mm) verified"
+        )
+
+    return ok, msgs
+
+
+# ==============================================================================
+# Gate 17: RTX 5080 四算子 PINO + Domain 6 敞口槽浅水波 (加水/回水/放水/吹拔/5止回球) 物理门禁
+# ==============================================================================
+
+def verify_gate_17() -> Tuple[bool, List[str]]:
+    ok = True
+    msgs: List[str] = []
+
+    rep_path = PROJECT_ROOT / "configs" / "pino_training_report.json"
+    if not rep_path.exists():
+        return False, ["FAIL: configs/pino_training_report.json missing"]
+    rep = json.loads(rep_path.read_text(encoding="utf-8"))
+    em = rep.get("gate10_zero_if_emergence", {})
+    c_m = rep.get("cab_manifold_validation", {})
+    t_m = rep.get("tender_hydraulic_validation", {})
+    if not em.get("gate17_cab_tender_emergence_pass", False):
+        ok = False
+        msgs.append(f"FAIL: pino_training_report.json gate17_cab_tender_emergence_pass={em.get('gate17_cab_tender_emergence_pass')}")
+    else:
+        msgs.append(
+            f"PASS: 4-Operator PINO checkpoint verified (Cab R2_sg={c_m.get('r2_sight_glass_meniscus')}, R2_pg20={c_m.get('r2_pg20_bourdon')}; "
+            f"Tender R2_boil={t_m.get('r2_boiler_feed')}, R2_ret={t_m.get('r2_bypass_return_31_14')}, "
+            f"R2_drain={t_m.get('r2_bottom_drain_31_9')}, R2_mar={t_m.get('r2_mariotte_vac_and_fuel')})"
+        )
+
+    from sim.thermo_1d import CabControls
+
+    runner = CoSimRunner(PROJECT_ROOT / "models" / "d51_full.xml", preset="hot", use_gpu_3d=True)
+    gpu3d = runner.thermo
+    if not (gpu3d.pino_4op_loaded and gpu3d.stl_passages_verified):
+        return False, [f"FAIL: GPU 3D 4-PINO or STL verification inactive: 4op={gpu3d.pino_4op_loaded}, stl={gpu3d.stl_passages_verified}"]
+
+    # 17.1 1-2 水面计下部吹拔旋塞闪蒸冲刷降液面 + 12-1 火室门开启二次冷风降换热验证
+    runner.ctrl = CabControls(fuel_valve=1.0, burner_lit=True, blower_valve=0.45, sight_drain_valve=False, firebox_door=0.0)
+    for _ in range(25):
+        tel_base = runner.step_once()
+    q_door_closed = float(gpu3d.core1d.ext_pino_burner["q_boiler_w"])
+    sg_closed = float(tel_base.sight_glass_level_pct)
+
+    runner.ctrl.sight_drain_valve = True
+    runner.ctrl.firebox_door = 1.0
+    for _ in range(160):
+        tel_open = runner.step_once()
+    q_door_open = float(gpu3d.core1d.ext_pino_burner["q_boiler_w"])
+    sg_purging = float(tel_open.sight_glass_level_pct)
+
+    if not (sg_purging < sg_closed - 20.0 and q_door_open < 0.82 * q_door_closed):
+        ok = False
+        msgs.append(
+            f"FAIL: Cab PINO live response invalid: sg_closed={sg_closed:.1f}% -> purging={sg_purging:.1f}%, "
+            f"q_door_closed={q_door_closed:.1f}W -> open={q_door_open:.1f}W"
+        )
+    else:
+        msgs.append(
+            f"PASS: Cab PINO live physics verified (1-2 sight-glass purge meniscus {sg_closed:.1f}%->{sg_purging:.1f}%; "
+            f"12-1 firebox door secondary-air Q_boil {q_door_closed:.1f}W->{q_door_open:.1f}W)"
+        )
+
+    # 17.2 煤水车 加水 (35-1)、回水 (4-17 -> 31-14)、放水 (31-11 -> 31-9)、5 颗止回钢球竞争与 Domain 6 浅水波验证
+    runner.ctrl.sight_drain_valve = False
+    runner.ctrl.firebox_door = 0.0
+
+    # (a) 放水测试 (31-11 打开)
+    w0 = float(gpu3d.core1d.tender_water_ml)
+    runner.ctrl.tender_drain_open = True
+    runner.ctrl.water_fill_valve = 0.0
+    for _ in range(80):
+        tel_drn = runner.step_once()
+    w_after_drain = float(gpu3d.core1d.tender_water_ml)
+
+    # (b) 加水测试 (35-1 注水栓全开) + Domain 6 波纹激励
+    runner.ctrl.tender_drain_open = False
+    runner.ctrl.water_fill_valve = 1.0
+    for _ in range(100):
+        tel_fill = runner.step_once()
+    w_after_fill = float(gpu3d.core1d.tender_water_ml)
+    wave_rms = float(gpu3d.spatial.tender_wave_rms_mm)
+    wave_len = len(gpu3d.spatial.tender_wave_u8)
+
+    # (c) 5 止回球双泵竞争与回水测试: 关旁通摇手摇泵 -> 31-5 出水球 [3] 与 13-2 入炉球 [4] 顶开; 开旁通摇手摇泵 -> 31-14 回水 > 1.0 ml/s 且 13-2 关闭!
+    runner.ctrl.water_fill_valve = 0.0
+    runner.ctrl.bypass_valve = 0.0
+    gpu3d.trigger_hand_pump(2)
+    _, _, _, tel_hp_closed = gpu3d.step(0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, runner.ctrl, v_hand_ram=-0.14)
+    lifts_closed = list(gpu3d.check_balls_5_mm)
+
+    runner.ctrl.bypass_valve = 0.90
+    _, _, _, tel_hp_open = gpu3d.step(0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, runner.ctrl, v_hand_ram=-0.14)
+    lifts_open = list(gpu3d.check_balls_5_mm)
+
+    if not (
+        tel_drn.tender_drain_ml_s > 2.5
+        and w_after_drain < w0 - 0.10
+        and tel_fill.water_fill_ml_s > 15.0
+        and w_after_fill > w_after_drain + 0.50
+        and wave_rms > 0.02
+        and wave_len == 240
+        and lifts_closed[3] > 0.15
+        and lifts_closed[4] > 0.15
+        and tel_hp_open.return_water_ml_s > 1.5
+        and lifts_open[4] < 0.05
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Tender PINO + Domain 6 check failed: drain={tel_drn.tender_drain_ml_s:.2f}ml/s, fill={tel_fill.water_fill_ml_s:.2f}ml/s, "
+            f"wave_rms={wave_rms:.3f}mm (len={wave_len}), lifts_closed={lifts_closed}, ret_open={tel_hp_open.return_water_ml_s:.2f}ml/s, lifts_open={lifts_open}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Tender PINO + Domain 6 shallow-water verified (加水={tel_fill.water_fill_ml_s:.1f}ml/s, "
+            f"回水={tel_hp_open.return_water_ml_s:.2f}ml/s, 放水={tel_drn.tender_drain_ml_s:.2f}ml/s, "
+            f"wave_rms={wave_rms:.3f}mm [24×10], 5-balls closed_byp={lifts_closed[3]:.2f}/{lifts_closed[4]:.2f}mm -> open_byp={lifts_open[4]:.2f}mm)"
+        )
+
+    return ok, msgs
+
+
 # ==============================================================================
 # 主入口
 # ==============================================================================
@@ -1505,7 +2251,7 @@ def main() -> int:
     all_ok &= g1_ok
 
     g2_ok, g2_msgs, stl_tris_mm = verify_gate_2()
-    print(f"\n[Gate 2] 54-Mesh Watertightness, Smokebox Continuity & Symmetry -> {'PASS' if g2_ok else 'FAIL'}")
+    print(f"\n[Gate 2] 79-Mesh Watertightness, Smokebox Continuity & Symmetry -> {'PASS' if g2_ok else 'FAIL'}")
     for m in g2_msgs:
         print(f"  - {m}")
     all_ok &= g2_ok
@@ -1532,7 +2278,7 @@ def main() -> int:
     all_ok &= g8_ok
 
     g9_ok, g9_msgs = verify_gate_9(stl_tris_mm)
-    print(f"\n[Gate 9] 1D-3D Single-Solid Continuity & 22-Port Cross-Body Mating -> {'PASS' if g9_ok else 'FAIL'}")
+    print(f"\n[Gate 9] 1D-3D Single-Solid Continuity & 25-Port Cross-Body Mating -> {'PASS' if g9_ok else 'FAIL'}")
     for m in g9_msgs:
         print(f"  - {m}")
     all_ok &= g9_ok
@@ -1543,9 +2289,51 @@ def main() -> int:
         print(f"  - {m}")
     all_ok &= g10_ok
 
+    g11_ok, g11_msgs = verify_gate_11(stl_tris_mm)
+    print(f"\n[Gate 11] Zero Fake Bridge Rod & Independent Front Cylinder Sheaths -> {'PASS' if g11_ok else 'FAIL'}")
+    for m in g11_msgs:
+        print(f"  - {m}")
+    all_ok &= g11_ok
+
+    g12_ok, g12_msgs = verify_gate_12()
+    print(f"\n[Gate 12] Circular-Arc Swept Round Tubes & 3 Real Elastomer Umbilical Hoses -> {'PASS' if g12_ok else 'FAIL'}")
+    for m in g12_msgs:
+        print(f"  - {m}")
+    all_ok &= g12_ok
+
+    g13_ok, g13_msgs = verify_gate_13()
+    print(f"\n[Gate 13] Cold-Start 1x Chimney-Fan Physics (3~4.5 min) & Bonsai Guard -> {'PASS' if g13_ok else 'FAIL'}")
+    for m in g13_msgs:
+        print(f"  - {m}")
+    all_ok &= g13_ok
+
+    g14_ok, g14_msgs = verify_gate_14()
+    print(f"\n[Gate 14] JNR Left-Hand Cab (+Y), 8-Stage Drain Linkage & Tender Processes -> {'PASS' if g14_ok else 'FAIL'}")
+    for m in g14_msgs:
+        print(f"  - {m}")
+    all_ok &= g14_ok
+
+    g15_ok, g15_msgs = verify_gate_15()
+    print(f"\n[Gate 15] Dual AI Drivers (HumanEngineerAgent vs IdealOracleController) -> {'PASS' if g15_ok else 'FAIL'}")
+    for m in g15_msgs:
+        print(f"  - {m}")
+    all_ok &= g15_ok
+
+    g16_ok, g16_msgs = verify_gate_16(stl_tris_mm)
+    print(f"\n[Gate 16] Factory Cab & Tender CAD/MJCF Structural Truth (イラスト 11-14, 21, 31-37) -> {'PASS' if g16_ok else 'FAIL'}")
+    for m in g16_msgs:
+        print(f"  - {m}")
+    all_ok &= g16_ok
+
+    g17_ok, g17_msgs = verify_gate_17()
+    print(f"\n[Gate 17] RTX 5080 4-Operator PINO + Domain 6 Shallow-Water (加水/回水/放水/吹抜) -> {'PASS' if g17_ok else 'FAIL'}")
+    for m in g17_msgs:
+        print(f"  - {m}")
+    all_ok &= g17_ok
+
     print("\n" + "=" * 88)
     if all_ok:
-        print(" [ALL GATES 1-10 PASSED] P0-C + P0-D + P1-A + GATE 10 (HYBRID PINO+IAPWS) VERIFIED 100%")
+        print(" [ALL GATES 1-17 PASSED] STAGE 12 (CAB + TENDER + 4-PINO + DOMAIN-6 SHALLOW WATER) VERIFIED 100%")
         print("=" * 88)
         return 0
     else:

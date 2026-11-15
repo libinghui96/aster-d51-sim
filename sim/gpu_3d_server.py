@@ -31,8 +31,9 @@ from aiohttp import WSMsgType, web
 import mujoco
 import torch
 
-from sim.auto_fireman import AutoFiremanAgent
 from sim.bonsai_copilot import AsyncBonsaiCopilot, CopilotDiagnosis
+from sim.human_engineer_agent import HumanEngineerAgent
+from sim.ideal_oracle_controller import IdealOracleController
 from sim.run_cosim import CoSimRunner
 from sim.thermo_1d import CabControls, ThermoTelemetry
 
@@ -54,11 +55,13 @@ def pack_frame_payload(
     scene_name: str,
     runner: CoSimRunner,
     tel: ThermoTelemetry,
-    auto_fireman: bool,
+    ai_mode: str,
+    ai_status: str = "",
     copilot_diag: Optional[CopilotDiagnosis] = None,
 ) -> str:
     sp = runner.thermo.spatial
     b64_slice = base64.b64encode(bytes(sp.midplane_temp_u8)).decode("ascii") if sp.midplane_temp_u8 else ""
+    b64_wave = base64.b64encode(bytes(sp.tender_wave_u8)).decode("ascii") if getattr(sp, "tender_wave_u8", None) else ""
     qpos_list = [round(float(x), 6) for x in runner.data.qpos]
 
     payload: Dict[str, Any] = {
@@ -66,7 +69,9 @@ def pack_frame_payload(
         "scene": scene_name,
         "nq": int(runner.model.nq),
         "qpos": qpos_list,
-        "autoFireman": auto_fireman,
+        "autoFireman": ai_mode != "off",
+        "aiMode": ai_mode,
+        "aiStatus": ai_status,
         "ctrl": {
             "fuelValve": round(runner.ctrl.fuel_valve, 3),
             "burnerLit": bool(runner.ctrl.burner_lit),
@@ -76,16 +81,30 @@ def pack_frame_payload(
             "reverser": round(runner.ctrl.reverser, 3),
             "drainCock": bool(runner.ctrl.drain_cock),
             "bypassValve": round(runner.ctrl.bypass_valve, 3),
+            "whistleValve": round(runner.ctrl.whistle_valve, 3),
+            "blowdownValve": round(runner.ctrl.blowdown_valve, 3),
+            "fireboxDoor": round(runner.ctrl.firebox_door, 3),
+            "fuelCapOpen": bool(runner.ctrl.fuel_cap_open),
+            "waterLidOpen": bool(runner.ctrl.water_lid_open),
+            "waterFillValve": round(float(getattr(runner.ctrl, "water_fill_valve", 0.0)), 3),
+            "tenderDrainOpen": bool(getattr(runner.ctrl, "tender_drain_open", False)),
+            "sightDrainValve": bool(getattr(runner.ctrl, "sight_drain_valve", False)),
+            "cabRoofOpen": bool(getattr(runner.ctrl, "cab_roof_open", False)),
+            "coalCoverOpen": bool(getattr(runner.ctrl, "coal_cover_open", False)),
             "gradeDeg": round(runner.ctrl.grade_deg, 2),
             "thermalWarp": round(runner.ctrl.thermal_warp, 1),
         },
         "tel": {
             "simTime": round(tel.sim_time, 3),
             "boilerTempC": round(tel.boiler_temp_c, 2),
+            "boilingProgressPct": round(tel.boiling_progress_pct, 1),
             "boilerPressureKgf": round(tel.boiler_pressure_kgf, 3),
+            "pgBourdonKgf": round(float(getattr(tel, "pg_bourdon_kgf", tel.boiler_pressure_kgf)), 3),
+            "turretPressureKgf": round(float(getattr(tel, "turret_pressure_kgf", tel.boiler_pressure_kgf)), 3),
             "steamChestKgf": round(tel.steam_chest_kgf, 3),
             "superheatTempC": round(tel.superheat_temp_c, 1),
             "waterLevelPct": round(tel.water_level_pct, 2),
+            "sightGlassLevelPct": round(float(getattr(tel, "sight_glass_level_pct", tel.water_level_pct)), 2),
             "trueWaterLevelPct": round(tel.true_water_level_pct, 2),
             "crownTempC": round(tel.crown_temp_c, 1),
             "crownSubmergedMm": round(tel.crown_submerged_mm, 2),
@@ -93,6 +112,17 @@ def pack_frame_payload(
             "sealHealth": round(tel.seal_health, 4),
             "alcoholMl": round(tel.alcohol_ml, 2),
             "tenderWaterMl": round(tel.tender_water_ml, 2),
+            "tenderWaterTempC": round(tel.tender_water_temp_c, 2),
+            "returnWaterMlS": round(tel.return_water_ml_s, 3),
+            "waterFillMlS": round(float(getattr(tel, "water_fill_ml_s", 0.0)), 3),
+            "tenderDrainMlS": round(float(getattr(tel, "tender_drain_ml_s", 0.0)), 3),
+            "tenderOverflowMlS": round(float(getattr(tel, "tender_overflow_ml_s", 0.0)), 3),
+            "mariotteBubbling": bool(tel.mariotte_bubbling),
+            "mariotteFloodAlarm": bool(tel.mariotte_flood_alarm),
+            "mariotteHeadspaceKpa": round(float(getattr(tel, "mariotte_headspace_kpa", 0.0)), 3),
+            "blowdownGS": round(float(getattr(tel, "blowdown_g_s", 0.0)), 3),
+            "sightPurgeGS": round(float(getattr(tel, "sight_purge_g_s", 0.0)), 3),
+            "whistleSteamGS": round(tel.whistle_steam_g_s, 3),
             "lubricatorOilPct": round(tel.lubricator_oil_pct, 2),
             "cylWallTempC": round(tel.cyl_wall_temp_c, 1),
             "condensateG": round(tel.condensate_g, 3),
@@ -147,7 +177,12 @@ def pack_frame_payload(
             "feedwaterVelMS": float(sp.feedwater_vel_m_s),
             "pumpChamberPKgf": float(sp.pump_chamber_p_kgf),
             "checkBallLiftsMm": sp.check_ball_lifts_mm,
+            "checkBall5LiftsMm": getattr(sp, "check_ball_5_lifts_mm", sp.check_ball_lifts_mm),
             "lubeWaterFrac": float(sp.lube_water_frac),
+            "pino4OpActive": bool(getattr(sp, "pino_4op_active", False)),
+            "tenderBayTempC": float(getattr(sp, "tender_bay_temp_c", 25.0)),
+            "tenderWaveRmsMm": float(getattr(sp, "tender_wave_rms_mm", 0.0)),
+            "tenderWaveB64": b64_wave,
             "midplaneTempB64": b64_slice,
         },
         "copilot": copilot_diag.to_dict() if copilot_diag is not None else None,
@@ -160,8 +195,10 @@ class GPU3DRealtimeBridge:
         self.scene = scene if scene in SCENE_XML_MAP else "roller"
         self.preset = preset
         self.runner = CoSimRunner(SCENE_XML_MAP[self.scene], preset=preset, use_gpu_3d=True)
-        self.af_agent = AutoFiremanAgent()
-        self.auto_fireman = False
+        self.human_agent = HumanEngineerAgent()
+        self.oracle_agent = IdealOracleController()
+        self.ai_mode: str = "off"  # "off" | "human" | "oracle"
+        self.ai_status: str = ""
         self.copilot = AsyncBonsaiCopilot(enabled=enable_copilot)
         self.clients: Set[web.WebSocketResponse] = set()
         self.last_tel: ThermoTelemetry = self.runner.step_once()
@@ -184,6 +221,24 @@ class GPU3DRealtimeBridge:
         self.runner = new_runner
         print(f"[WS-3D] 已热切换物理场景 -> {self.scene} ({xml_path.name})")
 
+    def _set_ai_mode(self, new_mode: str) -> None:
+        if new_mode not in ("off", "human", "oracle"):
+            new_mode = "off"
+        if new_mode == self.ai_mode:
+            return
+        dir_sgn = 1.0 if self.runner.ctrl.reverser >= 0.0 else -1.0
+        self.ai_mode = new_mode
+        if new_mode == "human":
+            self.human_agent.reset(direction=dir_sgn)
+            self.ai_status = self.human_agent.status_summary
+        elif new_mode == "oracle":
+            self.oracle_agent.reset(direction=dir_sgn)
+            self.runner.external_handpump_rad = None
+            self.ai_status = self.oracle_agent.status_summary
+        else:
+            self.runner.external_handpump_rad = None
+            self.ai_status = ""
+
     def handle_message(self, raw: str) -> None:
         try:
             msg = json.loads(raw)
@@ -192,13 +247,12 @@ class GPU3DRealtimeBridge:
         mtype = msg.get("type")
         c = self.runner.ctrl
         if mtype == "ctrl":
-            if "autoFireman" in msg:
-                af_new = bool(msg["autoFireman"])
-                if af_new and not self.auto_fireman:
-                    self.af_agent.reset(direction=1.0 if c.reverser >= 0.0 else -1.0)
-                self.auto_fireman = af_new
+            if "aiMode" in msg:
+                self._set_ai_mode(str(msg["aiMode"]))
+            elif "autoFireman" in msg:
+                self._set_ai_mode("oracle" if bool(msg["autoFireman"]) else "off")
             cd = msg.get("ctrl", {})
-            if not self.auto_fireman:
+            if self.ai_mode == "off":
                 if "fuelValve" in cd:
                     c.fuel_valve = float(cd["fuelValve"])
                 if "burnerLit" in cd:
@@ -215,6 +269,26 @@ class GPU3DRealtimeBridge:
                     c.drain_cock = bool(cd["drainCock"])
                 if "bypassValve" in cd:
                     c.bypass_valve = float(cd["bypassValve"])
+                if "blowdownValve" in cd:
+                    c.blowdown_valve = float(cd["blowdownValve"])
+                if "fireboxDoor" in cd:
+                    c.firebox_door = float(cd["fireboxDoor"])
+                if "fuelCapOpen" in cd:
+                    c.fuel_cap_open = bool(cd["fuelCapOpen"])
+            if "whistleValve" in cd:
+                c.whistle_valve = float(cd["whistleValve"])
+            if "waterLidOpen" in cd:
+                c.water_lid_open = bool(cd["waterLidOpen"])
+            if "waterFillValve" in cd:
+                c.water_fill_valve = float(cd["waterFillValve"])
+            if "tenderDrainOpen" in cd:
+                c.tender_drain_open = bool(cd["tenderDrainOpen"])
+            if "sightDrainValve" in cd:
+                c.sight_drain_valve = bool(cd["sightDrainValve"])
+            if "cabRoofOpen" in cd:
+                c.cab_roof_open = bool(cd["cabRoofOpen"])
+            if "coalCoverOpen" in cd:
+                c.coal_cover_open = bool(cd["coalCoverOpen"])
             if "gradeDeg" in cd:
                 c.grade_deg = float(cd["gradeDeg"])
             if "thermalWarp" in cd:
@@ -222,7 +296,7 @@ class GPU3DRealtimeBridge:
         elif mtype == "action":
             act = msg.get("name")
             if act == "handpump":
-                self.runner.thermo.trigger_hand_pump(int(msg.get("strokes", 5)))
+                self.runner.trigger_hand_pump(int(msg.get("strokes", 5)))
             elif act == "hotPreset":
                 self.runner.apply_hot_preset()
             elif act == "coldReset":
@@ -230,7 +304,8 @@ class GPU3DRealtimeBridge:
                 mujoco.mj_forward(self.runner.model, self.runner.data)
                 self.runner.thermo.reset_cold_prepared()
                 self.runner.ctrl = CabControls()
-                self.auto_fireman = False
+                self._set_ai_mode("off")
+                self.runner._handpump_vis_timer = 0.0
         elif mtype == "scene":
             self.switch_scene(str(msg.get("scene", "roller")))
 
@@ -243,7 +318,12 @@ class GPU3DRealtimeBridge:
         try:
             await ws.send_str(
                 pack_frame_payload(
-                    self.scene, self.runner, self.last_tel, self.auto_fireman, self.copilot.get_latest_diagnosis()
+                    self.scene,
+                    self.runner,
+                    self.last_tel,
+                    self.ai_mode,
+                    self.ai_status,
+                    self.copilot.get_latest_diagnosis(),
                 )
             )
             async for msg in ws:
@@ -313,14 +393,34 @@ class GPU3DRealtimeBridge:
             for _ in range(steps_per_frame):
                 tel = self.runner.step_once()
             self.last_tel = tel
-            if self.auto_fireman:
-                self.af_agent.update(steps_per_frame * dt_mj, tel, self.runner.ctrl)
+            if self.ai_mode == "human":
+                self.human_agent.update(
+                    steps_per_frame * dt_mj, tel, self.runner.ctrl, hand_pump_cb=self.runner.trigger_hand_pump
+                )
+                self.runner.external_handpump_rad = (
+                    self.human_agent.handpump_anim_rad if abs(self.human_agent.handpump_anim_rad) > 1e-4 else None
+                )
+                self.ai_status = self.human_agent.status_summary
+            elif self.ai_mode == "oracle":
+                self.runner.external_handpump_rad = None
+                self.oracle_agent.update(
+                    steps_per_frame * dt_mj, tel, self.runner.ctrl, hand_pump_cb=self.runner.trigger_hand_pump
+                )
+                self.ai_status = self.oracle_agent.status_summary
+            else:
+                self.runner.external_handpump_rad = None
+                self.ai_status = ""
 
             self.copilot.submit_telemetry_nonblocking(
                 asdict(tel), asdict(self.runner.ctrl), self.runner.thermo.spatial.to_dict()
             )
             frame_json = pack_frame_payload(
-                self.scene, self.runner, tel, self.auto_fireman, self.copilot.get_latest_diagnosis()
+                self.scene,
+                self.runner,
+                tel,
+                self.ai_mode,
+                self.ai_status,
+                self.copilot.get_latest_diagnosis(),
             )
             stale: list[web.WebSocketResponse] = []
             for ws in list(self.clients):

@@ -24,6 +24,8 @@ import numpy as np
 from dataclasses import asdict
 from sim.auto_fireman import AutoFiremanAgent
 from sim.bonsai_copilot import AsyncBonsaiCopilot
+from sim.human_engineer_agent import HumanEngineerAgent
+from sim.ideal_oracle_controller import IdealOracleController
 from sim.thermo_1d import AsterD51Thermo1D, CabControls, CylinderCalibration, ThermoTelemetry
 
 # GLFW 按键编码 (已避开 MuJoCo Viewer 内置渲染快捷键)
@@ -37,10 +39,12 @@ KEY_B = ord("B")    # 烟囱外置通風機 ON/OFF
 KEY_L = ord("L")    # 通風弁 +
 KEY_K = ord("K")    # 通風弁 -
 KEY_X = ord("X")    # ドレン弁 开/关
+KEY_W = ord("W")    # 汽笛 (11-3 / 11-8) 吹鸣开关
+KEY_F = ord("F")    # 火室門 (12-2) 开/关
 KEY_COMMA = ord(",")   # バイパス弁 关小 (增加入锅给水量)
 KEY_PERIOD = ord(".")  # バイパス弁 开大 (回流煤水车)
 KEY_Y = ord("Y")    # 手動給水ポンプ 摇动 5 次
-KEY_A = ord("A")    # AI 自動司炉 (Auto-Fireman) ON/OFF
+KEY_A = ord("A")    # AI 運転モード切换 (OFF -> 擬人 Human -> 理想 Oracle)
 KEY_9 = ord("9")    # 切换 1x / 15x 热力烧水加速
 KEY_7 = ord("7")    # 重置为冷炉状态 (試運転 ①)
 KEY_8 = ord("8")    # 一键切换至 3.8 kgf/cm² 热炉待发状态
@@ -126,6 +130,8 @@ def render_dashboard(
     tel: ThermoTelemetry,
     ctrl: CabControls,
     auto_fireman_on: bool = False,
+    ai_mode: str = "off",
+    ai_status: str = "",
     spatial_3d: Optional[Any] = None,
     copilot_diag: Optional[Any] = None,
 ) -> str:
@@ -134,7 +140,12 @@ def render_dashboard(
     burner_tag = "LIT (燃焼中)" if ctrl.burner_lit else "OFF (消火)  "
     fan_tag = "ON " if ctrl.chimney_fan else "OFF"
     drain_tag = "OPEN (排液)" if ctrl.drain_cock else "CLOSED     "
-    af_tag = "ON (AI巡航)" if auto_fireman_on else "OFF        "
+    if ai_mode == "human":
+        af_tag = "HUMAN (擬人)"
+    elif ai_mode == "oracle" or auto_fireman_on:
+        af_tag = "ORACLE(理想)"
+    else:
+        af_tag = "MANUAL(手動)"
     rev_mode = "NEUTRAL (N)" if abs(ctrl.reverser) < 0.05 else (
         f"FWD +{ctrl.reverser*100:3.0f}%" if ctrl.reverser > 0 else f"REV {ctrl.reverser*100:4.0f}%"
     )
@@ -148,13 +159,15 @@ def render_dashboard(
         "\033[H\033[J" + "=" * 78,
         f"  ASTER D51 LIVE STEAM COSIM [{eng_tag}] | t={tel.sim_time:6.1f}s ({ctrl.thermal_warp:.0f}x)",
         "=" * 78,
-        f"  圧力計 (PG-ø20) : {bar_gauge(tel.boiler_pressure_kgf, 0, 5.0)} {tel.boiler_pressure_kgf:4.2f} / 5.00 kgf/cm² [SV: {sv_tag}]",
+        f"  圧力計 (PG-ø20) : {bar_gauge(tel.boiler_pressure_kgf, 0, 5.0)} {tel.boiler_pressure_kgf:4.2f} / 5.00 kgf/cm² [SV: {sv_tag}] (沸騰:{tel.boiling_progress_pct:4.0f}%)",
         f"  水面計 (11-7)   : {bar_gauge(tel.water_level_pct, 0, 100)} {tel.water_level_pct:4.1f} %  (実水位:{tel.true_water_level_pct:4.1f}% | 頂板水深:{tel.crown_submerged_mm:+5.1f}mm)",
         f"  蒸気室 / 銅火室 : {tel.steam_chest_kgf:4.2f} kgf/cm²  |  T_boil: {tel.boiler_temp_c:5.1f}°C  |  T_crown: {tel.crown_temp_c:5.1f}°C  |  T_sh: {tel.superheat_temp_c:5.1f}°C (x={tel.steam_dryness_dome:.2f}->{tel.steam_dryness_chest:.2f})",
-        f"  燃料アルコール  : {tel.alcohol_ml:5.1f} / 130 ml |  炭水車水槽: {tel.tender_water_ml:5.1f} ml | 油:{tel.lubricator_oil_pct:4.1f}% | シール:{tel.seal_health*100:3.0f}%",
+        f"  燃料アルコール  : {tel.alcohol_ml:5.1f} / 130 ml |  炭水車水槽: {tel.tender_water_ml:5.1f}/340 ml ({tel.tender_water_temp_c:4.1f}°C, 戻水:{tel.return_water_ml_s:4.2f}ml/s) | シール:{tel.seal_health*100:3.0f}%",
         f"  シリンダ・煙室  : 壁温 {tel.cyl_wall_temp_c:5.1f}°C | 凝結水 {tel.condensate_g:4.2f}g | 煙室負圧 {tel.smokebox_vacuum_pa:4.0f}Pa | F_L={tel.force_L:+5.1f}N F_R={tel.force_R:+5.1f}N",
         f"  走行・給水収支  : 動輪 {tel.wheel_rpm:+6.1f} RPM ({tel.scale_speed_kmh:5.1f} km/h) | 蒸発 {tel.steam_gen_g_s:4.2f} g/s | 給水 {tel.feedwater_g_s:4.2f} g/s",
     ]
+    if ai_status:
+        lines.append(f"  [AI 運転状態]   : {ai_status}")
     if spatial_3d is not None:
         lines.append(
             f"  3D 流体場プローブ: 空燃比 φ={spatial_3d.air_fuel_phi:4.2f} (火炎傾角 {spatial_3d.flame_tilt_deg:4.1f}°) | "
@@ -231,8 +244,92 @@ class CoSimRunner:
         self.is_roller_mode = self.model.jnt_type[0] != mujoco.mjtJoint.mjJNT_FREE
         self._prev_fwd_vel = 0.0
 
+        # P3: 缓存驾驶室与煤水车全部 15 个独立可动操纵件/仪表关节地址
+        self._vis_joints: dict[str, tuple[int, int]] = {}
+        for jname in (
+            "j_cab_regulator",
+            "j_cab_blower",
+            "j_cab_whistle",
+            "j_cab_sight_drain",
+            "j_cab_pg_needle",
+            "j_cab_blowdown",
+            "j_cab_fire_door",
+            "j_cab_bypass",
+            "j_cab_roof_hatch",
+            "j_tender_handpump",
+            "j_tender_drain_plug",
+            "j_tender_coal_cover",
+            "j_tender_water_lid",
+            "j_tender_fuel_valve",
+            "j_tender_fuel_cap",
+        ):
+            jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+            if jid >= 0:
+                self._vis_joints[jname] = (int(self.model.jnt_qposadr[jid]), int(self.model.jnt_dofadr[jid]))
+        jid_hpr = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_hp_ram")
+        self.qpos_hp_ram = int(self.model.jnt_qposadr[jid_hpr]) if jid_hpr >= 0 else -1
+        self.qvel_hp_ram = int(self.model.jnt_dofadr[jid_hpr]) if jid_hpr >= 0 else -1
+        self._last_v_hand_ram = 0.0
+        self._handpump_vis_timer = 0.0
+        self._handpump_vis_phase = 0.0
+        self.external_handpump_rad: Optional[float] = None
+
         if preset == "hot":
             self.apply_hot_preset()
+        mujoco.mj_forward(self.model, self.data)
+
+    def trigger_hand_pump(self, strokes: int = 5) -> None:
+        self.thermo.trigger_hand_pump(strokes=strokes)
+        self._handpump_vis_timer = max(self._handpump_vis_timer, min(4.0, 0.50 * max(1, strokes)))
+
+    def _sync_cab_tender_visual_joints(self, dt: float, tel: ThermoTelemetry) -> None:
+        if not self._vis_joints:
+            return
+        if self.external_handpump_rad is not None:
+            hp_tgt = float(self.external_handpump_rad)
+        elif self._handpump_vis_timer > 0.0:
+            self._handpump_vis_timer = max(0.0, self._handpump_vis_timer - dt)
+            self._handpump_vis_phase += dt * 2.0 * math.pi * 2.0
+            hp_tgt = 0.42 * math.sin(self._handpump_vis_phase)
+        else:
+            self._handpump_vis_phase = 0.0
+            hp_tgt = 0.0
+
+        pg_val = float(getattr(tel, "pg_bourdon_kgf", tel.boiler_pressure_kgf))
+        p_norm = max(0.0, min(1.05, pg_val / 6.0))
+        targets = {
+            "j_cab_regulator": 1.18 * self.ctrl.regulator,
+            "j_cab_blower": 3.14 * self.ctrl.blower_valve,
+            "j_cab_whistle": -0.38 * self.ctrl.whistle_valve,
+            "j_cab_sight_drain": 0.0015 if bool(getattr(self.ctrl, "sight_drain_valve", False)) else 0.0,
+            "j_cab_pg_needle": -2.10 + p_norm * 4.20,
+            "j_cab_blowdown": 3.14 * float(getattr(self.ctrl, "blowdown_valve", 0.0)),
+            "j_cab_fire_door": -1.65 * self.ctrl.firebox_door,
+            "j_cab_bypass": -1.35 * self.ctrl.bypass_valve,
+            "j_cab_roof_hatch": 2.10 if bool(getattr(self.ctrl, "cab_roof_open", False)) else 0.0,
+            "j_tender_handpump": hp_tgt,
+            "j_tender_drain_plug": 0.0085 if bool(getattr(self.ctrl, "tender_drain_open", False)) else 0.0,
+            "j_tender_coal_cover": 1.65 if bool(getattr(self.ctrl, "coal_cover_open", False)) else 0.0,
+            "j_tender_water_lid": 1.45 if self.ctrl.water_lid_open else 0.0,
+            "j_tender_fuel_valve": 1.50 * self.ctrl.fuel_valve,
+            "j_tender_fuel_cap": 0.0045 if self.ctrl.fuel_cap_open else 0.0,
+        }
+        alpha = min(1.0, dt * 24.0)
+        for jname, tgt in targets.items():
+            addrs = self._vis_joints.get(jname)
+            if addrs is not None:
+                qadr, dadr = addrs
+                curr = float(self.data.qpos[qadr])
+                nxt = curr + alpha * (tgt - curr)
+                dq_dt = (nxt - curr) / max(1e-6, dt)
+                self.data.qpos[qadr] = nxt
+                self.data.qvel[dadr] = dq_dt if jname == "j_tender_handpump" else 0.0
+                if jname == "j_tender_handpump":
+                    self._last_v_hand_ram = 0.017 * dq_dt
+                    if self.qpos_hp_ram >= 0:
+                        self.data.qpos[self.qpos_hp_ram] = 0.017 * nxt
+                    if self.qvel_hp_ram >= 0:
+                        self.data.qvel[self.qvel_hp_ram] = self._last_v_hand_ram
 
     def apply_hot_preset(self) -> None:
         self.thermo.reset_hot_ready()
@@ -277,6 +374,7 @@ class CoSimRunner:
             v_vR=v_vR,
             pitch_rad=pitch_rad,
             accel_x=accel_x,
+            v_hand_ram=self._last_v_hand_ram,
         )
         if self.use_gpu_3d:
             step_kwargs["q_ram"] = float(self.data.qpos[self.qpos_pump])
@@ -291,12 +389,13 @@ class CoSimRunner:
         self.data.qfrc_applied[self.qvel_valR] = tel.valve_friction_R
         self.data.qfrc_applied[self.qvel_pump] = F_pump
         if self.qvel_drain >= 0:
-            self.data.qfrc_applied[self.qvel_drain] = 0.0085 if self.ctrl.drain_cock else 0.0
+            self.data.qfrc_applied[self.qvel_drain] = 0.022 if self.ctrl.drain_cock else 0.0
         if self.is_roller_mode:
             self.data.qfrc_applied[self.qvel_w3] = -0.0022 * omega_3 - 0.00012 * omega_3 * abs(omega_3)
         else:
             self.data.qfrc_applied[self.qvel_w3] = -0.0055 * omega_3 - 0.00048 * omega_3 * abs(omega_3)
 
+        self._sync_cab_tender_visual_joints(dt, tel)
         mujoco.mj_step(self.model, self.data)
         return tel
 
@@ -305,18 +404,20 @@ def run_interactive(
     xml_path: Path,
     preset: str,
     auto_fireman: bool = False,
+    ai_mode_init: str = "off",
     use_gpu_3d: bool = False,
     enable_copilot: bool = False,
 ) -> None:
     import mujoco.viewer
 
     runner = CoSimRunner(xml_path, preset=preset, use_gpu_3d=use_gpu_3d)
-    af_agent = AutoFiremanAgent()
-    af_enabled = auto_fireman
+    human_agent = HumanEngineerAgent()
+    oracle_agent = IdealOracleController()
+    ai_mode = ai_mode_init if ai_mode_init in ("off", "human", "oracle") else ("oracle" if auto_fireman else "off")
     copilot = AsyncBonsaiCopilot(enabled=enable_copilot) if enable_copilot else None
 
     def on_key(keycode: int) -> None:
-        nonlocal af_enabled
+        nonlocal ai_mode
         ctrl = runner.ctrl
         if keycode == KEY_UP:
             ctrl.regulator = min(1.0, ctrl.regulator + 0.05)
@@ -343,22 +444,35 @@ def run_interactive(
             ctrl.blower_valve = max(0.0, ctrl.blower_valve - 0.10)
         elif keycode == KEY_X:
             ctrl.drain_cock = not ctrl.drain_cock
+        elif keycode == KEY_W:
+            ctrl.whistle_valve = 0.0 if ctrl.whistle_valve > 0.1 else 1.0
+        elif keycode == KEY_F:
+            ctrl.firebox_door = 0.0 if ctrl.firebox_door > 0.1 else 1.0
         elif keycode == KEY_COMMA:
             ctrl.bypass_valve = max(0.0, ctrl.bypass_valve - 0.05)
         elif keycode == KEY_PERIOD:
             ctrl.bypass_valve = min(1.0, ctrl.bypass_valve + 0.05)
         elif keycode == KEY_Y:
-            runner.thermo.trigger_hand_pump(strokes=5)
+            runner.trigger_hand_pump(strokes=5)
         elif keycode == KEY_A:
-            af_enabled = not af_enabled
-            if af_enabled:
-                af_agent.reset(direction=1.0 if ctrl.reverser >= 0.0 else -1.0)
+            cycle = {"off": "human", "human": "oracle", "oracle": "off"}
+            ai_mode = cycle.get(ai_mode, "off")
+            dir_sgn = 1.0 if ctrl.reverser >= 0.0 else -1.0
+            if ai_mode == "human":
+                human_agent.reset(direction=dir_sgn)
+            elif ai_mode == "oracle":
+                oracle_agent.reset(direction=dir_sgn)
+                runner.external_handpump_rad = None
+            else:
+                runner.external_handpump_rad = None
         elif keycode == KEY_9:
             ctrl.thermal_warp = 15.0 if ctrl.thermal_warp < 2.0 else 1.0
         elif keycode == KEY_7:
             mujoco.mj_resetData(runner.model, runner.data)
             runner.thermo.reset_cold_prepared()
             runner.ctrl = CabControls()
+            ai_mode = "off"
+            runner.external_handpump_rad = None
         elif keycode == KEY_8:
             runner.apply_hot_preset()
 
@@ -377,8 +491,20 @@ def run_interactive(
             tel = None
             for _ in range(steps_per_frame):
                 tel = runner.step_once()
-            if af_enabled and tel is not None:
-                af_agent.update(steps_per_frame * dt, tel, runner.ctrl)
+            ai_status = ""
+            if tel is not None:
+                if ai_mode == "human":
+                    human_agent.update(steps_per_frame * dt, tel, runner.ctrl, hand_pump_cb=runner.trigger_hand_pump)
+                    runner.external_handpump_rad = (
+                        human_agent.handpump_anim_rad if abs(human_agent.handpump_anim_rad) > 1e-4 else None
+                    )
+                    ai_status = human_agent.status_summary
+                elif ai_mode == "oracle":
+                    runner.external_handpump_rad = None
+                    oracle_agent.update(steps_per_frame * dt, tel, runner.ctrl, hand_pump_cb=runner.trigger_hand_pump)
+                    ai_status = oracle_agent.status_summary
+                else:
+                    runner.external_handpump_rad = None
             viewer.sync()
 
             now = time.perf_counter()
@@ -392,7 +518,13 @@ def run_interactive(
                     diag = copilot.get_latest_diagnosis()
                 sys.stdout.write(
                     render_dashboard(
-                        tel, runner.ctrl, auto_fireman_on=af_enabled, spatial_3d=sp, copilot_diag=diag
+                        tel,
+                        runner.ctrl,
+                        auto_fireman_on=(ai_mode != "off"),
+                        ai_mode=ai_mode,
+                        ai_status=ai_status,
+                        spatial_3d=sp,
+                        copilot_diag=diag,
                     )
                     + "\n"
                 )
@@ -508,7 +640,13 @@ def main() -> None:
     parser.add_argument("--preset", choices=["cold", "hot"], default="cold")
     parser.add_argument("--gpu-3d", action="store_true", help="启用本地 RTX 5080 571万体素五大零件域真 3D 多相热流 + PINO 求解器")
     parser.add_argument("--copilot", action="store_true", help="启用异步本地 Ollama bonsai-2:27b L3 机务诊断副驾")
-    parser.add_argument("--auto-fireman", action="store_true", help="启动时默认开启 RTX 5080 标定 AI 自动司炉巡航")
+    parser.add_argument("--auto-fireman", action="store_true", help="启动时默认开启理想最优自动司炉巡航")
+    parser.add_argument(
+        "--ai-mode",
+        choices=["off", "human", "oracle"],
+        default=None,
+        help="选择 AI 驾驶模式: off(手动) | human(拟人实操司机) | oracle(理想全知极限控制)",
+    )
     parser.add_argument("--headless-demo", action="store_true", help="无 GUI 自动运行标准试车流程并输出曲线图")
     parser.add_argument("--out-plot", type=Path, default=Path("logs/d51_telemetry.png"))
     args = parser.parse_args()
@@ -519,10 +657,12 @@ def main() -> None:
     if args.headless_demo:
         run_headless_demo(args.xml, args.out_plot, use_gpu_3d=args.gpu_3d)
     else:
+        init_mode = args.ai_mode if args.ai_mode is not None else ("oracle" if args.auto_fireman else "off")
         run_interactive(
             args.xml,
             args.preset,
             auto_fireman=args.auto_fireman,
+            ai_mode_init=init_mode,
             use_gpu_3d=args.gpu_3d,
             enable_copilot=args.copilot,
         )

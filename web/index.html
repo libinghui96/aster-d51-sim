@@ -16,43 +16,59 @@
     }
     .hud-panel {
       position: fixed; background: rgba(18, 22, 28, 0.86); backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 13px 15px;
+      border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 12px 14px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.45);
     }
-    #top-gauges { top: 16px; left: 16px; width: 372px; display: flex; flex-direction: column; gap: 8px; }
-    #cab-controls { bottom: 16px; right: 16px; width: 382px; display: flex; flex-direction: column; gap: 8px; }
-    #scene-toolbar { top: 16px; right: 16px; display: flex; gap: 8px; flex-wrap: wrap; max-width: calc(100vw - 420px); }
+    #top-gauges { top: 14px; left: 14px; width: 386px; display: flex; flex-direction: column; gap: 6px; }
+    #cab-controls { bottom: 14px; right: 14px; width: 422px; display: flex; flex-direction: column; gap: 5.5px; }
+    #scene-toolbar { top: 14px; right: 14px; display: flex; gap: 7px; flex-wrap: wrap; max-width: calc(100vw - 420px); }
 
-    h2 { font-size: 12px; letter-spacing: 0.6px; color: #9da7b3; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+    h2 { font-size: 11.5px; letter-spacing: 0.6px; color: #9da7b3; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
     .lut-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: rgba(46, 160, 67, 0.22); color: #56d364; border: 1px solid rgba(86, 211, 100, 0.35); }
     .lut-badge.live-3d { background: rgba(31, 182, 255, 0.22); color: #58e6ff; border-color: rgba(88, 230, 255, 0.55); box-shadow: 0 0 10px rgba(56, 200, 255, 0.35); }
-    .gauge-row { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; }
+    .gauge-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
     .val-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; color: #58a6ff; }
     .val-hot { color: #ff6b61 !important; text-shadow: 0 0 8px rgba(255, 80, 60, 0.55); }
-    .bar-bg { width: 100%; height: 8px; background: #21262d; border-radius: 4px; overflow: hidden; position: relative; }
+    .bar-bg { width: 100%; height: 7px; background: #21262d; border-radius: 4px; overflow: hidden; position: relative; }
     .bar-fill { height: 100%; transition: width 0.08s linear; background: linear-gradient(90deg, #2ea043, #d29922, #f85149); }
+    .boil-fill { height: 100%; transition: width 0.08s linear; background: linear-gradient(90deg, #1f6feb, #3fb950, #f0883e); }
     .water-fill { height: 100%; transition: width 0.08s linear; background: #388bfd; }
     .mid-mark { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #fff; opacity: 0.85; }
 
-    .ctrl-row { display: grid; grid-template-columns: 122px 1fr 52px; align-items: center; gap: 8px; font-size: 12.5px; }
+    .ctrl-row { display: grid; grid-template-columns: 128px 1fr 50px; align-items: center; gap: 7px; font-size: 12px; }
+    .ai-row { display: grid; grid-template-columns: 108px 1fr; align-items: center; gap: 7px; font-size: 12px; }
     input[type="range"] { width: 100%; accent-color: #d29922; cursor: pointer; }
-    .btn-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
     button, select {
       background: #21262d; color: #e6edf3; border: 1px solid rgba(255,255,255,0.16);
-      padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; transition: 0.15s;
+      padding: 5px 8.5px; border-radius: 6px; font-size: 11.5px; cursor: pointer; transition: 0.15s;
     }
     button:hover, select:hover { background: #30363d; }
     button.active { background: #b85c00; border-color: #ffa657; color: #fff; }
-    button.ai-active { background: #1f6feb; border-color: #79c0ff; color: #fff; box-shadow: 0 0 10px rgba(56, 139, 253, 0.45); }
-    .badge-warn { color: #ff7b72; font-weight: 700; font-size: 12px; min-height: 17px; line-height: 1.35; }
+    button.danger-active { background: #b62324; border-color: #ff7b72; color: #fff; }
+    select.ai-select-active { background: #1f6feb; border-color: #79c0ff; color: #fff; }
+    .ai-status-banner {
+      display: none; font-size: 11px; color: #79c0ff; background: rgba(31, 111, 235, 0.14);
+      border: 1px solid rgba(121, 192, 255, 0.28); border-radius: 5px; padding: 4px 7px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .hint-3d { font-size: 10.5px; color: #8b949e; }
+    .badge-warn { color: #ff7b72; font-weight: 700; font-size: 11.5px; min-height: 16px; line-height: 1.35; }
     .copilot-box {
-      display: none; margin-top: 2px; padding: 7px 9px; border-radius: 6px;
+      display: none; margin-top: 2px; padding: 6px 8px; border-radius: 6px;
       background: rgba(31, 111, 235, 0.14); border: 1px solid rgba(121, 192, 255, 0.30);
-      font-size: 11.5px; line-height: 1.4; color: #c9d1d9;
+      font-size: 11px; line-height: 1.38; color: #c9d1d9;
     }
     .copilot-box.caution { background: rgba(210, 153, 34, 0.16); border-color: rgba(227, 179, 65, 0.42); }
     .copilot-box.critical { background: rgba(248, 81, 73, 0.18); border-color: rgba(255, 123, 114, 0.55); }
     .copilot-head { display: flex; justify-content: space-between; font-weight: 700; color: #79c0ff; margin-bottom: 2px; }
+
+    #part-tooltip {
+      position: fixed; pointer-events: none; display: none; z-index: 90;
+      background: rgba(13, 17, 23, 0.94); border: 1px solid rgba(255, 184, 108, 0.65);
+      border-radius: 6px; padding: 5px 9px; font-size: 11.5px; color: #f0f6fc;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55); white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -61,6 +77,7 @@
   </div>
 
   <div id="canvas-container"></div>
+  <div id="part-tooltip"></div>
 
   <div id="scene-toolbar" class="hud-panel">
     <select id="select-scene">
@@ -69,7 +86,8 @@
     </select>
     <select id="select-cam">
       <option value="normal">标准金属外观</option>
-      <option value="xray">锅炉内胆与气缸全透视内窥 (X-Ray)</option>
+      <option value="xray">锅炉/气缸/炭水車 透视内窥 (X-Ray)</option>
+      <option value="cab">運転室・炭水車 3D直感操作視点</option>
       <option value="chase">R2m 整列侧前动态追车视角</option>
     </select>
     <button id="btn-hot-preset" class="active">3.8kg/cm² 热炉即发</button>
@@ -88,7 +106,13 @@
     <div class="bar-bg"><div id="bar-pressure" class="bar-fill" style="width: 0%"></div></div>
 
     <div class="gauge-row">
-      <span>水面計水位 (適正 50%)</span>
+      <span>ボイラ水温 / 沸騰進捗</span>
+      <span id="txt-boil-prog" class="val-mono">25.0°C | 沸騰 0%</span>
+    </div>
+    <div class="bar-bg"><div id="bar-boil-prog" class="boil-fill" style="width: 0%"></div></div>
+
+    <div class="gauge-row">
+      <span>水面計水位 (11-7 適正 50%)</span>
       <span id="txt-water" class="val-mono">50.0 %</span>
     </div>
     <div class="bar-bg">
@@ -98,9 +122,9 @@
 
     <div class="gauge-row"><span>蒸気室 / 過熱蒸気温度</span><span id="txt-steam" class="val-mono">0.00 kgf | 165°C</span></div>
     <div class="gauge-row"><span>銅火室頂板 / シール健全度</span><span id="txt-crown" class="val-mono">156°C | 100%</span></div>
-    <div class="gauge-row"><span>煙室負圧 / シリンダ壁温</span><span id="txt-smokebox" class="val-mono">-7 Pa | 132°C</span></div>
+    <div class="gauge-row"><span>煙室負圧 / シリンダ壁温</span><span id="txt-smokebox" class="val-mono">-78 Pa | 132°C</span></div>
     <div class="gauge-row"><span>動輪回転 / 1:32 換算車速</span><span id="txt-speed" class="val-mono">0 RPM | 0.0 km/h</span></div>
-    <div class="gauge-row"><span>燃料アルコール / 炭水車水</span><span id="txt-tanks" class="val-mono">130 ml | 320 ml</span></div>
+    <div class="gauge-row"><span>燃料 / 炭水車水 (戻水・水温)</span><span id="txt-tanks" class="val-mono">130ml | 272ml (25°C)</span></div>
     <div class="gauge-row"><span>左右ピストン有効推力</span><span id="txt-forces" class="val-mono">L: 0.0N | R: 0.0N</span></div>
     <div class="gauge-row"><span>乾き度 x / 当量比 φ / 油膜</span><span id="txt-fluid3d" class="val-mono">x=0.95 | φ=1.00 | 3.8μm</span></div>
     <div id="copilot-box" class="copilot-box">
@@ -111,26 +135,49 @@
   </div>
 
   <div id="cab-controls" class="hud-panel">
-    <h2>Cab Controls (運転室操作盤)</h2>
+    <h2>
+      <span>Cab &amp; Tender Controls (運転室・炭水車)</span>
+      <span class="hint-3d">3D 弁・ハンドル直接ドラッグ可</span>
+    </h2>
+    <div class="ai-row">
+      <label>AI 運転モード</label>
+      <select id="sel-ai-mode">
+        <option value="off">手動運転 (Manual)</option>
+        <option value="human">モード1: 擬人実操機関士 (0.4s遅延・視認)</option>
+        <option value="oracle">モード2: 理想全知最適制御 (Oracle 200Hz)</option>
+      </select>
+    </div>
+    <div id="txt-ai-status" class="ai-status-banner"></div>
+
     <div class="ctrl-row">
-      <label>加減弁 (Regulator)</label>
+      <label>加減弁 (11-11 Reg)</label>
       <input id="rng-regulator" type="range" min="0" max="1" step="0.02" value="0" />
       <span id="val-regulator" class="val-mono">0%</span>
     </div>
     <div class="ctrl-row">
-      <label>逆転機 (Reverser)</label>
+      <label>逆転機 (8-16 左運転)</label>
       <input id="rng-reverser" type="range" min="-1" max="1" step="0.02" value="0.78" />
       <span id="val-reverser" class="val-mono">+78%</span>
     </div>
     <div class="ctrl-row">
-      <label>通風弁 (Blower)</label>
+      <label>通風弁 (11-13 Blw)</label>
       <input id="rng-blower" type="range" min="0" max="1" step="0.05" value="0.25" />
       <span id="val-blower" class="val-mono">25%</span>
     </div>
     <div class="ctrl-row">
-      <label>バイパス弁 (給水)</label>
+      <label>バイパス弁 (4-17 Byp)</label>
       <input id="rng-bypass" type="range" min="0" max="1" step="0.05" value="0.40" />
       <span id="val-bypass" class="val-mono">40%</span>
+    </div>
+    <div class="ctrl-row">
+      <label>燃料針弁 (36-6 Fuel)</label>
+      <input id="rng-fuel" type="range" min="0" max="1" step="0.05" value="1.00" />
+      <span id="val-fuel" class="val-mono">100%</span>
+    </div>
+    <div class="ctrl-row">
+      <label>注水栓 (35-1 加水)</label>
+      <input id="rng-waterfill" type="range" min="0" max="1" step="0.05" value="0.00" />
+      <span id="val-waterfill" class="val-mono">0%</span>
     </div>
     <div class="ctrl-row">
       <label>勾配模擬 (Grade)</label>
@@ -138,11 +185,19 @@
       <span id="val-grade" class="val-mono">0.0°</span>
     </div>
     <div class="btn-row">
-      <button id="btn-autofireman">AI 自動司炉</button>
-      <button id="btn-burner" class="active">バーナー点火</button>
+      <button id="btn-burner" class="active">23-1 点火</button>
       <button id="btn-fan">煙突通風機</button>
-      <button id="btn-drain" class="active">ドレン弁 (排液)</button>
-      <button id="btn-handpump">手動給水 (+5回)</button>
+      <button id="btn-drain" class="active">8-6 ドレン弁</button>
+      <button id="btn-whistle" title="押している間 11-2→13-3→11-8 車底真鍮汽笛吹鳴">11-2 汽笛</button>
+      <button id="btn-sightdrain" title="11-7 左側パイレックス水面計の下部 1-2 吹抜コック洗浄">1-2 水面計吹抜</button>
+      <button id="btn-firedoor">12-1 火室扉</button>
+      <button id="btn-blowdown">11-16 ブロー弁</button>
+      <button id="btn-roofhatch">21-28 天窓</button>
+      <button id="btn-handpump">31-5 手動給水(+5)</button>
+      <button id="btn-tenderdrain" title="31-11 上引き排水スタンドパイプを開いて炭水車底 31-9 から放水">31-11 排水栓(放水)</button>
+      <button id="btn-coalcover">36-1 炭庫蓋</button>
+      <button id="btn-waterlid">35-6 水槽蓋</button>
+      <button id="btn-fuelcap" title="開弁中に開けるとマリオット負圧喪失・燃料溢流">36-5 気密蓋</button>
       <button id="btn-warp">15x 沸騰加速</button>
     </div>
   </div>

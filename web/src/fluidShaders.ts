@@ -24,6 +24,7 @@ export interface CadShaderUniforms {
 
 export class FluidPartVisualizer {
   readonly root = new THREE.Group();
+  readonly tenderRoot = new THREE.Group();
   readonly uniforms: CadShaderUniforms;
 
   private wickFlames: THREE.Mesh[] = [];
@@ -56,11 +57,24 @@ export class FluidPartVisualizer {
   private lubeCoreMat: THREE.ShaderMaterial;
   private lubeCoreMesh: THREE.Mesh;
 
+  private tenderWaterMesh: THREE.Mesh;
+  private tenderOpenBayWaterMesh: THREE.Mesh;
+  private tenderOpenBayMat: THREE.ShaderMaterial;
+  private tenderWaveTexData: Uint8Array<ArrayBuffer>;
+  private tenderWaveTex: THREE.DataTexture;
+  private tenderAlcoholMesh: THREE.Mesh;
+  private returnStreamMesh: THREE.Mesh;
+  private waterFillStreamMesh: THREE.Mesh;
+  private tenderDrainStreamMesh: THREE.Mesh;
+  private mariotteBubblePoints: THREE.Points;
+  private mariotteBubblePos: Float32Array;
+
   private elapsed = 0.0;
   private feedPhase = 0.0;
 
   constructor() {
     this.root.matrixAutoUpdate = false;
+    this.tenderRoot.matrixAutoUpdate = false;
 
     this.uniforms = {
       uTime: { value: 0.0 },
@@ -165,11 +179,11 @@ export class FluidPartVisualizer {
       `,
     });
 
+    // 23-1 纵向单列 1×3 三头立式 ø10mm 燃烧器火焰 (X = [-93, -77, -61] mm, Y = 0)
     const wickCoords: [number, number, number][] = [
-      [-0.089, -0.0058, 0.0185],
-      [-0.089, +0.0058, 0.0185],
-      [-0.065, -0.0058, 0.0185],
-      [-0.065, +0.0058, 0.0185],
+      [-0.093, 0.0, 0.0185],
+      [-0.077, 0.0, 0.0185],
+      [-0.061, 0.0, 0.0185],
     ];
     wickCoords.forEach(([wx, wy, wz], idx) => {
       for (const ang of [0.0, Math.PI * 0.5]) {
@@ -351,28 +365,28 @@ export class FluidPartVisualizer {
     this.bubblePoints.visible = false;
     this.root.add(this.bubblePoints);
 
-    // 11-7 驾驶室玻璃管水面计实况液柱 (X=-0.1155, Y=-0.0095, Z=0.0392..0.0568)
-    const sgGeom = new THREE.CylinderGeometry(0.00122, 0.00122, 1.0, 14);
+    // 11-7 驾驶室左侧 (+Y) パイレックス玻璃管水面计实况液柱 (X=-0.1162, Y=+0.0105, Z=0.0386..0.0564)
+    const sgGeom = new THREE.CylinderGeometry(0.00118, 0.00118, 1.0, 14);
     sgGeom.rotateX(Math.PI * 0.5);
     sgGeom.translate(0, 0, 0.5);
     const sgMat = new THREE.MeshBasicMaterial({
       color: 0x2ee6ff,
       transparent: true,
-      opacity: 0.86,
+      opacity: 0.88,
     });
     this.sightGlassWaterMesh = new THREE.Mesh(sgGeom, sgMat);
-    this.sightGlassWaterMesh.position.set(-0.1155, -0.0095, 0.0392);
-    this.sightGlassWaterMesh.scale.set(1, 1, 0.0088);
+    this.sightGlassWaterMesh.position.set(-0.1162, 0.0105, 0.0386);
+    this.sightGlassWaterMesh.scale.set(1, 1, 0.0089);
     this.sightGlassWaterMesh.renderOrder = 5;
     this.root.add(this.sightGlassWaterMesh);
 
-    const menGeom = new THREE.CylinderGeometry(0.00142, 0.00142, 0.0007, 14);
+    const menGeom = new THREE.CylinderGeometry(0.00136, 0.00136, 0.0007, 14);
     menGeom.rotateX(Math.PI * 0.5);
     this.sightGlassMeniscusMesh = new THREE.Mesh(
       menGeom,
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 })
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.96 })
     );
-    this.sightGlassMeniscusMesh.position.set(-0.1155, -0.0095, 0.0480);
+    this.sightGlassMeniscusMesh.position.set(-0.1162, 0.0105, 0.0475);
     this.sightGlassMeniscusMesh.renderOrder = 6;
     this.root.add(this.sightGlassMeniscusMesh);
 
@@ -537,6 +551,169 @@ export class FluidPartVisualizer {
     this.lubeCoreMesh.renderOrder = 3;
     this.lubeCoreMesh.visible = false;
     this.root.add(this.lubeCoreMesh);
+
+    // -----------------------------------------------------------------------
+    // 5. P3 煤水车 (Tender) 35-1 常开敞口注水槽 Domain 6 守恒浅水波纹面 + 加水/31-14回水/31-11放水 + X-Ray 内液位
+    // -----------------------------------------------------------------------
+    const twGeom = new THREE.BoxGeometry(0.116, 0.070, 1.0);
+    twGeom.translate(-0.036, 0.0, 0.5);
+    this.tenderWaterMesh = new THREE.Mesh(
+      twGeom,
+      new THREE.MeshBasicMaterial({ color: 0x1e88e5, transparent: true, opacity: 0.34, depthWrite: false })
+    );
+    this.tenderWaterMesh.position.set(0.0, 0.0, 0.004);
+    this.tenderWaterMesh.scale.set(1.0, 1.0, 0.036);
+    this.tenderWaterMesh.renderOrder = 3;
+    this.tenderWaterMesh.visible = false;
+    this.tenderRoot.add(this.tenderWaterMesh);
+
+    // 35-1 常驻可见敞口注水槽自由液面 (X∈[-0.058, -0.010], Y∈[-0.0175, +0.0175], Domain 6 24×10 GPU 浅水波高纹理)
+    this.tenderWaveTexData = new Uint8Array(new ArrayBuffer(24 * 10 * 4));
+    for (let i = 0; i < 24 * 10; i++) {
+      this.tenderWaveTexData[4 * i] = 128;
+      this.tenderWaveTexData[4 * i + 1] = 128;
+      this.tenderWaveTexData[4 * i + 2] = 128;
+      this.tenderWaveTexData[4 * i + 3] = 255;
+    }
+    this.tenderWaveTex = new THREE.DataTexture(this.tenderWaveTexData, 24, 10, THREE.RGBAFormat);
+    this.tenderWaveTex.magFilter = THREE.LinearFilter;
+    this.tenderWaveTex.minFilter = THREE.LinearFilter;
+    this.tenderWaveTex.needsUpdate = true;
+
+    this.tenderOpenBayMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      uniforms: {
+        uWaveTex: { value: this.tenderWaveTex },
+        uTime: { value: 0.0 },
+        uWaterZ: { value: 0.032 },
+        uTempC: { value: 25.0 },
+        uJetAmp: { value: 0.0 },
+      },
+      vertexShader: /* glsl */ `
+        uniform sampler2D uWaveTex;
+        uniform float uTime;
+        uniform float uWaterZ;
+        uniform float uJetAmp;
+        varying vec2 vUv;
+        varying float vEtaMm;
+        void main() {
+          vUv = uv;
+          vec3 p = position;
+          float texEta = (texture2D(uWaveTex, uv).r - 0.50196) * 5.0; // ±2.5 mm
+          float micro = uJetAmp * 0.35 * sin(uv.x * 28.0 - uTime * 15.0) * cos(uv.y * 22.0 + uTime * 11.0);
+          vEtaMm = texEta + micro;
+          p.z = uWaterZ + vEtaMm * 0.001;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTempC;
+        varying vec2 vUv;
+        varying float vEtaMm;
+        void main() {
+          float warm = clamp((uTempC - 24.0) / 36.0, 0.0, 1.0);
+          vec3 coldCol = vec3(0.08, 0.52, 0.90);
+          vec3 warmCol = vec3(0.16, 0.82, 0.94);
+          vec3 crest   = vec3(0.86, 0.98, 1.00);
+          float ripple = clamp(abs(vEtaMm) * 0.75, 0.0, 1.0);
+          float men = 1.0 - smoothstep(0.0, 0.07, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
+          vec3 col = mix(mix(coldCol, warmCol, warm), crest, clamp(ripple * 0.65 + men * 0.35, 0.0, 0.85));
+          gl_FragColor = vec4(col, 0.76 + 0.16 * ripple);
+        }
+      `,
+    });
+    const obGeom = new THREE.PlaneGeometry(0.0468, 0.0338, 23, 9);
+    obGeom.translate(-0.034, 0.0, 0.0);
+    this.tenderOpenBayWaterMesh = new THREE.Mesh(obGeom, this.tenderOpenBayMat);
+    this.tenderOpenBayWaterMesh.renderOrder = 4;
+    this.tenderOpenBayWaterMesh.visible = false;
+    this.tenderRoot.add(this.tenderOpenBayWaterMesh);
+
+    const taGeom = new THREE.BoxGeometry(0.062, 0.046, 1.0);
+    taGeom.translate(0.056, 0.0, 0.5);
+    this.tenderAlcoholMesh = new THREE.Mesh(
+      taGeom,
+      new THREE.MeshBasicMaterial({ color: 0xf7b731, transparent: true, opacity: 0.38, depthWrite: false })
+    );
+    this.tenderAlcoholMesh.position.set(0.0, 0.0, 0.017);
+    this.tenderAlcoholMesh.scale.set(1.0, 1.0, 0.033);
+    this.tenderAlcoholMesh.renderOrder = 3;
+    this.tenderAlcoholMesh.visible = false;
+    this.tenderRoot.add(this.tenderAlcoholMesh);
+
+    // 31-14 左前高位鹅颈回水喷流 (回水): 自 (-0.0215, +0.0055, +0.0462) 落入 35-1 敞口槽水面 (常驻可见!)
+    const rsGeom = new THREE.CylinderGeometry(0.0009, 0.0014, 1.0, 12);
+    rsGeom.rotateX(Math.PI * 0.5);
+    rsGeom.translate(0, 0, -0.5);
+    this.returnStreamMesh = new THREE.Mesh(
+      rsGeom,
+      new THREE.MeshBasicMaterial({
+        color: 0x38e8ff,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+    this.returnStreamMesh.position.set(-0.0215, 0.0055, 0.0462);
+    this.returnStreamMesh.scale.set(1.0, 1.0, 0.016);
+    this.returnStreamMesh.renderOrder = 5;
+    this.returnStreamMesh.visible = false;
+    this.tenderRoot.add(this.returnStreamMesh);
+
+    // 35-1 敞口注水槽 加水 水柱: 自上方 (-0.034, 0.0, +0.066) 垂直注入自由液面 (常驻可见!)
+    const wfGeom = new THREE.CylinderGeometry(0.0018, 0.0013, 1.0, 14);
+    wfGeom.rotateX(Math.PI * 0.5);
+    wfGeom.translate(0, 0, -0.5);
+    this.waterFillStreamMesh = new THREE.Mesh(
+      wfGeom,
+      new THREE.MeshBasicMaterial({
+        color: 0x52b8ff,
+        transparent: true,
+        opacity: 0.82,
+        depthWrite: false,
+      })
+    );
+    this.waterFillStreamMesh.position.set(-0.034, 0.0, 0.066);
+    this.waterFillStreamMesh.scale.set(1.0, 1.0, 0.032);
+    this.waterFillStreamMesh.renderOrder = 5;
+    this.waterFillStreamMesh.visible = false;
+    this.tenderRoot.add(this.waterFillStreamMesh);
+
+    // 31-11 -> 31-9 底部排水口 放水 水流: 自煤水车底板 (-0.038, -0.008, -0.003) 排向轨面 (常驻可见!)
+    const tdGeom = new THREE.CylinderGeometry(0.0014, 0.0020, 0.034, 12);
+    tdGeom.rotateX(Math.PI * 0.5);
+    this.tenderDrainStreamMesh = new THREE.Mesh(
+      tdGeom,
+      new THREE.MeshBasicMaterial({
+        color: 0x38c8ff,
+        transparent: true,
+        opacity: 0.84,
+        depthWrite: false,
+      })
+    );
+    this.tenderDrainStreamMesh.position.set(-0.038, -0.008, -0.020);
+    this.tenderDrainStreamMesh.renderOrder = 5;
+    this.tenderDrainStreamMesh.visible = false;
+    this.tenderRoot.add(this.tenderDrainStreamMesh);
+
+    this.mariotteBubblePos = new Float32Array(28 * 3);
+    for (let i = 0; i < 28; i++) {
+      this.mariotteBubblePos[3 * i] = 0.028 + (Math.random() - 0.5) * 0.008;
+      this.mariotteBubblePos[3 * i + 1] = (Math.random() - 0.5) * 0.008;
+      this.mariotteBubblePos[3 * i + 2] = 0.018 + Math.random() * 0.030;
+    }
+    const mbGeom = new THREE.BufferGeometry();
+    mbGeom.setAttribute("position", new THREE.BufferAttribute(this.mariotteBubblePos, 3));
+    this.mariotteBubblePoints = new THREE.Points(
+      mbGeom,
+      new THREE.PointsMaterial({ color: 0xfff3c4, size: 0.0028, transparent: true, opacity: 0.88, depthWrite: false })
+    );
+    this.mariotteBubblePoints.renderOrder = 5;
+    this.mariotteBubblePoints.visible = false;
+    this.tenderRoot.add(this.mariotteBubblePoints);
   }
 
   private respawnBubble(i: number, zFrac = 0.0): void {
@@ -640,7 +817,8 @@ export class FluidPartVisualizer {
     qPR: number,
     calib: CylinderCalibration,
     xray: boolean,
-    burnerLit: boolean
+    burnerLit: boolean,
+    tenderMatrix?: THREE.Matrix4 | null
   ): void {
     this.elapsed += dt;
     const sp = out.spatial;
@@ -648,6 +826,13 @@ export class FluidPartVisualizer {
 
     this.root.matrix.copy(locoMatrix);
     this.root.matrixWorldNeedsUpdate = true;
+    if (tenderMatrix) {
+      this.tenderRoot.visible = true;
+      this.tenderRoot.matrix.copy(tenderMatrix);
+      this.tenderRoot.matrixWorldNeedsUpdate = true;
+    } else {
+      this.tenderRoot.visible = false;
+    }
 
     // 同步 CAD 材质全局流体着色器 Uniforms
     this.uniforms.uTime.value = this.elapsed;
@@ -673,11 +858,60 @@ export class FluidPartVisualizer {
     this.flameMat.uniforms.uTiltRad.value = (sp.flameTiltDeg * Math.PI) / 180.0;
     this.flameMat.uniforms.uIntensity.value = Math.min(1.2, 0.55 + out.smokeboxVacuumPa / 140.0);
 
-    // 2. 更新 11-7 驾驶室水面计实况液柱 (常驻可见!)
-    const sgFrac = Math.max(0.03, Math.min(0.98, out.waterLevelPct / 100.0));
-    const sgHeight = 0.0176 * sgFrac;
+    // 2. 更新 11-7 驾驶室左侧 (+Y) 水面计实况液柱 (常驻可见，响应 1-2 吹拔旋塞闪蒸降压!)
+    const sgLevel = out.sightGlassLevelPct ?? out.waterLevelPct;
+    const sgFrac = Math.max(0.02, Math.min(0.98, sgLevel / 100.0));
+    const sgHeight = Math.max(0.0005, 0.0178 * sgFrac);
     this.sightGlassWaterMesh.scale.set(1.0, 1.0, sgHeight);
-    this.sightGlassMeniscusMesh.position.z = 0.0392 + sgHeight;
+    this.sightGlassMeniscusMesh.position.z = 0.0386 + sgHeight;
+
+    // 2b. 更新煤水车 35-1 常开敞口注水槽自由液面波纹 + 加水 / 31-14 回水 / 31-11 放水 (全视角常驻可见!)
+    const hasTdr = !!tenderMatrix;
+    const wFrac = Math.max(0.01, Math.min(1.0, out.tenderWaterMl / 340.0));
+    const zBayWater = 0.003 + 0.037 * wFrac;
+    this.tenderOpenBayWaterMesh.visible = hasTdr && out.tenderWaterMl > 0.5;
+    this.returnStreamMesh.visible = hasTdr && out.returnWaterMlS > 0.02;
+    this.waterFillStreamMesh.visible = hasTdr && (out.waterFillMlS ?? 0) > 0.05;
+    this.tenderDrainStreamMesh.visible = hasTdr && (out.tenderDrainMlS ?? 0) > 0.05;
+
+    if (hasTdr) {
+      if (sp.tenderWaveB64 && sp.tenderWaveB64.length >= 200) {
+        const bin = atob(sp.tenderWaveB64);
+        const n = Math.min(24 * 10, bin.length);
+        for (let idx = 0; idx < n; idx++) {
+          const v = bin.charCodeAt(idx);
+          const o = idx * 4;
+          this.tenderWaveTexData[o] = v;
+          this.tenderWaveTexData[o + 1] = v;
+          this.tenderWaveTexData[o + 2] = v;
+          this.tenderWaveTexData[o + 3] = 255;
+        }
+        this.tenderWaveTex.needsUpdate = true;
+      }
+      this.tenderOpenBayMat.uniforms.uTime.value = this.elapsed;
+      this.tenderOpenBayMat.uniforms.uWaterZ.value = zBayWater;
+      this.tenderOpenBayMat.uniforms.uTempC.value = sp.tenderBayTempC ?? out.tenderWaterTempC;
+      this.tenderOpenBayMat.uniforms.uJetAmp.value = Math.min(
+        1.5,
+        out.returnWaterMlS * 0.45 + (out.waterFillMlS ?? 0) * 0.08 + (out.tenderDrainMlS ?? 0) * 0.06
+      );
+
+      if (this.returnStreamMesh.visible) {
+        const dropLen = Math.max(0.005, 0.0462 - zBayWater);
+        this.returnStreamMesh.scale.set(1.0, 1.0, dropLen);
+        const rsMat = this.returnStreamMesh.material as THREE.MeshBasicMaterial;
+        rsMat.opacity = Math.min(0.92, 0.38 + 0.48 * Math.min(1.0, out.returnWaterMlS / 0.8));
+      }
+      if (this.waterFillStreamMesh.visible) {
+        const fillLen = Math.max(0.008, 0.066 - zBayWater);
+        const wScale = 0.65 + 0.55 * Math.min(1.0, (out.waterFillMlS ?? 0) / 18.0);
+        this.waterFillStreamMesh.scale.set(wScale, wScale, fillLen);
+      }
+      if (this.tenderDrainStreamMesh.visible) {
+        const dScale = 0.65 + 0.55 * Math.min(1.0, (out.tenderDrainMlS ?? 0) / 5.0);
+        this.tenderDrainStreamMesh.scale.set(dScale, dScale, 1.0);
+      }
+    }
 
     // 3. X-Ray 内窥零件级三维流体场更新
     this.waterSurfaceMesh.visible = xray;
@@ -685,11 +919,37 @@ export class FluidPartVisualizer {
     this.bubblePoints.visible = xray && sp.boilingIntensity > 0.02;
     this.sliceMesh.visible = xray;
     this.lubeCoreMesh.visible = xray;
+    this.tenderWaterMesh.visible = xray && hasTdr && out.tenderWaterMl > 1.0;
+    this.tenderAlcoholMesh.visible = xray && hasTdr && out.alcoholMl > 0.5;
+    this.mariotteBubblePoints.visible = xray && hasTdr && (out.mariotteBubbling || out.mariotteFloodAlarm);
     for (const m of [...this.cylHeadMeshes, ...this.cylCrankMeshes, ...this.cylCondMeshes, ...this.portGlowMeshes]) {
       m.visible = xray;
     }
 
     if (!xray) return;
+
+    if (hasTdr) {
+      this.tenderWaterMesh.scale.set(1.0, 1.0, 0.040 * wFrac);
+      const twMat = this.tenderWaterMesh.material as THREE.MeshBasicMaterial;
+      const warm = Math.max(0.0, Math.min(1.0, (out.tenderWaterTempC - 25.0) / 40.0));
+      twMat.color.setRGB(0.10 + 0.12 * warm, 0.52 + 0.30 * warm, 0.90);
+
+      const aFrac = Math.max(0.02, Math.min(1.0, out.alcoholMl / 130.0));
+      this.tenderAlcoholMesh.scale.set(1.0, 1.0, 0.034 * aFrac);
+      const taMat = this.tenderAlcoholMesh.material as THREE.MeshBasicMaterial;
+      taMat.color.setHex(out.mariotteFloodAlarm ? 0xff4d29 : 0xf7b731);
+
+      if (this.mariotteBubblePoints.visible) {
+        const zTop = 0.017 + 0.034 * aFrac;
+        for (let i = 0; i < 28; i++) {
+          this.mariotteBubblePos[3 * i + 2] += (out.mariotteFloodAlarm ? 0.065 : 0.024) * dt;
+          if (this.mariotteBubblePos[3 * i + 2] > zTop) {
+            this.mariotteBubblePos[3 * i + 2] = 0.018;
+          }
+        }
+        this.mariotteBubblePoints.geometry.attributes.position.needsUpdate = true;
+      }
+    }
 
     const waterZ = sp.waterFreeZMm * 0.001;
     const sloshTan = Math.tan((sp.waterSloshPitchDeg * Math.PI) / 180.0);

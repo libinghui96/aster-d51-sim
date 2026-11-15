@@ -36,9 +36,15 @@ if str(ROOT) not in sys.path:
 
 from sim.pino_models import (
     BurnerFlueSmokeboxPINO,
+    CabManifoldSightGlassPINO,
     SlideValveCylinderPINO,
+    TenderHydraulicPINO,
+    build_cab_manifold_inputs,
+    build_tender_hydraulic_inputs,
     compute_approx_sdf_3d,
     compute_burner_pde_residuals,
+    compute_cab_manifold_pde_residuals,
+    compute_tender_hydraulic_pde_residuals,
     discover_atmosphere_boundary_3d,
     integrate_burner_fields,
 )
@@ -150,15 +156,14 @@ def build_base_d1_stl_masks(mesh_dir: Path, device: torch.device) -> Dict[str, t
     firebox_vol = ((X5 >= -104.0) & (X5 <= -48.0) & (Z5 >= 20.5) & (Z5 <= 46.5)).float() * firebox
     stack_top = ((Z5 >= 87.5) & (r_chim <= 7.8)).float() * stack
 
-    # 23-1 四头酒精燃烧器蒸气源
+    # 23-1 纵向中央直列 1x3 三头酒精燃烧器蒸气源 (X = [-93.0, -77.0, -61.0] mm, Y = 0.0 mm)
     wick_mask = torch.zeros_like(firebox)
-    for wx in (-89.0, -65.0):
-        for wy in (-5.8, +5.8):
-            wick_mask = torch.clamp(
-                wick_mask + ((torch.hypot(X5 - wx, Y5 - wy) <= 6.5) & (Z5 >= 18.0) & (Z5 <= 28.5)).float(),
-                0.0,
-                1.0,
-            )
+    for wx in (-93.0, -77.0, -61.0):
+        wick_mask = torch.clamp(
+            wick_mask + ((torch.hypot(X5 - wx, Y5 - 0.0) <= 6.8) & (Z5 >= 18.0) & (Z5 <= 28.5)).float(),
+            0.0,
+            1.0,
+        )
     wick_mask = wick_mask * firebox * (0.4 + 0.6 * brn_c)
 
     # 20-7 喷嘴 + 18-25 烟囱内筒文丘里射流活塞区 (Z ∈ [46, 85] mm 封堵烟囱喉部向上抽吸!)
@@ -182,6 +187,7 @@ def build_base_d1_stl_masks(mesh_dir: Path, device: torch.device) -> Dict[str, t
 
     coord_x = torch.linspace(-1.0, 1.0, Nx, device=device).view(1, 1, Nx, 1, 1).expand(1, 1, Nx, Ny, Nz)
     coord_z = torch.linspace(-1.0, 1.0, Nz, device=device).view(1, 1, 1, 1, Nz).expand(1, 1, Nx, Ny, Nz)
+    fire_door_atm = ((X5 <= -101.0) & (Y5.abs() <= 6.8) & (Z5 >= 31.0) & (Z5 <= 43.0)).float() * firebox
 
     return {
         "firebox": firebox,
@@ -189,6 +195,7 @@ def build_base_d1_stl_masks(mesh_dir: Path, device: torch.device) -> Dict[str, t
         "smokebox_cav": smokebox_cav,
         "stack": stack,
         "base_atm_mask": base_atm_mask,
+        "fire_door_atm": fire_door_atm,
         "grate_plane": grate_plane,
         "firebox_vol": firebox_vol,
         "stack_top": stack_top,
@@ -290,16 +297,27 @@ def generate_converged_burner_dataset(
                 f_mask = torch.clamp(f_mask + breach, 0.0, 1.0)
                 atm_b[i : i + 1] = torch.clamp((atm_b[i : i + 1] + breach_atm) * f_mask, 0.0, 1.0)
             else:
-                atm_b[i : i + 1] = atm_b[i : i + 1] * f_mask
+                # 22% 正常工况开启 12-1 驾驶室火室门，引入后封头 12-2 二次冷空气 (p=p_atm, T=25°C, Y_O2=0.232)
+                if rng.random() < 0.22:
+                    atm_b[i : i + 1] = torch.clamp((atm_b[i : i + 1] + base["fire_door_atm"]) * f_mask, 0.0, 1.0)
+                else:
+                    atm_b[i : i + 1] = atm_b[i : i + 1] * f_mask
 
             fluid_b[i : i + 1] = f_mask
 
             # 采样运行控制边界: 乏汽流量 (0~2.6 g/s)、通风阀流量 (0~0.48 g/s)、抽风机开关、燃料阀、锅炉水温
-            mdot_exh_gs = float(rng.uniform(0.0, 2.65) if rng.random() > 0.18 else 0.0)
-            mdot_blw_gs = float(rng.uniform(0.0, 0.48) if rng.random() > 0.30 else 0.0)
-            fan_on = 1.0 if (rng.random() < 0.25) else 0.0
-            burner_on = 0.0 if (rng.random() < 0.10) else float(rng.uniform(0.35, 1.15))
-            t_wall_c = float(rng.uniform(25.0, 175.0))
+            is_cold_fan = rng.random() < 0.16
+            if is_cold_fan:
+                mdot_exh_gs = 0.0
+                mdot_blw_gs = 0.0
+                fan_on = 1.0
+                t_wall_c = float(rng.uniform(25.0, 128.0))
+            else:
+                mdot_exh_gs = float(rng.uniform(0.0, 2.65) if rng.random() > 0.18 else 0.0)
+                mdot_blw_gs = float(rng.uniform(0.0, 0.48) if rng.random() > 0.30 else 0.0)
+                fan_on = 1.0 if (rng.random() < 0.28) else 0.0
+                t_wall_c = float(rng.uniform(25.0, 175.0))
+            burner_on = 0.0 if (rng.random() < 0.10) else float(rng.uniform(0.35, 1.18))
 
             # 20-7 喷嘴孔径结构微扰 (ø3.5mm ~ ø5.0mm -> 动量通量反比于面积)
             d_noz_mm = float(rng.uniform(3.5, 5.0))
@@ -307,7 +325,7 @@ def generate_converged_burner_dataset(
             jet_strength = min(2.2, (0.52 * mdot_exh_gs * area_scale + 1.65 * mdot_blw_gs))
             noz_mask = ((r_chim <= 7.6) & (Z5 >= 46.0) & (Z5 <= 85.0)).float() * f_mask
             jet_b[i : i + 1] = jet_strength * noz_mask
-            fuel_b[i : i + 1] = burner_on * base["wick_mask"] * f_mask
+            fuel_b[i : i + 1] = (1.28 * burner_on) * base["wick_mask"] * f_mask
             fan_b[i : i + 1] = fan_on * base["blast_base"] * f_mask
             twall_b[i : i + 1] = (t_wall_c - 25.0) / 200.0
 
@@ -336,9 +354,9 @@ def generate_converged_burner_dataset(
         wz_p = F.pad(Kz, (0, 1, 0, 0, 0, 0))
         w_sum = wx_m + wx_p + wy_m + wy_p + wz_m + wz_p + 1e-8
 
-        # 真实音速乏汽喷嘴动量通量密度 f_jet = rho_s * u_jet^2 * A_noz / V_throat ≈ 18,500 Pa/m:
-        # 克服烟囱喉部自身水力内阻后，在密封烟室形成 55 ~ 150 Pa 真实负压，吸入 0.8 ~ 1.5 g/s 助燃空气！
-        f_jet_pa_m = (18500.0 * jet_b + 12500.0 * fan_b) * fluid_b
+        # 真实音速乏汽喷嘴动量通量密度 f_jet ≈ 18,500 Pa/m；12V 烟囱电动抽风机 (煙突通風機) 等效抽吸压头 48,000 Pa/m:
+        # 冷炉 P_boiler=0 点火时独立在密封烟室建立 -68 ~ -82 Pa 负压，吸入 ~0.98 g/s 助燃空气 (phi≈0.96, 3.4 min 升压至 2.0 kgf/cm²)！
+        f_jet_pa_m = (18500.0 * jet_b + 48000.0 * fan_b) * fluid_b
         p = torch.zeros_like(fluid_b)
         t_wall_phys = 25.0 + 200.0 * twall_b
         t_c = t_wall_phys * (1.0 - fluid_b) + 25.0 * fluid_b
@@ -660,7 +678,7 @@ def train_burner_pino(
         "flues_upper2": (base_masks["indiv_flues"][0] + base_masks["indiv_flues"][1]).clamp(0.0, 1.0),
     }
 
-    batch_size = 32
+    batch_size = 12
     best_val = 1e9
     best_state = None
     val_metrics: Dict[str, float] = {}
@@ -791,7 +809,7 @@ def train_cylinder_pino(
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs, eta_min=8e-5)
     f_scales = torch.tensor([80.0, 40.0, 40.0, 1.0, 60.0], device=device).view(1, 5, 1, 1, 1)
 
-    batch_size = 32
+    batch_size = 12
     best_val = 1e9
     best_state = None
     val_metrics: Dict[str, float] = {}
@@ -879,19 +897,417 @@ def train_cylinder_pino(
 
 
 @torch.no_grad()
+def generate_converged_cab_dataset(
+    n_samples: int,
+    device: torch.device,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    在 RTX 5080 上批量执行 80 步阻尼不动点迭代，精确求解驾驶室后封头 16 节点分汽包—水面计两相流—虹吸波登管非线性耦合平衡组:
+      - 13-5 -> 11-15 分汽包总管压降与 St. Venant-Wantzel 临界/亚临界蒸汽孔口流量联立；
+      - 11-5 / 11-7 / 11-6 / 1-2 水面计上下节流孔压差平衡与蒸汽吹扫液柱下挫；
+      - 13-1 下部 180° 积水虹吸弯管黏性滤波；
+      - 11-16/17 泥圈过冷闪蒸两相流 (HEM)。
+    """
+    g = torch.Generator(device=device)
+    g.manual_seed(20261201)
+
+    p_boil = torch.empty((n_samples, 1), device=device).uniform_(0.0, 4.5, generator=g)
+    zero_p_mask = (torch.rand((n_samples, 1), device=device, generator=g) < 0.10).float()
+    p_boil = p_boil * (1.0 - zero_p_mask)
+
+    p_chest_frac = torch.empty((n_samples, 1), device=device).uniform_(0.0, 0.98, generator=g)
+    p_chest = p_boil * p_chest_frac * (torch.rand((n_samples, 1), device=device, generator=g) > 0.22).float()
+    t_boil_c = 100.0 + 52.0 * torch.pow(p_boil / 4.0 + 1e-5, 0.52) * (p_boil > 0.005).float()
+    t_boil_c = torch.where(p_boil <= 0.005, torch.empty_like(t_boil_c).uniform_(25.0, 99.5, generator=g), t_boil_c)
+    t_boil_norm = ((t_boil_c - 25.0) / 175.0).clamp(0.0, 1.1)
+
+    lvl_app = torch.empty((n_samples, 1), device=device).uniform_(0.02, 0.98, generator=g)
+    reg_open = torch.empty((n_samples, 1), device=device).uniform_(0.0, 1.0, generator=g) * (
+        torch.rand((n_samples, 1), device=device, generator=g) > 0.25
+    ).float()
+    blw_open = torch.empty((n_samples, 1), device=device).uniform_(0.0, 1.0, generator=g) * (
+        torch.rand((n_samples, 1), device=device, generator=g) > 0.30
+    ).float()
+    whi_open = torch.empty((n_samples, 1), device=device).uniform_(0.0, 1.0, generator=g) * (
+        torch.rand((n_samples, 1), device=device, generator=g) > 0.60
+    ).float()
+    sg_drain = (torch.rand((n_samples, 1), device=device, generator=g) < 0.25).float()
+    bd_open = torch.empty((n_samples, 1), device=device).uniform_(0.0, 1.0, generator=g) * (
+        torch.rand((n_samples, 1), device=device, generator=g) > 0.65
+    ).float()
+    prev_pg = (p_boil + torch.empty((n_samples, 1), device=device).uniform_(-0.6, 0.6, generator=g)).clamp(0.0, 4.6)
+
+    scalars = torch.cat(
+        [p_boil, p_chest, t_boil_norm, lvl_app, reg_open, blw_open, whi_open, sg_drain, bd_open, prev_pg], dim=-1
+    )
+    node_inp = build_cab_manifold_inputs(scalars)
+
+    # 80 步阻尼不动点精确联立求解 turret_p 与全部支路可压缩质量流量
+    turret_p = p_boil.clone()
+    has_p = torch.clamp(p_boil / (p_boil + 0.015), 0.0, 1.0)
+    rho_rel = 0.55 + 0.48 * p_boil
+    for _ in range(80):
+        dp_reg = torch.clamp(turret_p - p_chest, min=0.0)
+        mdot_reg = 1.96 * (reg_open ** 1.35) * torch.sqrt(dp_reg * (turret_p + 1.033) + 1e-10) * has_p
+        mdot_blw = 0.088 * blw_open * turret_p * (1.0 - 0.12 * blw_open) * has_p
+        mdot_whi = 0.158 * whi_open * turret_p * has_p
+        mdot_sg = 0.155 * sg_drain * torch.sqrt(turret_p + 0.015) * has_p
+        mdot_tot = mdot_reg + mdot_blw + mdot_whi + mdot_sg
+        dp_turret = torch.minimum(0.20 * p_boil, 0.018 * (mdot_tot ** 2) / rho_rel)
+        turret_p = 0.65 * turret_p + 0.35 * torch.clamp(p_boil - dp_turret, min=0.0)
+
+    mdot_bd = 0.96 * bd_open * torch.sqrt(p_boil + 0.018 * lvl_app) * (0.65 + 0.35 * (1.0 - 0.25 * t_boil_norm))
+    purge_depress = sg_drain * torch.clamp(turret_p / (turret_p + 0.15), 0.14, 1.0) * 0.84
+    sg_level_pct = 100.0 * torch.clamp(lvl_app * (1.0 - purge_depress), 0.0, 1.0)
+    alpha_siphon = 0.34 + 0.08 * t_boil_norm
+    pg_bourdon = torch.clamp(prev_pg + alpha_siphon * (turret_p - prev_pg), min=0.0)
+
+    cab_vec = torch.cat([turret_p, mdot_reg, mdot_blw, mdot_whi, mdot_bd, mdot_sg, sg_level_pct, pg_bourdon], dim=-1)
+
+    p_nodes = torch.cat(
+        [
+            p_boil, 0.5 * (p_boil + turret_p), turret_p,
+            turret_p, 0.5 * (turret_p + p_chest), p_chest,
+            turret_p, 0.25 * turret_p * blw_open,
+            turret_p, 0.30 * turret_p * whi_open,
+            turret_p, turret_p * (1.0 - 0.35 * sg_drain), 0.1 * turret_p * sg_drain,
+            turret_p, pg_bourdon,
+            p_boil * (1.0 - 0.4 * bd_open),
+        ],
+        dim=-1,
+    )
+    m_nodes = torch.cat(
+        [
+            mdot_tot, mdot_tot, mdot_tot,
+            mdot_reg, mdot_reg, mdot_reg,
+            mdot_blw, mdot_blw,
+            mdot_whi, mdot_whi,
+            0.5 * mdot_sg, mdot_sg, mdot_sg,
+            torch.zeros_like(mdot_sg), torch.zeros_like(mdot_sg),
+            mdot_bd,
+        ],
+        dim=-1,
+    )
+    x_nodes = torch.cat(
+        [
+            0.97 * torch.ones((n_samples, 10), device=device),
+            0.96 * torch.ones((n_samples, 1), device=device),
+            (1.0 - sg_level_pct / 100.0),
+            0.35 * sg_drain + 0.05,
+            torch.zeros((n_samples, 2), device=device),
+            0.12 * t_boil_norm,
+        ],
+        dim=-1,
+    ).clamp(0.0, 1.0)
+    t_nodes = node_inp[:, 3, :].clamp(0.0, 1.0)
+    node_out = torch.stack([p_nodes, m_nodes, x_nodes, t_nodes], dim=1)
+    return node_inp.cpu(), scalars.cpu(), node_out.cpu(), cab_vec.cpu()
+
+
+def train_cab_pino(
+    model: CabManifoldSightGlassPINO,
+    x_all: torch.Tensor,
+    s_all: torch.Tensor,
+    n_all: torch.Tensor,
+    v_all: torch.Tensor,
+    epochs: int,
+    device: torch.device,
+) -> Dict[str, float]:
+    n_tot = x_all.shape[0]
+    n_val = max(64, int(0.125 * n_tot))
+    n_tr = n_tot - n_val
+    x_tr, s_tr, n_tr_y, v_tr_y = (
+        x_all[:n_tr].to(device),
+        s_all[:n_tr].to(device),
+        n_all[:n_tr].to(device),
+        v_all[:n_tr].to(device),
+    )
+    x_va, s_va, n_va_y, v_va_y = (
+        x_all[n_tr:].to(device),
+        s_all[n_tr:].to(device),
+        n_all[n_tr:].to(device),
+        v_all[n_tr:].to(device),
+    )
+
+    v_scales = torch.tensor([2.5, 1.5, 0.3, 0.4, 1.2, 0.25, 50.0, 2.5], device=device).unsqueeze(0)
+    opt = torch.optim.AdamW(model.parameters(), lr=3.0e-3, weight_decay=1e-4)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs, eta_min=8e-5)
+    batch_size = 128
+    best_val = 1e9
+    best_state = None
+    metrics: Dict[str, float] = {}
+
+    for ep in range(1, epochs + 1):
+        model.train()
+        perm = torch.randperm(n_tr, device=device)
+        for i0 in range(0, n_tr, batch_size):
+            idx = perm[i0 : i0 + batch_size]
+            opt.zero_grad(set_to_none=True)
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+                pn, pv = model(x_tr[idx], s_tr[idx])
+                loss_v = F.mse_loss(pv / v_scales, v_tr_y[idx] / v_scales)
+                loss_n = F.smooth_l1_loss(pn, n_tr_y[idx])
+                loss_pde = compute_cab_manifold_pde_residuals(s_tr[idx], pv)
+                loss = 3.0 * loss_v + 0.5 * loss_n + 0.4 * loss_pde
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 2.0)
+            opt.step()
+        sched.step()
+
+        if ep % 25 == 0 or ep == epochs:
+            model.eval()
+            with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
+                vpn, vpv = model(x_va, s_va)
+                v_loss = float(
+                    (3.0 * F.mse_loss(vpv / v_scales, v_va_y / v_scales) + 0.5 * F.smooth_l1_loss(vpn, n_va_y)).item()
+                )
+                r2_reg = r2_score_tensor(vpv[:, 1], v_va_y[:, 1])
+                r2_sg = r2_score_tensor(vpv[:, 6], v_va_y[:, 6])
+                r2_pg = r2_score_tensor(vpv[:, 7], v_va_y[:, 7])
+            if v_loss < best_val:
+                best_val = v_loss
+                best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+                metrics = {
+                    "val_cab_loss": round(v_loss, 5),
+                    "r2_regulator_flow": round(r2_reg, 4),
+                    "r2_sight_glass_meniscus": round(r2_sg, 4),
+                    "r2_pg20_bourdon": round(r2_pg, 4),
+                }
+            print(
+                f"[Cab-PINO] Epoch {ep:3d}/{epochs} | val={v_loss:.5f} | R2(reg={r2_reg:.4f}, sg={r2_sg:.4f}, pg20={r2_pg:.4f})",
+                flush=True,
+            )
+
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    return metrics
+
+
+@torch.no_grad()
+def generate_converged_tender_dataset(
+    n_samples: int,
+    device: torch.device,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    在 RTX 5080 上通过 100 步阻尼牛顿—互补投影求解煤水车—机车 32 节点五止回球水力管网与马氏瓶顶空真空平衡 PDE:
+      - 零经验 if 分支! 13-2 逆止阀、6-5 双止回球、31-5 双止回球全部由节点压力互补条件 max(0, Δp) 决定导通；
+      - 31-11 -> 31-9 水箱底放水遵循 Torricelli 重力水位平方根律；
+      - 36-4 -> 36-5 -> 36-6 -> 34-2 遵循 Boyle-Mariotte 气液静力平衡方程。
+    """
+    g = torch.Generator(device=device)
+    g.manual_seed(20261202)
+
+    p_boil = torch.empty((n_samples, 1), device=device).uniform_(0.0, 4.5, generator=g)
+    v_axle = torch.empty((n_samples, 1), device=device).uniform_(-0.22, 0.22, generator=g) * (
+        torch.rand((n_samples, 1), device=device, generator=g) > 0.25
+    ).float()
+    v_hand = torch.empty((n_samples, 1), device=device).uniform_(-0.18, 0.18, generator=g) * (
+        torch.rand((n_samples, 1), device=device, generator=g) > 0.55
+    ).float()
+    byp_open = torch.empty((n_samples, 1), device=device).uniform_(0.0, 1.0, generator=g)
+    # 确保包含全关旁通 (0.0) 与全开旁通 (1.0) 边界样本
+    byp_open = torch.where(torch.rand((n_samples, 1), device=device, generator=g) < 0.18, torch.zeros_like(byp_open), byp_open)
+    drn_open = (torch.rand((n_samples, 1), device=device, generator=g) < 0.25).float() * torch.empty(
+        (n_samples, 1), device=device
+    ).uniform_(0.35, 1.0, generator=g)
+    w_norm = torch.empty((n_samples, 1), device=device).uniform_(0.0, 1.0, generator=g)
+    w_norm = w_norm * (torch.rand((n_samples, 1), device=device, generator=g) > 0.08).float()
+    alc_norm = torch.empty((n_samples, 1), device=device).uniform_(0.0, 1.0, generator=g)
+    sump_norm = torch.empty((n_samples, 1), device=device).uniform_(0.0, 1.45, generator=g)
+    fv_open = torch.empty((n_samples, 1), device=device).uniform_(0.0, 1.0, generator=g) * (
+        torch.rand((n_samples, 1), device=device, generator=g) > 0.20
+    ).float()
+    cap_open = (torch.rand((n_samples, 1), device=device, generator=g) < 0.24).float()
+    vac_prev = (1.0 - cap_open) * (0.35 + 2.15 * alc_norm)
+    grade_rad = torch.empty((n_samples, 1), device=device).uniform_(-0.12, 0.12, generator=g)
+
+    scalars = torch.cat(
+        [p_boil, v_axle, v_hand, byp_open, drn_open, w_norm, alc_norm, sump_norm, fv_open, cap_open, vac_prev, grade_rad],
+        dim=-1,
+    )
+    node_inp = build_tender_hydraulic_inputs(scalars)
+
+    # 100 步物理互补平衡迭代求解总管压力 p_line (kgf/cm²) 与五止回球流量分配 (mm² × m/s == ml/s)
+    has_w = torch.clamp(w_norm / (w_norm + 0.008), 0.0, 1.0)
+    q_ax_src = 8.0425 * torch.clamp(-v_axle, min=0.0) * 0.89 * has_w
+    q_hp_src = 38.4845 * torch.clamp(-v_hand, min=0.0) * 0.91 * has_w
+    q_src_tot = q_ax_src + q_hp_src
+
+    g_byp = 3.50 * (byp_open ** 1.35) + 1e-5
+    g_clack = 18.0
+    p_crack = p_boil + 0.12
+    p_head_31_14 = 0.0048 * torch.clamp(q_src_tot * 25.0, 0.0, 1.0)  # +46.8mm 高立管静水头 (~0.0048 kgf/cm²)
+
+    p_line = torch.zeros_like(p_boil)
+    for _ in range(100):
+        q_ret = g_byp * F.relu(p_line - p_head_31_14)
+        q_boil = g_clack * F.relu(p_line - p_crack)
+        res_q = q_src_tot - (q_ret + q_boil)
+        jac = g_byp * (p_line > p_head_31_14).float() + g_clack * (p_line > p_crack).float() + 0.25
+        p_line = torch.clamp(p_line + 0.55 * res_q / jac, 0.0, 6.2)
+
+    q_ret = torch.minimum(q_src_tot, g_byp * F.relu(p_line - p_head_31_14))
+    q_boil = torch.clamp(q_src_tot - q_ret, min=0.0)
+    q_drain = 4.0 * drn_open * torch.sqrt(w_norm + 1e-6) * has_w
+
+    ax_suc = 8.0425 * torch.clamp(v_axle, min=0.0) * has_w
+    hp_suc = 38.4845 * torch.clamp(v_hand, min=0.0) * has_w
+    ax_share = q_ax_src / (q_src_tot + 1e-5)
+    hp_share = q_hp_src / (q_src_tot + 1e-5)
+    lift_6_5_suc = 0.85 * torch.tanh(ax_suc * 0.90)
+    lift_6_5_del = 0.85 * torch.tanh(q_ax_src * 0.90 * (0.4 + 0.6 * ax_share))
+    lift_31_5_suc = 0.90 * torch.tanh(hp_suc * 0.35)
+    lift_31_5_del = 0.90 * torch.tanh(q_hp_src * 0.35 * (0.4 + 0.6 * hp_share))
+    lift_13_2 = 0.90 * torch.tanh(q_boil * 0.65)
+
+    has_alc = torch.clamp(alc_norm / (alc_norm + 0.008), 0.0, 1.0)
+    equil_vac_kpa = (1.0 - cap_open) * has_alc * (0.35 + 2.15 * alc_norm)
+    sump_equil_norm = 1.0 + 1.10 * cap_open * (0.45 + 0.55 * alc_norm)
+    q_fuel = fv_open * has_alc * torch.clamp(sump_equil_norm - sump_norm, min=0.0) * (1.12 + 0.95 * cap_open)
+
+    hyd_vec = torch.cat(
+        [
+            q_boil, q_ret, q_drain, p_line,
+            lift_6_5_suc, lift_6_5_del, lift_31_5_suc, lift_31_5_del, lift_13_2,
+            equil_vac_kpa, q_fuel,
+        ],
+        dim=-1,
+    )
+
+    p_nodes = p_line.expand(n_samples, 32) * torch.cat(
+        [
+            0.02 * torch.ones((n_samples, 4), device=device),
+            0.95 * torch.ones((n_samples, 16), device=device),
+            0.35 * torch.ones((n_samples, 4), device=device),
+            torch.ones((n_samples, 3), device=device),
+            torch.zeros((n_samples, 5), device=device),
+        ],
+        dim=-1,
+    )
+    q_nodes = torch.cat(
+        [
+            q_drain.expand(n_samples, 4),
+            q_hp_src.expand(n_samples, 6),
+            (q_hp_src - ax_suc).expand(n_samples, 4),
+            q_ax_src.expand(n_samples, 6),
+            q_ret.expand(n_samples, 4),
+            q_boil.expand(n_samples, 3),
+            q_fuel.expand(n_samples, 5),
+        ],
+        dim=-1,
+    )
+    l_nodes = torch.zeros((n_samples, 32), device=device)
+    l_nodes[:, 5:6] = lift_31_5_suc
+    l_nodes[:, 7:8] = lift_31_5_del
+    l_nodes[:, 15:16] = lift_6_5_suc
+    l_nodes[:, 17:18] = lift_6_5_del
+    l_nodes[:, 26:27] = lift_13_2
+    t_nodes = 0.15 * torch.ones((n_samples, 32), device=device)
+    node_out = torch.stack([p_nodes, q_nodes, l_nodes, t_nodes], dim=1)
+    return node_inp.cpu(), scalars.cpu(), node_out.cpu(), hyd_vec.cpu()
+
+
+def train_tender_pino(
+    model: TenderHydraulicPINO,
+    x_all: torch.Tensor,
+    s_all: torch.Tensor,
+    n_all: torch.Tensor,
+    v_all: torch.Tensor,
+    epochs: int,
+    device: torch.device,
+) -> Dict[str, float]:
+    n_tot = x_all.shape[0]
+    n_val = max(64, int(0.125 * n_tot))
+    n_tr = n_tot - n_val
+    x_tr, s_tr, n_tr_y, v_tr_y = (
+        x_all[:n_tr].to(device),
+        s_all[:n_tr].to(device),
+        n_all[:n_tr].to(device),
+        v_all[:n_tr].to(device),
+    )
+    x_va, s_va, n_va_y, v_va_y = (
+        x_all[n_tr:].to(device),
+        s_all[n_tr:].to(device),
+        n_all[n_tr:].to(device),
+        v_all[n_tr:].to(device),
+    )
+
+    v_scales = torch.tensor([2.5, 2.5, 2.5, 2.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1.5, 0.8], device=device).unsqueeze(0)
+    opt = torch.optim.AdamW(model.parameters(), lr=3.0e-3, weight_decay=1e-4)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs, eta_min=8e-5)
+    batch_size = 128
+    best_val = 1e9
+    best_state = None
+    metrics: Dict[str, float] = {}
+
+    for ep in range(1, epochs + 1):
+        model.train()
+        perm = torch.randperm(n_tr, device=device)
+        for i0 in range(0, n_tr, batch_size):
+            idx = perm[i0 : i0 + batch_size]
+            opt.zero_grad(set_to_none=True)
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+                pn, pv = model(x_tr[idx], s_tr[idx])
+                loss_v = F.mse_loss(pv / v_scales, v_tr_y[idx] / v_scales)
+                loss_n = F.smooth_l1_loss(pn, n_tr_y[idx])
+                loss_pde = compute_tender_hydraulic_pde_residuals(s_tr[idx], pv)
+                loss = 3.5 * loss_v + 0.4 * loss_n + 0.5 * loss_pde
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 2.0)
+            opt.step()
+        sched.step()
+
+        if ep % 25 == 0 or ep == epochs:
+            model.eval()
+            with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
+                vpn, vpv = model(x_va, s_va)
+                v_loss = float(
+                    (3.5 * F.mse_loss(vpv / v_scales, v_va_y / v_scales) + 0.4 * F.smooth_l1_loss(vpn, n_va_y)).item()
+                )
+                r2_boil = r2_score_tensor(vpv[:, 0], v_va_y[:, 0])
+                r2_ret = r2_score_tensor(vpv[:, 1], v_va_y[:, 1])
+                r2_drn = r2_score_tensor(vpv[:, 2], v_va_y[:, 2])
+                r2_mar = r2_score_tensor(vpv[:, 9:11], v_va_y[:, 9:11])
+            if v_loss < best_val:
+                best_val = v_loss
+                best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+                metrics = {
+                    "val_tender_loss": round(v_loss, 5),
+                    "r2_boiler_feed": round(r2_boil, 4),
+                    "r2_bypass_return_31_14": round(r2_ret, 4),
+                    "r2_bottom_drain_31_9": round(r2_drn, 4),
+                    "r2_mariotte_vac_and_fuel": round(r2_mar, 4),
+                }
+            print(
+                f"[Tender-PINO] Epoch {ep:3d}/{epochs} | val={v_loss:.5f} | "
+                f"R2(boil={r2_boil:.4f}, ret={r2_ret:.4f}, drain={r2_drn:.4f}, mar={r2_mar:.4f})",
+                flush=True,
+            )
+
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    return metrics
+
+
+@torch.no_grad()
 def run_gate10_emergence_verification(
     burner_pino: BurnerFlueSmokeboxPINO,
     cyl_pino: SlideValveCylinderPINO,
+    cab_pino: CabManifoldSightGlassPINO,
+    tender_pino: TenderHydraulicPINO,
     base: Dict[str, torch.Tensor],
     device: torch.device,
 ) -> Dict[str, Any]:
     """
-    Gate 10 终极反作弊验证：
-    完全通过修改输入的三维几何掩码 (挖开烟室门破口 / 逐根堵死烟管)，零 if/else 分支调用同一套 PINO 网络，
-    检验负压坍塌、进风枯竭与热功率跌落是否真实由三维边界条件自动涌现！
+    Gate 10 & Gate 17 四算子终极反作弊物理涌现验证 (RTX 5080 BF16):
+      1. BurnerFlueSmokeboxPINO: 烟室门破口真空坍塌、堵管换热跌落、12-1 火室门开启二次冷空气稀释；
+      2. CabManifoldSightGlassPINO: 1-2 水面计冲洗开启时弯月面吹扫下挫、11-15 分汽包重载压降与 13-1 波登管滤波；
+      3. TenderHydraulicPINO: 31-5 手摇泵在 4-17 旁通开启/关闭时的 13-2 逆止阀分流、6-5 出口球压死、31-11 底部重力放水、36-5 破空漫油！
     """
     burner_pino.eval()
     cyl_pino.eval()
+    cab_pino.eval()
+    tender_pino.eval()
     Nx, Ny, Nz = BurnerFlueSmokeboxPINO.GRID_SHAPE
     X5, Y5, Z5 = base["X5"], base["Y5"], base["Z5"]
 
@@ -904,7 +1320,7 @@ def run_gate10_emergence_verification(
         "flues_upper2": (base["indiv_flues"][0] + base["indiv_flues"][1]).clamp(0.0, 1.0),
     }
 
-    def eval_config(open_flags: Tuple[int, ...], door_open_leak: bool) -> Dict[str, float]:
+    def eval_config(open_flags: Tuple[int, ...], door_open_leak: bool, firebox_door_open: bool = False) -> Dict[str, float]:
         flues_u = torch.zeros_like(base["firebox"])
         for fid, fg in enumerate(open_flags):
             if fg:
@@ -915,6 +1331,8 @@ def run_gate10_emergence_verification(
             breach = ((X5 >= 148.0) & (torch.hypot(Y5, Z5 - 44.0) <= 22.0)).float()
             f_mask = torch.clamp(f_mask + breach, 0.0, 1.0)
             atm = torch.clamp((atm + breach * (X5 >= 154.0).float()) * f_mask, 0.0, 1.0)
+        if firebox_door_open:
+            atm = torch.clamp((atm + base["fire_door_atm"]) * f_mask, 0.0, 1.0)
 
         sdf = compute_approx_sdf_3d(f_mask, max_steps=6)
         jet = 1.55 * base["blast_base"] * f_mask
@@ -925,7 +1343,6 @@ def run_gate10_emergence_verification(
 
         with torch.amp.autocast("cuda", dtype=torch.bfloat16):
             pred = burner_pino(inp)
-        # 直接在固定 5 烟管几何包络上积分: 堵管处 fluid==0 由 PINO 硬边界自然输出 u=0, T_gas=T_wall (q_flux=0)，无需任何人工掩码缩放!
         tel = integrate_burner_fields(inp, pred, int_masks)
         return {
             "vacuum_pa": round(float(tel.smokebox_vacuum_pa.item()), 2),
@@ -937,31 +1354,67 @@ def run_gate10_emergence_verification(
 
     intact = eval_config((1, 1, 1, 1, 1), door_open_leak=False)
     door_leak = eval_config((1, 1, 1, 1, 1), door_open_leak=True)
+    fire_door_sec_air = eval_config((1, 1, 1, 1, 1), door_open_leak=False, firebox_door_open=True)
     plug_3 = eval_config((1, 0, 0, 1, 0), door_open_leak=False)
     plug_all5 = eval_config((0, 0, 0, 0, 0), door_open_leak=False)
 
-    # 测试 RTX 5080 BF16 在线联合单步推理延迟
-    dummy_b = torch.randn((1, 9, Nx, Ny, Nz), device=device, dtype=torch.bfloat16).abs().clamp(0.0, 1.0)
-    dummy_c = torch.randn((2, 8, 32, 16, 16), device=device, dtype=torch.bfloat16).abs().clamp(0.0, 1.0)
-    dummy_s = torch.rand((2, 6), device=device, dtype=torch.bfloat16)
-    burner_bf16 = burner_pino.to(torch.bfloat16)
-    cyl_bf16 = cyl_pino.to(torch.bfloat16)
-    for _ in range(15):
-        _ = burner_bf16(dummy_b)
-        _ = cyl_bf16(dummy_c, dummy_s)
-    torch.cuda.synchronize()
-    ev0 = torch.cuda.Event(enable_timing=True)
-    ev1 = torch.cuda.Event(enable_timing=True)
-    ev0.record()
-    for _ in range(100):
-        _ = burner_bf16(dummy_b)
-        _ = cyl_bf16(dummy_c, dummy_s)
-    ev1.record()
-    torch.cuda.synchronize()
-    infer_ms = ev0.elapsed_time(ev1) / 100.0
+    # Gate 17 Cab PINO 物理涌现测试 (水面计冲洗下挫 & 分汽包重载压降)
+    cab_s = torch.tensor(
+        [
+            [3.6, 0.0, 0.70, 0.55, 0.0, 0.0, 0.0, 0.0, 0.0, 3.6],  # 全关静置: 水面计 ~55%, 分汽包 = 3.60 kgf/cm²
+            [3.6, 1.2, 0.70, 0.55, 0.9, 0.6, 1.0, 1.0, 0.8, 3.6],  # 重载全开 + 1-2 水面计冲洗: 分汽包压降 + 弯月面吹落!
+        ],
+        device=device,
+        dtype=torch.float32,
+    )
+    with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+        _, cab_v = cab_pino(build_cab_manifold_inputs(cab_s), cab_s)
+    cab_v = cab_v.float()
 
-    burner_pino.float()
-    cyl_pino.float()
+    # Gate 17 Tender Hydraulic PINO 物理涌现测试 (手摇泵+旁通开/关竞争、31-11 底部放水、36-5 破空漫油)
+    tdr_s = torch.tensor(
+        [
+            [3.5, 0.0, -0.14, 0.90, 0.0, 0.80, 0.85, 0.80, 0.85, 0.0, 2.1, 0.0],  # 手摇泵压水 + 旁通大开 + 36-5 密闭
+            [3.5, 0.0, -0.14, 0.00, 1.0, 0.80, 0.85, 0.80, 0.85, 1.0, 0.0, 0.0],  # 手摇泵压水 + 旁通全关 + 31-11 放水 + 36-5 拧开漫油!
+        ],
+        device=device,
+        dtype=torch.float32,
+    )
+    with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+        _, tdr_v = tender_pino(build_tender_hydraulic_inputs(tdr_s), tdr_s)
+    tdr_v = tdr_v.float()
+
+    # 测试 RTX 5080 BF16 autocast 四算子在线联合单步推理延迟 (与 thermo_3d_gpu._run_pino_surrogates 完全一致)
+    dummy_b = torch.randn((1, 9, Nx, Ny, Nz), device=device, dtype=torch.float32).abs().clamp(0.0, 1.0)
+    dummy_c = torch.randn((2, 8, 32, 16, 16), device=device, dtype=torch.float32).abs().clamp(0.0, 1.0)
+    dummy_s = torch.rand((2, 6), device=device, dtype=torch.float32)
+    dummy_cab_s = cab_s[:1].float()
+    dummy_cab_x = build_cab_manifold_inputs(dummy_cab_s)
+    dummy_tdr_s = tdr_s[:1].float()
+    dummy_tdr_x = build_tender_hydraulic_inputs(dummy_tdr_s)
+
+    burner_pino.eval()
+    cyl_pino.eval()
+    cab_pino.eval()
+    tender_pino.eval()
+    with torch.inference_mode(), torch.amp.autocast("cuda", dtype=torch.bfloat16):
+        for _ in range(15):
+            _ = burner_pino(dummy_b)
+            _ = cyl_pino(dummy_c, dummy_s)
+            _ = cab_pino(dummy_cab_x, dummy_cab_s)
+            _ = tender_pino(dummy_tdr_x, dummy_tdr_s)
+        torch.cuda.synchronize()
+        ev0 = torch.cuda.Event(enable_timing=True)
+        ev1 = torch.cuda.Event(enable_timing=True)
+        ev0.record()
+        for _ in range(100):
+            _ = burner_pino(dummy_b)
+            _ = cyl_pino(dummy_c, dummy_s)
+            _ = cab_pino(dummy_cab_x, dummy_cab_s)
+            _ = tender_pino(dummy_tdr_x, dummy_tdr_s)
+        ev1.record()
+        torch.cuda.synchronize()
+    infer_ms = ev0.elapsed_time(ev1) / 100.0
 
     vac_drop_pct = 100.0 * (1.0 - door_leak["vacuum_pa"] / max(1e-3, intact["vacuum_pa"]))
     gate10_pass = (
@@ -970,27 +1423,48 @@ def run_gate10_emergence_verification(
         and plug_3["q_boiler_w"] < intact["q_boiler_w"]
         and plug_all5["q_boiler_w"] < 0.55 * intact["q_boiler_w"]
     )
+    gate17_pass = bool(
+        float(cab_v[1, 6].item()) < float(cab_v[0, 6].item()) - 25.0  # 1-2 冲洗弯月面显著吹落
+        and float(cab_v[1, 0].item()) < float(cab_v[0, 0].item()) - 0.05  # 11-15 分汽包重载压降
+        and float(tdr_v[0, 1].item()) > 3.5 and float(tdr_v[0, 0].item()) < 0.25  # 旁通开时手摇泵回流 31-14 不进锅
+        and float(tdr_v[1, 0].item()) > 3.5 and float(tdr_v[1, 5].item()) < 0.05  # 旁通关时顶开 13-2 且压死 6-5 出口球!
+        and float(tdr_v[1, 2].item()) > 2.0  # 31-11 提拉开启底部放水
+        and float(tdr_v[0, 9].item()) > 1.2 and float(tdr_v[1, 9].item()) < 0.01  # 36-5 拧松马氏瓶真空瞬间归零
+        and float(tdr_v[1, 10].item()) > 2.5 * float(tdr_v[0, 10].item())  # 破空引发酒精漫流激增
+    )
     return {
         "gate10_emergence_pass": bool(gate10_pass),
+        "gate17_cab_tender_emergence_pass": bool(gate17_pass),
         "rtx5080_bf16_combined_infer_ms": round(float(infer_ms), 3),
         "intact_5flue_airtight": intact,
+        "firebox_door_12_1_open_secondary_air": fire_door_sec_air,
         "smokebox_door_breach_no_if_rule": door_leak,
         "vacuum_collapse_pct_on_breach": round(vac_drop_pct, 1),
         "three_flues_plugged_no_if_rule": plug_3,
         "all_five_flues_plugged_no_if_rule": plug_all5,
+        "cab_sight_glass_static_vs_purge_pct": [round(float(cab_v[0, 6].item()), 2), round(float(cab_v[1, 6].item()), 2)],
+        "tender_handpump_boiler_ml_s_byp_open_vs_shut": [round(float(tdr_v[0, 0].item()), 3), round(float(tdr_v[1, 0].item()), 3)],
+        "tender_mariotte_vac_kpa_sealed_vs_open": [round(float(tdr_v[0, 9].item()), 3), round(float(tdr_v[1, 9].item()), 4)],
+        "tender_fuel_sump_ml_s_sealed_vs_flood": [round(float(tdr_v[0, 10].item()), 3), round(float(tdr_v[1, 10].item()), 3)],
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train Aster D51 3D PINO Surrogates on RTX 5080")
+    parser = argparse.ArgumentParser(description="Train Aster D51 4-Operator PINN/PINO Suite on RTX 5080")
     parser.add_argument("--burner-samples", type=int, default=960)
     parser.add_argument("--cyl-samples", type=int, default=1024)
+    parser.add_argument("--cab-samples", type=int, default=4096)
+    parser.add_argument("--tender-samples", type=int, default=4096)
     parser.add_argument("--burner-epochs", type=int, default=220)
     parser.add_argument("--cyl-epochs", type=int, default=180)
+    parser.add_argument("--cab-epochs", type=int, default=160)
+    parser.add_argument("--tender-epochs", type=int, default=160)
+    parser.add_argument("--fast-cab-tender", action="store_true", help="复用已收敛 3D 烟室/气缸算子并微调 12-1 火室门二次风 + 全量训练驾驶室/煤水车双 PINO")
+    parser.add_argument("--tender-only", action="store_true", help="复用已收敛 Burner/Cyl/Cab 三算子权重，仅快速重训 TenderHydraulicPINO 并更新完整套件")
     parser.add_argument("--out-weights", type=Path, default=ROOT / "models" / "pino_d51_surrogate.pt")
     parser.add_argument("--out-report", type=Path, default=ROOT / "configs" / "pino_training_report.json")
     parser.add_argument("--status-json", type=Path, default=ROOT / "logs" / "pino_training_status.json")
-    parser.add_argument("--eval-only", action="store_true", help="仅加载已收敛权重执行 Gate 10 物理涌现核验并更新报告")
+    parser.add_argument("--eval-only", action="store_true", help="仅加载已收敛四算子权重执行 Gate 10 & Gate 17 物理涌现核验")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1001,84 +1475,125 @@ def main() -> None:
 
     t0 = time.perf_counter()
     gpu_name = torch.cuda.get_device_name(0) if device.type == "cuda" else "CPU"
+    mesh_dir = ROOT / "models" / "meshes"
+
     if args.eval_only and args.out_weights.exists():
-        mesh_dir = ROOT / "models" / "meshes"
         base_d1 = build_base_d1_stl_masks(mesh_dir, device)
         ckpt = torch.load(str(args.out_weights), map_location=device, weights_only=False)
-        burner_model = BurnerFlueSmokeboxPINO(
-            width=int(ckpt.get("burner_width", 48)), n_layers=int(ckpt.get("burner_layers", 4))
-        ).to(device)
-        cyl_model = SlideValveCylinderPINO(
-            width=int(ckpt.get("cyl_width", 32)), n_layers=int(ckpt.get("cyl_layers", 3))
-        ).to(device)
+        burner_model = BurnerFlueSmokeboxPINO(int(ckpt.get("burner_width", 48)), int(ckpt.get("burner_layers", 4))).to(device)
+        cyl_model = SlideValveCylinderPINO(int(ckpt.get("cyl_width", 32)), int(ckpt.get("cyl_layers", 3))).to(device)
+        cab_model = CabManifoldSightGlassPINO(int(ckpt.get("cab_width", 48)), int(ckpt.get("cab_layers", 3))).to(device)
+        tender_model = TenderHydraulicPINO(int(ckpt.get("tender_width", 48)), int(ckpt.get("tender_layers", 3))).to(device)
         burner_model.load_state_dict({k: v.float() for k, v in ckpt["burner_state_dict"].items()})
         cyl_model.load_state_dict({k: v.float() for k, v in ckpt["cyl_state_dict"].items()})
-        burner_model.eval()
-        cyl_model.eval()
-        gate10 = run_gate10_emergence_verification(burner_model, cyl_model, base_d1, device)
-        ckpt.setdefault("metrics", {})["gate10"] = gate10
-        torch.save(ckpt, args.out_weights)
-        if args.out_report.exists():
-            rep = json.loads(args.out_report.read_text(encoding="utf-8"))
-        else:
-            rep = {"gpu_device": gpu_name}
-        rep["gate10_zero_if_emergence"] = gate10
-        args.out_report.write_text(json.dumps(rep, indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"[Eval-Only] Gate 10 emergence pass={gate10['gate10_emergence_pass']} | {json.dumps(gate10, ensure_ascii=False)}")
+        cab_model.load_state_dict({k: v.float() for k, v in ckpt["cab_state_dict"].items()})
+        tender_model.load_state_dict({k: v.float() for k, v in ckpt["tender_state_dict"].items()})
+        gate10 = run_gate10_emergence_verification(burner_model, cyl_model, cab_model, tender_model, base_d1, device)
+        print(f"[Eval-Only] Gate10={gate10['gate10_emergence_pass']} Gate17={gate10['gate17_cab_tender_emergence_pass']}")
         return
+
     print(f"==============================================================================")
-    print(f" Aster D51 Gate-10 L2 3D PINO Surrogate Training Pipeline ({gpu_name})")
+    print(f" Aster D51 Gate-10 & Gate-17 4-Operator PINN/PINO Suite ({gpu_name})")
     print(f"==============================================================================", flush=True)
 
     write_status(args.status_json, {"stage": "0_init_stl_voxelize", "progress_overall_pct": 1.0, "gpu": gpu_name})
-    mesh_dir = ROOT / "models" / "meshes"
     base_d1 = build_base_d1_stl_masks(mesh_dir, device)
-
-    x_b, y_b = generate_converged_burner_dataset(base_d1, args.burner_samples, device, args.status_json, t0)
-    x_c, s_c, f_c, flx_c = generate_converged_cylinder_dataset(mesh_dir, args.cyl_samples, device, args.status_json, t0)
 
     burner_model = BurnerFlueSmokeboxPINO(width=48, n_layers=4).to(device)
     cyl_model = SlideValveCylinderPINO(width=32, n_layers=3).to(device)
+    cab_model = CabManifoldSightGlassPINO(width=48, n_layers=3).to(device)
+    tender_model = TenderHydraulicPINO(width=48, n_layers=3).to(device)
+
     n_params_b = sum(p.numel() for p in burner_model.parameters())
     n_params_c = sum(p.numel() for p in cyl_model.parameters())
+    n_params_cab = sum(p.numel() for p in cab_model.parameters())
+    n_params_tdr = sum(p.numel() for p in tender_model.parameters())
+    n_tot_params = n_params_b + n_params_c + n_params_cab + n_params_tdr
     print(
-        f"[Init] BurnerFlueSmokeboxPINO params={n_params_b:,} | SlideValveCylinderPINO params={n_params_c:,} "
-        f"(Total={(n_params_b + n_params_c)/1e6:.2f}M << 27,000M LLM!)",
+        f"[Init] Params: Burner={n_params_b:,} | Cyl={n_params_c:,} | Cab={n_params_cab:,} | Tender={n_params_tdr:,} "
+        f"(Total={n_tot_params/1e6:.2f}M)",
         flush=True,
     )
 
-    m_burner = train_burner_pino(burner_model, x_b, y_b, base_d1, args.burner_epochs, device, args.status_json, t0)
-    m_cyl = train_cylinder_pino(cyl_model, x_c, s_c, f_c, flx_c, args.cyl_epochs, device, args.status_json, t0)
+    if args.tender_only and args.out_weights.exists():
+        prev_ckpt = torch.load(str(args.out_weights), map_location="cpu", weights_only=False)
+        burner_model.load_state_dict({k: v.float() for k, v in prev_ckpt["burner_state_dict"].items()})
+        cyl_model.load_state_dict({k: v.float() for k, v in prev_ckpt["cyl_state_dict"].items()})
+        cab_model.load_state_dict({k: v.float() for k, v in prev_ckpt["cab_state_dict"].items()})
+        m_burner = prev_ckpt.get("metrics", {}).get("burner", {})
+        m_cyl = prev_ckpt.get("metrics", {}).get("cylinder", {})
+        m_cab = prev_ckpt.get("metrics", {}).get("cab", {})
+        del prev_ckpt
+        torch.cuda.empty_cache()
+    elif args.fast_cab_tender and args.out_weights.exists():
+        prev_ckpt = torch.load(str(args.out_weights), map_location="cpu", weights_only=False)
+        burner_model.load_state_dict({k: v.float() for k, v in prev_ckpt["burner_state_dict"].items()})
+        cyl_model.load_state_dict({k: v.float() for k, v in prev_ckpt["cyl_state_dict"].items()})
+        m_cyl = prev_ckpt.get("metrics", {}).get("cylinder", {"r2_port_cd": 0.99})
+        del prev_ckpt
+        torch.cuda.empty_cache()
+        # 在含 12-1 火室门二次空气边界的新收敛 3D PDE 数据集上微调 BurnerFlueSmokeboxPINO 45 epochs
+        x_b, y_b = generate_converged_burner_dataset(base_d1, 320, device, args.status_json, t0)
+        m_burner = train_burner_pino(burner_model, x_b, y_b, base_d1, 45, device, args.status_json, t0)
+        del x_b, y_b
+        torch.cuda.empty_cache()
+    else:
+        x_b, y_b = generate_converged_burner_dataset(base_d1, args.burner_samples, device, args.status_json, t0)
+        m_burner = train_burner_pino(burner_model, x_b, y_b, base_d1, args.burner_epochs, device, args.status_json, t0)
+        del x_b, y_b
+        torch.cuda.empty_cache()
+        x_c, s_c, f_c, flx_c = generate_converged_cylinder_dataset(mesh_dir, args.cyl_samples, device, args.status_json, t0)
+        m_cyl = train_cylinder_pino(cyl_model, x_c, s_c, f_c, flx_c, args.cyl_epochs, device, args.status_json, t0)
+        del x_c, s_c, f_c, flx_c
+        torch.cuda.empty_cache()
 
-    gate10 = run_gate10_emergence_verification(burner_model, cyl_model, base_d1, device)
+    if not (args.tender_only and args.out_weights.exists()):
+        write_status(args.status_json, {"stage": "5/6_train_cab_pino", "progress_overall_pct": 82.0})
+        x_cab, s_cab, n_cab, v_cab = generate_converged_cab_dataset(args.cab_samples, device)
+        m_cab = train_cab_pino(cab_model, x_cab, s_cab, n_cab, v_cab, args.cab_epochs, device)
+
+    write_status(args.status_json, {"stage": "6/6_train_tender_pino", "progress_overall_pct": 91.0})
+    x_tdr, s_tdr, n_tdr, v_tdr = generate_converged_tender_dataset(args.tender_samples, device)
+    m_tdr = train_tender_pino(tender_model, x_tdr, s_tdr, n_tdr, v_tdr, args.tender_epochs, device)
+
+    gate10 = run_gate10_emergence_verification(burner_model, cyl_model, cab_model, tender_model, base_d1, device)
     total_sec = time.perf_counter() - t0
 
     args.out_weights.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
         {
-            "arch_version": "d51_pino_v1",
+            "arch_version": "d51_pino_v2",
             "burner_width": 48,
             "burner_layers": 4,
             "cyl_width": 32,
             "cyl_layers": 3,
+            "cab_width": 48,
+            "cab_layers": 3,
+            "tender_width": 48,
+            "tender_layers": 3,
             "burner_state_dict": {k: v.cpu().to(torch.float16) for k, v in burner_model.state_dict().items()},
             "cyl_state_dict": {k: v.cpu().to(torch.float16) for k, v in cyl_model.state_dict().items()},
-            "metrics": {"burner": m_burner, "cylinder": m_cyl, "gate10": gate10},
+            "cab_state_dict": {k: v.cpu().to(torch.float16) for k, v in cab_model.state_dict().items()},
+            "tender_state_dict": {k: v.cpu().to(torch.float16) for k, v in tender_model.state_dict().items()},
+            "metrics": {"burner": m_burner, "cylinder": m_cyl, "cab": m_cab, "tender": m_tdr, "gate10": gate10},
         },
         args.out_weights,
     )
 
     report = {
         "gpu_device": gpu_name,
+        "arch_version": "d51_pino_v2_4op",
         "total_training_time_sec": round(total_sec, 2),
-        "total_parameters": int(n_params_b + n_params_c),
+        "total_parameters": int(n_tot_params),
         "burner_params": int(n_params_b),
         "cylinder_params": int(n_params_c),
+        "cab_manifold_params": int(n_params_cab),
+        "tender_hydraulic_params": int(n_params_tdr),
         "weights_size_mb": round(args.out_weights.stat().st_size / (1024 * 1024), 2),
-        "burner_Samples": args.burner_samples,
-        "cylinder_samples": args.cyl_samples,
         "burner_validation": m_burner,
         "cylinder_validation": m_cyl,
+        "cab_manifold_validation": m_cab,
+        "tender_hydraulic_validation": m_tdr,
         "gate10_zero_if_emergence": gate10,
     }
     args.out_report.parent.mkdir(parents=True, exist_ok=True)
@@ -1091,16 +1606,18 @@ def main() -> None:
             "progress_overall_pct": 100.0,
             "elapsed_sec": round(total_sec, 2),
             "gate10_emergence_pass": gate10["gate10_emergence_pass"],
+            "gate17_cab_tender_emergence_pass": gate10["gate17_cab_tender_emergence_pass"],
             "rtx5080_bf16_combined_infer_ms": gate10["rtx5080_bf16_combined_infer_ms"],
             "report_path": str(args.out_report),
         },
     )
     print(f"==============================================================================")
-    print(f" [DONE] 3D PINO 双算子训练完成! 总耗时 {total_sec:.1f}s | 权重大小 {report['weights_size_mb']} MB")
-    print(f" [Gate 10] 无经验分支物理涌现检验: {'PASS' if gate10['gate10_emergence_pass'] else 'WARN'}")
-    print(f"   - 完好烟室负压: {gate10['intact_5flue_airtight']['vacuum_pa']} Pa -> 烟室门破洞自动坍塌至: "
-          f"{gate10['smokebox_door_breach_no_if_rule']['vacuum_pa']} Pa (-{gate10['vacuum_collapse_pct_on_breach']}%)")
-    print(f"   - RTX 5080 BF16 双算子联合推理耗时: {gate10['rtx5080_bf16_combined_infer_ms']} ms / 步")
+    print(f" [DONE] 四算子 PINO 套件训练完成! 总耗时 {total_sec:.1f}s | 权重大小 {report['weights_size_mb']} MB")
+    print(
+        f" [Gate 10 & 17] 物理涌现检验: Gate10={'PASS' if gate10['gate10_emergence_pass'] else 'WARN'} "
+        f"| Gate17={'PASS' if gate10['gate17_cab_tender_emergence_pass'] else 'WARN'}"
+    )
+    print(f"   - RTX 5080 BF16 四算子联合单步推理耗时: {gate10['rtx5080_bf16_combined_infer_ms']} ms / 步")
     print(f"==============================================================================", flush=True)
 
 

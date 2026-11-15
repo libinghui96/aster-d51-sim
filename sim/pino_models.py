@@ -450,3 +450,489 @@ def integrate_burner_fields(
         mean_o2_firebox=o2_fb,
         flue_profile_8_c=flue_prof_8,
     )
+
+
+class SpectralManifoldBlock1d(nn.Module):
+    """
+    一维分支流形傅里叶神经算子块 (1D Spectral FNO + 局部 3-tap 分支卷积):
+    - 频域 rFFT 分支: 跨全管路拓扑瞬间耦合椭圆压力平衡 (如 11-15 分汽包压力与 6-6/34-8 共用给水总管水锤压力);
+    - 局部卷积分支: 捕捉阀门缩脉节流、止回钢球阀座阶跃与 U 型冷凝弯管局部阻尼。
+    """
+
+    def __init__(self, width: int, modes: int = 8):
+        super().__init__()
+        self.width = width
+        self.modes = modes
+        scale = 1.0 / (width * width) ** 0.5
+        self.w_real = nn.Parameter(scale * torch.randn(width, width, modes))
+        self.w_imag = nn.Parameter(scale * torch.randn(width, width, modes))
+        self.local_conv = nn.Conv1d(width, width, kernel_size=3, padding=1)
+        g = 8 if (width % 8 == 0) else (4 if (width % 4 == 0) else 1)
+        self.norm = nn.GroupNorm(num_groups=g, num_channels=width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        orig_dtype = x.dtype
+        _, _, n_nodes = x.shape
+        xf = x.float()
+        fx = torch.fft.rfft(xf, dim=2, norm="ortho")
+        out_fx = torch.zeros_like(fx)
+        m = min(self.modes, fx.shape[2])
+        w_c = torch.complex(self.w_real[:, :, :m].float(), self.w_imag[:, :, :m].float())
+        out_fx[:, :, :m] = torch.einsum("bcm,cdm->bdm", fx[:, :, :m], w_c)
+        y_spec = torch.fft.irfft(out_fx, n=n_nodes, dim=2, norm="ortho").to(orig_dtype)
+        y_loc = self.local_conv(x)
+        return x + F.gelu(self.norm(y_spec + y_loc))
+
+
+class CabManifoldSightGlassPINO(nn.Module):
+    """
+    驾驶室后封头分汽包—水面计两相流—虹吸波登管物理神经算子 (Stage 12 Gate 17 #3):
+    求解 イラスト 11, 12, 13 全部驾驶室功能管路节点的耦合可压缩/两相流偏微分算子：
+      - 13-5 锅顶衬套 -> 11-15 分汽包总管压力降 p_turret
+      - 11-10/11-11 加减阀扇形闸口 -> 13-9 炉内干汽管可压缩质量流量 mdot_reg_g_s
+      - 11-13/11-14 左上 35° 通风阀 -> 13-8 外部铜管 -> 17-3 烟室 Fanno 摩擦射流 mdot_blw_g_s
+      - 11-2 右中汽笛阀 -> 13-3 下行管 -> 11-8 锅底长谐振汽笛耗汽流 mdot_whistle_g_s
+      - 11-16/17 右下泥圈排污针阀过冷闪蒸两相流 (HEM) mdot_blowdown_g_s
+      - 11-5/11-6/11-7 左侧透明玻璃水面计两相静压/动压弯月面 h_meniscus_pct 与 1-2 冲洗排汽流 mdot_sg_purge_g_s
+      - 13-1 下部 180° 积水 U 型虹吸弯管黏性滤波 -> PG-ø20 波登管表压 pg_bourdon_kgf
+
+    输入:
+      node_inp : [B, 6, 16] (16 个后壁管路节点特征: 导通度、无量纲压边界、静液柱高程、过冷/温度、上一步动态状态、节点坐标)
+      scalars  : [B, 10]    = [p_boil_kgf, p_chest_kgf, t_boil_norm, level_app_norm, reg_open, blw_open,
+                               whi_open, sg_drain_open, bd_open, prev_bourdon_kgf]
+    输出:
+      node_out : [B, 4, 16] = [p_node_kgf, mdot_node_g_s, dryness_node, temp_node_norm]
+      cab_vec  : [B, 8]     = [turret_p_kgf, mdot_reg_g_s, mdot_blw_g_s, mdot_whistle_g_s,
+                               mdot_blowdown_g_s, mdot_sg_purge_g_s, sight_glass_level_pct, pg_bourdon_kgf]
+    """
+
+    NUM_NODES = 16
+
+    def __init__(self, width: int = 48, n_layers: int = 3):
+        super().__init__()
+        self.lift = nn.Sequential(
+            nn.Conv1d(6, width, kernel_size=1),
+            nn.GELU(),
+            nn.Conv1d(width, width, kernel_size=3, padding=1),
+        )
+        self.blocks = nn.ModuleList([SpectralManifoldBlock1d(width, modes=9) for _ in range(n_layers)])
+        self.node_head = nn.Sequential(
+            nn.Conv1d(width, width, kernel_size=1),
+            nn.GELU(),
+            nn.Conv1d(width, 4, kernel_size=1),
+        )
+        self.vec_head = nn.Sequential(
+            nn.Linear(width + 10, width),
+            nn.GELU(),
+            nn.Linear(width, 8),
+        )
+
+    def forward(self, node_inp: torch.Tensor, scalars: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        p_boil = scalars[:, 0:1].clamp(min=0.0)
+        p_chest = scalars[:, 1:2].clamp(min=0.0)
+        lvl_app = scalars[:, 3:4].clamp(0.0, 1.0)
+        reg_open = scalars[:, 4:5].clamp(0.0, 1.0)
+        blw_open = scalars[:, 5:6].clamp(0.0, 1.0)
+        whi_open = scalars[:, 6:7].clamp(0.0, 1.0)
+        sg_drain = scalars[:, 7:8].clamp(0.0, 1.0)
+        bd_open = scalars[:, 8:9].clamp(0.0, 1.0)
+        prev_pg = scalars[:, 9:10].clamp(min=0.0)
+
+        h = self.lift(node_inp)
+        for blk in self.blocks:
+            h = blk(h)
+        raw_nodes = self.node_head(h)
+
+        p_nodes = p_boil.unsqueeze(-1) * torch.sigmoid(raw_nodes[:, 0:1])
+        mdot_nodes = 4.5 * F.softplus(raw_nodes[:, 1:2]) * node_inp[:, 0:1]
+        x_nodes = torch.sigmoid(raw_nodes[:, 2:3])
+        t_nodes = torch.sigmoid(raw_nodes[:, 3:4])
+        node_out = torch.cat([p_nodes, mdot_nodes, x_nodes, t_nodes], dim=1)
+
+        pooled = h.mean(dim=-1)
+        raw_v = self.vec_head(torch.cat([pooled, scalars], dim=-1))
+
+        # 硬物理边界投影 (Hard BC Ansatz):
+        # 1) 分汽包总管压力 0 <= p_turret <= p_boil (全关时严格等于 p_boil)
+        any_draw = (reg_open + blw_open + whi_open + sg_drain).clamp(0.0, 1.0)
+        turret_drop_frac = 0.22 * torch.sigmoid(raw_v[:, 0:1]) * any_draw
+        turret_p = p_boil * (1.0 - turret_drop_frac)
+
+        # 2) 各支路蒸汽/排污质量流量: 阀门全闭或零压差时严格为 0 g/s!
+        dp_reg = torch.clamp(turret_p - p_chest, min=0.0)
+        has_p = torch.clamp(p_boil / (p_boil + 0.015), 0.0, 1.0)
+        mdot_reg = (reg_open ** 1.35) * torch.sqrt(dp_reg * (turret_p + 1.033) + 1e-8) * (1.15 + 1.65 * torch.sigmoid(raw_v[:, 1:2]))
+        mdot_blw = blw_open * turret_p * (0.045 + 0.085 * torch.sigmoid(raw_v[:, 2:3])) * has_p
+        mdot_whi = whi_open * turret_p * (0.085 + 0.145 * torch.sigmoid(raw_v[:, 3:4])) * has_p
+        mdot_bd = bd_open * torch.sqrt(p_boil + 0.018) * (0.55 + 0.85 * torch.sigmoid(raw_v[:, 4:5]))
+        mdot_sg = sg_drain * torch.sqrt(p_boil + 0.015) * (0.08 + 0.16 * torch.sigmoid(raw_v[:, 5:6]))
+
+        # 3) 11-7 水面计玻璃管液位: 1-2 闭合时锚定两相静压液位；开启 1-2 冲洗时蒸汽高速吹扫使弯月面自然下挫!
+        purge_blowdown_depress = sg_drain * torch.clamp(p_boil / (p_boil + 0.15), 0.12, 1.0) * (0.72 + 0.24 * torch.sigmoid(raw_v[:, 6:7]))
+        capillary_trim = 0.035 * torch.tanh(raw_v[:, 6:7]) * (1.0 - sg_drain)
+        sg_level_pct = 100.0 * torch.clamp(lvl_app * (1.0 - purge_blowdown_depress) + capillary_trim, 0.0, 1.0)
+
+        # 4) 13-1 180° 积水虹吸弯管驱动的 PG-ø20 波登管压力: 黏性阻尼松弛逼近 turret_p
+        alpha_siphon = 0.18 + 0.42 * torch.sigmoid(raw_v[:, 7:8])
+        pg_bourdon = torch.clamp(prev_pg + alpha_siphon * (turret_p - prev_pg), min=0.0)
+
+        cab_vec = torch.cat([turret_p, mdot_reg, mdot_blw, mdot_whi, mdot_bd, mdot_sg, sg_level_pct, pg_bourdon], dim=-1)
+        return node_out, cab_vec
+
+
+class TenderHydraulicPINO(nn.Module):
+    """
+    煤水车—机车五止回球水力管网 + 马氏瓶真空补醇物理神经算子 (Stage 12 Gate 17 #4):
+    零经验 if 规则! 直接在 32 个真实物理管路节点上同时求解:
+      1) 31-5 浸渍横型手摇泵 (ø7x16mm, 双 SB-ø4) + 6-5 中央轴动泵 (ø3.2mm, 双 SB-ø3) 共用 BT-ø5/34-8 给水软管的水力竞争；
+      2) 4-17 旁通阀 -> 4-16 软管 -> 31-14 左前 50° 鹅颈高立管 (+46.8mm 防虹吸静水头) 与 13-2/13-7 锅炉逆止阀 (SB-ø4) 的分流；
+      3) 31-11 上部引抜排水栓 -> 31-9 水箱底衬套 Torricelli 重力放水流量；
+      4) 36-4 密闭马氏瓶顶空负压 P_vac <-> 36-5 注醇盖大气导通度 <-> 36-6 针阀 <-> 34-2 恒液位サンプ供醇与漫油物理涌现！
+
+    输入:
+      node_inp : [B, 7, 32] (32 节点管路导通度、泵源位移速度、背压边界、静水高程、液位库存、顶空真空状态、节点坐标)
+      scalars  : [B, 12]    = [p_boil_kgf, v_axle_ram_m_s, v_hand_ram_m_s, bypass_open, drain_plug_open,
+                               water_level_norm, alcohol_level_norm, sump_level_norm, fuel_valve_open,
+                               fuel_cap_open, head_vac_prev_kpa, grade_rad]
+    输出:
+      node_out : [B, 4, 32] = [p_hyd_kgf, q_node_ml_s, check_lift_norm, fluid_temp_norm]
+      hyd_vec  : [B, 11]    = [q_boiler_clack_ml_s, q_return_31_14_ml_s, q_drain_31_9_ml_s, p_line_shared_kgf,
+                               lift_6_5_suc_mm, lift_6_5_del_mm, lift_31_5_suc_mm, lift_31_5_del_mm, lift_13_2_clack_mm,
+                               mariotte_vac_kpa, q_fuel_to_sump_ml_s]
+    """
+
+    NUM_NODES = 32
+
+    def __init__(self, width: int = 48, n_layers: int = 3):
+        super().__init__()
+        self.lift = nn.Sequential(
+            nn.Conv1d(7, width, kernel_size=1),
+            nn.GELU(),
+            nn.Conv1d(width, width, kernel_size=3, padding=1),
+        )
+        self.blocks = nn.ModuleList([SpectralManifoldBlock1d(width, modes=12) for _ in range(n_layers)])
+        self.node_head = nn.Sequential(
+            nn.Conv1d(width, width, kernel_size=1),
+            nn.GELU(),
+            nn.Conv1d(width, 4, kernel_size=1),
+        )
+        self.vec_head = nn.Sequential(
+            nn.Linear(width + 12, width),
+            nn.GELU(),
+            nn.Linear(width, 11),
+        )
+
+    def forward(self, node_inp: torch.Tensor, scalars: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        p_boil = scalars[:, 0:1].clamp(min=0.0)
+        v_axle = scalars[:, 1:2]                 # m/s (<0 压水冲程, >0 吸水冲程)
+        v_hand = scalars[:, 2:3]                 # m/s (<0 压水冲程, >0 吸水冲程)
+        byp_open = scalars[:, 3:4].clamp(0.0, 1.0)
+        drn_open = scalars[:, 4:5].clamp(0.0, 1.0)
+        w_norm = scalars[:, 5:6].clamp(0.0, 1.0)
+        alc_norm = scalars[:, 6:7].clamp(0.0, 1.0)
+        sump_norm = scalars[:, 7:8].clamp(0.0, 1.5)
+        fv_open = scalars[:, 8:9].clamp(0.0, 1.0)
+        cap_open = scalars[:, 9:10].clamp(0.0, 1.0)
+
+        h = self.lift(node_inp)
+        for blk in self.blocks:
+            h = blk(h)
+        raw_nodes = self.node_head(h)
+
+        p_nodes = 5.5 * torch.sigmoid(raw_nodes[:, 0:1])
+        q_nodes = 6.0 * torch.tanh(raw_nodes[:, 1:2] / 2.0)
+        l_nodes = torch.sigmoid(raw_nodes[:, 2:3])
+        t_nodes = torch.sigmoid(raw_nodes[:, 3:4])
+        node_out = torch.cat([p_nodes, q_nodes, l_nodes, t_nodes], dim=1)
+
+        pooled = h.mean(dim=-1)
+        raw_v = self.vec_head(torch.cat([pooled, scalars], dim=-1))
+
+        # 物理硬守恒结构投影 (Hard Physical Conservation & Complementarity Ansatz):
+        has_water = torch.clamp(w_norm / (w_norm + 0.008), 0.0, 1.0)
+        # PN3.2-1 (8.0425 mm²) 与 PN7-1.9 (38.4845 mm²) 容积排量源: mm² × m/s == ml/s!
+        q_axle_disp = 8.0425 * torch.clamp(-v_axle, min=0.0) * has_water * (0.82 + 0.14 * torch.sigmoid(raw_v[:, 0:1]))
+        q_hand_disp = 38.4845 * torch.clamp(-v_hand, min=0.0) * has_water * (0.84 + 0.14 * torch.sigmoid(raw_v[:, 1:2]))
+        q_pump_tot = q_axle_disp + q_hand_disp
+
+        # 共用给水总管压力 p_line_shared_kgf 与 13-2 逆止阀开启压差精确互补平衡:
+        # 31-14 鹅颈立管静水头 ~0.0048 kgf/cm², 13-2 逆止阀开启压差 p_boil + 0.12 kgf/cm²
+        p_crack = p_boil + 0.12
+        p_head = 0.0048 * torch.clamp(q_pump_tot * 25.0, 0.0, 1.0)
+        g_byp = (byp_open ** 1.35) * (2.6 + 1.8 * torch.sigmoid(raw_v[:, 2:3])) + 1e-5
+        g_clack = 14.0 + 8.0 * torch.sigmoid(raw_v[:, 3:4])
+        p_sub = p_head + q_pump_tot / g_byp
+        p_sup = (g_byp * p_sub + g_clack * p_crack) / (g_byp + g_clack)
+        p_line = torch.clamp(torch.minimum(p_sub, p_sup), 0.0, 6.2)
+
+        # 经 4-17 -> 31-14 高位鹅颈管回水流量与经 13-2 顶入锅炉流量严格满足质量连续性 q_boil + q_ret == q_pump_tot!
+        q_ret_cap = g_byp * torch.clamp(p_line - p_head, min=0.0)
+        q_ret = torch.minimum(q_pump_tot, q_ret_cap)
+        q_boil = torch.clamp(q_pump_tot - q_ret, min=0.0)
+
+        # 31-11 提拉排水栓 -> 31-9 底部重力放水 (Torricelli 定律 q_drain ∝ drn_open * sqrt(h_water))
+        q_drain = drn_open * torch.sqrt(w_norm + 1e-6) * (3.2 + 1.6 * torch.sigmoid(raw_v[:, 4:5])) * has_water
+
+        # 5 颗不锈钢止回球真实升程 (mm): 由各自前后压差/冲程流量连续涌现!
+        axle_suc_flow = 8.0425 * torch.clamp(v_axle, min=0.0) * has_water
+        hand_suc_flow = 38.4845 * torch.clamp(v_hand, min=0.0) * has_water
+        # 当手摇泵 31-5 高压压水且轴动泵未压水时，共用管高压自动压死 6-5 出口球 (lift_6_5_del -> 0)!
+        axle_share = q_axle_disp / (q_pump_tot + 1e-5)
+        hand_share = q_hand_disp / (q_pump_tot + 1e-5)
+        lift_6_5_suc = 0.85 * torch.tanh(axle_suc_flow * 0.9 * (0.8 + 0.4 * torch.sigmoid(raw_v[:, 5:6])))
+        lift_6_5_del = 0.85 * torch.tanh(q_axle_disp * 0.9 * (0.4 + 0.6 * axle_share) * (0.8 + 0.4 * torch.sigmoid(raw_v[:, 6:7])))
+        lift_31_5_suc = 0.90 * torch.tanh(hand_suc_flow * 0.35 * (0.8 + 0.4 * torch.sigmoid(raw_v[:, 7:8])))
+        lift_31_5_del = 0.90 * torch.tanh(q_hand_disp * 0.35 * (0.4 + 0.6 * hand_share) * (0.8 + 0.4 * torch.sigmoid(raw_v[:, 8:9])))
+        lift_13_2 = 0.90 * torch.tanh(q_boil * 0.65)
+
+        # 36-4 马氏瓶顶空真空度 (kPa) 与 34-2 恒液位サンプ重力补醇流量 (ml/s):
+        # 旋紧 36-5 (cap_open=0) 时顶空维持 ρ_alc * g * h_col 静水平衡负压，仅当 sump_norm < 1.0 (3.5 ml) 时冒泡补液；
+        # 一旦拧松 36-5 (cap_open=1 -> 大气导通)，顶空负压瞬间归零，液柱全静压头灌入 34-2 造成物理漫油!
+        has_alc = torch.clamp(alc_norm / (alc_norm + 0.008), 0.0, 1.0)
+        equil_vac_kpa = (1.0 - cap_open) * has_alc * (0.35 + 2.15 * alc_norm) * (0.82 + 0.36 * torch.sigmoid(raw_v[:, 9:10]))
+        # 有效驱动液位目标: 密闭马氏瓶由斜切补气管口锁死在 sump_norm = 1.0 (3.5 ml); 破空时由全罐高程驱动冲向 sump_norm = 2.1 (7.35 ml)
+        sump_equil_norm = 1.0 + 1.10 * cap_open * (0.45 + 0.55 * alc_norm)
+        head_drive = torch.clamp(sump_equil_norm - sump_norm, min=0.0)
+        q_fuel = fv_open * has_alc * head_drive * (0.85 + 0.95 * cap_open + 0.55 * torch.sigmoid(raw_v[:, 10:11]))
+
+        hyd_vec = torch.cat(
+            [
+                q_boil,
+                q_ret,
+                q_drain,
+                p_line,
+                lift_6_5_suc,
+                lift_6_5_del,
+                lift_31_5_suc,
+                lift_31_5_del,
+                lift_13_2,
+                equil_vac_kpa,
+                q_fuel,
+            ],
+            dim=-1,
+        )
+        return node_out, hyd_vec
+
+
+def compute_cab_manifold_pde_residuals(scalars: torch.Tensor, cab_vec: torch.Tensor) -> torch.Tensor:
+    """
+    驾驶室分汽包—水面计算子物理守恒残差 (PINN Loss):
+      1) 13-5 锅顶干汽总管压降—动能平方关系残差: (p_boil - p_turret) - K_turret * (mdot_tot)^2 / rho_steam = 0
+      2) 水面计冲洗吹扫单调性残差: 1-2 开启时弯月面高度严格低于静压表观高度
+    """
+    p_boil = scalars[:, 0].float()
+    lvl_app = scalars[:, 3].float() * 100.0
+    sg_drain = scalars[:, 7].float()
+
+    turret_p = cab_vec[:, 0].float()
+    mdot_tot = (cab_vec[:, 1] + cab_vec[:, 2] + cab_vec[:, 3]).float()
+    sg_lvl = cab_vec[:, 6].float()
+
+    rho_rel = 0.55 + 0.48 * p_boil
+    dp_expected = torch.minimum(0.22 * p_boil, 0.018 * (mdot_tot ** 2) / rho_rel)
+    res_turret = (p_boil - turret_p) - dp_expected
+    res_sg_mono = F.relu(sg_lvl - lvl_app) * sg_drain * 0.02
+    return (res_turret ** 2 + res_sg_mono ** 2).mean()
+
+
+def compute_tender_hydraulic_pde_residuals(scalars: torch.Tensor, hyd_vec: torch.Tensor) -> torch.Tensor:
+    """
+    煤水车五止回球管网—马氏瓶算子物理守恒残差 (PINN Loss):
+      1) 13-2 锅炉逆止阀互补松弛条件 (Complementarity): q_boil * max(0, p_boil + 0.12 - p_line) == 0
+      2) 36-5 破空大气等压条件: cap_open * mariotte_vac_kpa == 0
+    """
+    p_boil = scalars[:, 0].float()
+    cap_open = scalars[:, 9].float()
+
+    q_boil = hyd_vec[:, 0].float()
+    p_line = hyd_vec[:, 3].float()
+    vac_kpa = hyd_vec[:, 9].float()
+
+    comp_clack = q_boil * F.relu((p_boil + 0.11) - p_line)
+    atm_breach = cap_open * vac_kpa
+    return (comp_clack ** 2 + atm_breach ** 2).mean()
+
+
+def build_cab_manifold_inputs(scalars: torch.Tensor) -> torch.Tensor:
+    """
+    从驾驶室 10 维状态向量 [B, 10] 确定性构造 16 节点 6 通道管路拓扑特征张量 [B, 6, 16]:
+      节点拓扑:
+        [0..2]  13-5 锅顶衬套 -> 11-15 分汽包总管
+        [3..5]  11-10/11-11 加减阀扇形闸口 -> 13-9 炉内干汽管
+        [6..7]  11-13 左上 35° 通风阀 -> 13-8 外部通风管 -> 17-3
+        [8..9]  11-2 右中汽笛阀 -> 13-3 下行管 -> 11-8 锅底长汽笛
+        [10..12] 11-5 上座 -> 11-7 左侧透明玻璃管 -> 11-6 下座 -> 1-2 冲洗针阀
+        [13..14] 13-1 下部 180° 积水虹吸弯管 -> PG-ø20 波登管
+        [15]    11-16/17 右下泥圈排污针阀
+    """
+    B = scalars.shape[0]
+    dev = scalars.device
+    dtp = scalars.dtype
+
+    p_boil_n = (scalars[:, 0] / 5.0).clamp(0.0, 1.2)
+    p_chest_n = (scalars[:, 1] / 5.0).clamp(0.0, 1.2)
+    t_boil_n = scalars[:, 2].clamp(0.0, 1.2)
+    lvl_app = scalars[:, 3].clamp(0.0, 1.0)
+    reg_o = scalars[:, 4].clamp(0.0, 1.0)
+    blw_o = scalars[:, 5].clamp(0.0, 1.0)
+    whi_o = scalars[:, 6].clamp(0.0, 1.0)
+    sg_o = scalars[:, 7].clamp(0.0, 1.0)
+    bd_o = scalars[:, 8].clamp(0.0, 1.0)
+    prev_pg_n = (scalars[:, 9] / 5.0).clamp(0.0, 1.2)
+    one = torch.ones_like(p_boil_n)
+    zero = torch.zeros_like(p_boil_n)
+
+    cond = torch.stack(
+        [
+            one, 0.92 * one, 0.88 * one,
+            reg_o, 0.85 * reg_o, 0.80 * reg_o,
+            blw_o, 0.55 * blw_o,
+            whi_o, 0.62 * whi_o,
+            0.75 * one, 0.95 * one, sg_o,
+            0.35 * one, 0.25 * one,
+            bd_o,
+        ],
+        dim=-1,
+    )
+    p_bc = torch.stack(
+        [
+            p_boil_n, p_boil_n, p_boil_n,
+            p_boil_n, 0.5 * (p_boil_n + p_chest_n), p_chest_n,
+            p_boil_n, zero,
+            p_boil_n, zero,
+            p_boil_n, p_boil_n, zero,
+            p_boil_n, prev_pg_n,
+            p_boil_n,
+        ],
+        dim=-1,
+    )
+    head = torch.stack(
+        [
+            one, 0.95 * one, 0.95 * one,
+            0.95 * one, 0.88 * one, 0.85 * one,
+            0.95 * one, 0.82 * one,
+            0.65 * one, 0.15 * one,
+            0.92 * one, lvl_app, 0.35 * lvl_app,
+            0.85 * one, 0.96 * one,
+            0.12 * one + 0.25 * lvl_app,
+        ],
+        dim=-1,
+    )
+    temp_ch = t_boil_n.unsqueeze(-1).expand(B, 16) * torch.tensor(
+        [1.0, 0.99, 0.98, 0.98, 0.97, 0.97, 0.96, 0.90, 0.95, 0.86, 0.96, 0.92, 0.88, 0.52, 0.36, 0.94],
+        device=dev,
+        dtype=dtp,
+    ).unsqueeze(0)
+    dyn_state = torch.stack(
+        [
+            prev_pg_n, prev_pg_n, prev_pg_n,
+            reg_o, p_chest_n, p_chest_n,
+            blw_o, blw_o,
+            whi_o, whi_o,
+            lvl_app, lvl_app * (1.0 - 0.7 * sg_o), sg_o,
+            prev_pg_n, prev_pg_n,
+            bd_o,
+        ],
+        dim=-1,
+    )
+    coords = torch.linspace(-1.0, 1.0, 16, device=dev, dtype=dtp).unsqueeze(0).expand(B, 16)
+    return torch.stack([cond, p_bc, head, temp_ch, dyn_state, coords], dim=1)
+
+
+def build_tender_hydraulic_inputs(scalars: torch.Tensor) -> torch.Tensor:
+    """
+    从煤水车—机车 12 维水力/马氏瓶状态向量 [B, 12] 确定性构造 32 节点 7 通道管网特征张量 [B, 7, 32]:
+      节点拓扑:
+        [0..3]   35-1/31-10 敞口水槽静压与 31-9/31-11 底部放水支路
+        [4..9]   31-5 浸渍手摇泵 (ø7x16mm, 双 SB-ø4) -> 31-13 -> 34-6 床下管
+        [10..13] BT-ø5 + 34-8 跨车共用给水软管 -> 6-11
+        [14..19] 6-5 中央轴动泵 (ø3.2mm, 双 SB-ø3) -> 6-6 汇流三通
+        [20..23] 4-17 旁通阀 -> 4-16 软管 -> 31-14 左前 50° 鹅颈高立管
+        [24..26] 13-11 车架前延给水管 -> 13-2/13-7 锅炉逆止阀 (SB-ø4)
+        [27..31] 36-4 密闭马氏瓶顶空 <-> 36-5 密封盖 <-> 36-6 针阀 <-> 34-2 サンプ <-> 23-1 燃烧器
+    """
+    B = scalars.shape[0]
+    dev = scalars.device
+    dtp = scalars.dtype
+
+    p_boil_n = (scalars[:, 0] / 5.0).clamp(0.0, 1.2)
+    v_ax = scalars[:, 1].clamp(-0.35, 0.35)
+    v_hp = scalars[:, 2].clamp(-0.35, 0.35)
+    byp = scalars[:, 3].clamp(0.0, 1.0)
+    drn = scalars[:, 4].clamp(0.0, 1.0)
+    w_n = scalars[:, 5].clamp(0.0, 1.0)
+    alc_n = scalars[:, 6].clamp(0.0, 1.0)
+    sump_n = (scalars[:, 7] / 2.0).clamp(0.0, 1.2)
+    fv_o = scalars[:, 8].clamp(0.0, 1.0)
+    cap_o = scalars[:, 9].clamp(0.0, 1.0)
+    vac_n = (scalars[:, 10] / 4.0).clamp(0.0, 1.2)
+    grade = scalars[:, 11].clamp(-0.35, 0.35)
+
+    one = torch.ones_like(p_boil_n)
+    zero = torch.zeros_like(p_boil_n)
+
+    cond = torch.cat(
+        [
+            torch.stack([one, one, drn, drn], dim=-1),
+            torch.stack([one, one, one, 0.85 * one, 0.80 * one, 0.80 * one], dim=-1),
+            0.78 * one.unsqueeze(-1).expand(B, 4),
+            torch.stack([one, one, one, 0.82 * one, 0.85 * one, 0.90 * one], dim=-1),
+            torch.stack([byp, 0.85 * byp, 0.80 * byp, 0.75 * byp], dim=-1),
+            torch.stack([0.82 * one, 0.80 * one, one], dim=-1),
+            torch.stack([one, cap_o, fv_o, 0.85 * fv_o, 0.75 * one], dim=-1),
+        ],
+        dim=-1,
+    )
+    pump_src = torch.cat(
+        [
+            torch.zeros((B, 4), device=dev, dtype=dtp),
+            (v_hp * 3.0).unsqueeze(-1).expand(B, 6),
+            ((v_hp * 2.0 + v_ax) * 1.5).unsqueeze(-1).expand(B, 4),
+            (v_ax * 4.0).unsqueeze(-1).expand(B, 6),
+            torch.zeros((B, 12), device=dev, dtype=dtp),
+        ],
+        dim=-1,
+    )
+    p_back = torch.cat(
+        [
+            torch.zeros((B, 20), device=dev, dtype=dtp),
+            torch.stack([0.02 * one, 0.02 * one, 0.05 * one, 0.05 * one], dim=-1),
+            torch.stack([0.5 * p_boil_n, 0.8 * p_boil_n, p_boil_n], dim=-1),
+            torch.stack([-vac_n, zero, zero, zero, zero], dim=-1),
+        ],
+        dim=-1,
+    )
+    elev = (
+        torch.tensor(
+            [
+                0.30, 0.25, 0.08, 0.0,
+                0.14, 0.14, 0.18, 0.08, -0.05, -0.05,
+                -0.08, -0.08, -0.05, -0.03,
+                0.10, 0.0, 0.0, 0.05, 0.08, 0.08,
+                0.12, -0.04, 0.22, 0.47,
+                0.10, 0.14, 0.18,
+                0.42, 0.55, 0.35, 0.02, 0.12,
+            ],
+            device=dev,
+            dtype=dtp,
+        ).unsqueeze(0)
+        + 0.15 * grade.unsqueeze(-1)
+    )
+    inv_lvl = torch.cat(
+        [
+            w_n.unsqueeze(-1).expand(B, 27),
+            torch.stack([alc_n, alc_n, alc_n, sump_n, sump_n], dim=-1),
+        ],
+        dim=-1,
+    )
+    vac_ch = torch.cat(
+        [
+            (1.0 - byp).unsqueeze(-1).expand(B, 27),
+            torch.stack([vac_n, cap_o, fv_o, sump_n, one - cap_o], dim=-1),
+        ],
+        dim=-1,
+    )
+    coords = torch.linspace(-1.0, 1.0, 32, device=dev, dtype=dtp).unsqueeze(0).expand(B, 32)
+    return torch.stack([cond, pump_src, p_back, elev, inv_lvl, vac_ch, coords], dim=1)
+
+
