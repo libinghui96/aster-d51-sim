@@ -57,7 +57,7 @@
 - RTX 5080 离线收敛 3D PDE 数据生成与轻量级 3D PINO 双算子训练：`python scripts/10_train_pino_surrogate.py`
 - 启动 3D 交互热机联调（热炉即发）：`python -m sim.run_cosim --xml models/d51_full.xml --preset hot`
 - 启动 RTX 5080 571万体素真 3D 零件级多相热流联调：`python -m sim.run_cosim --xml models/d51_full.xml --preset hot --gpu-3d`
-- 启动本地 RTX 5080 Live 3D WebSocket 推流桥（供浏览器 60 FPS 直连）：`python -m sim.gpu_3d_server --scene roller --preset hot`
+- 启动本地 RTX 5080 Live 3D WebSocket 推流桥（默认绑定 `0.0.0.0:8765`，自带旧进程接管与防伪终端断开 `_SafeTeeStream` 高可用保护，详见 `docs/LESSONS_LEARNED.md` 失误 21）：`python -m sim.gpu_3d_server --scene roller --preset hot`
 - 无 GUI 自动化全流程试车验收与绘图：`python -m sim.run_cosim --xml models/d51_full.xml --headless-demo --gpu-3d`
 - 同步资产并构建 Web 3D 实时交互前端：`python scripts/05_sync_web_assets.py && npm --prefix web run build`
 

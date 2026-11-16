@@ -223,8 +223,20 @@
   2. **驾驶室圆弧车顶后悬挑檐口漏掏空造成仪表顶缘遮挡**：`cab_roof` 外筒含后悬挑长度，若内部掏空圆柱 `cab_roof_hollow` 长度偏短且后门框仅用平顶方盒切割，会在 `Z ≈ +70.5 mm` 留下一道实心垂檐，从车后正视时切掉 `PG-ø20` 与 `11-11` 加减柄顶缘。**准则**：拱顶壳体内部掏空必须贯穿整个后悬挑，后门洞须叠加同心圆弧拱顶切割；
   3. **异材质贴合板共面 Z-Fighting 闪烁**：驾驶室地板 `8-11` 顶面与主车架尾梁顶面同处 `Z = +20.0 mm`、铸铁背板 `11-9` 上拱半径略小于紫铜后管板时，光栅化深度缓冲会出现灰黑条带闪烁或铜边漏光。**准则**：相邻异材质覆盖件必须预留 `>= 0.3 mm` 法向阶差与 `>= 0.8 mm` 径向包边余量，每次重构后用 `MUJOCO_GL=egl` 导出单张 `640×480` 离屏图做目视终审；
   4. **平坦长板 STL「稀疏三角顶点盲区」与侧铰门「枢轴 vs 质心」混淆**：`200.7 mm` 平坦矩形底架的 STL 顶点仅位于两端角点 `X = ±100.35 mm`，直接过滤原始顶点 `|X| <= 85 mm` 会误判中间段无底板；右铰于 `Y = -6.5 mm` 的居中火室门 `12-1`，其刚体原点 `body_xpos` 在铰链轴线（`-6.5 mm`）而网格质心 `geom_xpos` 在门板中心（`-1.3 mm`）。**准则**：局部区间几何核验一律先调 `sample_triangle_surface()` 加密采样；偏心铰接件必须分别校验铰链 `body_xpos` 与门板 `geom_xpos`；
-  5. **三维 PDE 全堵烟管工况的「火室直接辐射 vs 烟管对流」双通道物理拆分**：在 `BurnerFlueSmokeboxPINO` 零 `if` 检验中，5 根烟管全堵时火室内 `23-1` 三头灯芯仍直接加热四周紫铜火室壁，使总 `Q_boiler` 物理保留约 `56.7%`，而烟管对流特征量 `Q_superheater` 暴跌 `96.9%`（`13.37 W -> 0.42 W`）、进风量下降 `53.1%`。**准则**：多传热通道系统的堵管涌现门禁应联合考核「总吸热显著折减（`< 62%`）+ 烟管过热对流坍塌（`< 15%`）」，避免违背火室辐射传热物理事实的过度单一阈值；
-  6. **后台常驻 WebSocket 服务伪终端关闭（`/dev/pts/N (deleted)`）触发 `print()` `OSError (EIO)` 秒断陷阱**：当通过 SSH / IDE 终端启动 `gpu_3d_server` 后原终端会话关闭时，Linux 内核将 `FD1/FD2` 标记为 `/dev/pts/0 (deleted)`；此时无打印的 `/healthz` 仍正常返回 `200 OK`，但一旦运行一段时间填满缓冲区或新客户端连入触发 `ws_handler` 内的 `print(...)`，Python 立即抛出 `OSError: [Errno 5] Input/output error`，导致 WebSocket 在 `101 Switching Protocols` 后瞬间以 `1006` 异常断开且无法重连！**准则**：所有常驻推流服务必须在入口忽略 `SIGHUP`、将 `sys.stdout/stderr` 包装为捕获 `OSError` 并落盘日志文件的安全流（`_SafeTeeStream`），并在广播循环中定期 `await asyncio.sleep(0)` 让出事件循环、检测 TCP 发送缓冲背压跳帧及过滤 `NaN/Inf` JSON。
+  5. **三维 PDE 全堵烟管工况的「火室直接辐射 vs 烟管对流」双通道物理拆分**：在 `BurnerFlueSmokeboxPINO` 零 `if` 检验中，5 根烟管全堵时火室内 `23-1` 三头灯芯仍直接加热四周紫铜火室壁，使总 `Q_boiler` 物理保留约 `56.7%`，而烟管对流特征量 `Q_superheater` 暴跌 `96.9%`（`13.37 W -> 0.42 W`）、进风量下降 `53.1%`。**准则**：多传热通道系统的堵管涌现门禁应联合考核「总吸热显著折减（`< 62%`）+ 烟管过热对流坍塌（`< 15%`）」，避免违背火室辐射传热物理事实的过度单一阈值。
+
+---
+
+### 失误 21：Web 实时 GPU 推流服务掉线降级、远程代理寻址隔离与后台伪终端 `EIO` 秒断五大隐患及高可用规范
+- **错误现象**：
+  1. 页面右上角徽章静默变为绿色 `CFD LUT`（回退前端 1D 离线兜底），用户难以第一时间区分“算法关了 PINO”还是“WebSocket 断连降级”；
+  2. 运行一段时间或关闭原启动终端标签页后，GPU 推流突然掉线且再也连不上——奇怪的是 `curl /healthz` 仍返回 `200 OK`，但任何 WebSocket 连接在 `101 Switching Protocols` 后 `0.1 ms` 内即以 `1006` 异常断开，同时新启动的 `nohup` 实例因旧进程霸占 `8765` 端口报 `Address already in use` 直接退出。
+- **根因剖析与五大高可用强制准则**：
+  1. **伪终端销毁（`/dev/pts/N (deleted)`）触发 `print()` `OSError (EIO)` 秒断与旧进程占口**：Linux 下原 SSH/IDE 终端关闭后进程 `FD1/FD2` 指向已删除的伪终端，无打印的 `/healthz` 不受影响，但缓冲刷盘或 `ws_handler` 内执行 `print(...)` 会立即抛出 `OSError: [Errno 5] Input/output error` 秒杀协程。**准则**：常驻服务入口必须忽略 `SIGHUP`、将 `sys.stdout/stderr` 包装为自动捕获 `OSError` 并落盘 `logs/gpu_server.log` 的 `_SafeTeeStream`，且启动时自动平滑终止同用户残留的旧 `gpu_3d_server` 进程；
+  2. **远程 SSH 单端口转发、局域网访问与 `https://` 代理下的同源 `/ws` 寻址**：若前端在 `https:` 下直接早退，或在 Vite (`5173`) 开发模式下硬编码直连 `:8765`，在仅转发单端口或走 `https://` IDE 代理时会连接失败；后端若只绑 `127.0.0.1` 则拒绝局域网直连。**准则**：`vite.config.ts` 的 `server/preview` 必须配置 `/ws` 与 `/healthz` 反向代理，前端统一优先连接同源 `ws(s)://<window.location.host>/ws`，后端默认绑定 `0.0.0.0`；
+  3. **静态缓存导致 MJCF 自由度维度失配与徽章语义显式化**：重构关节后若浏览器缓存了旧版 `.xml`，会出现 `latestWsFrame.qpos.length !== model.nq` 而静默降级本地求解。**准则**：服务端对非哈希静态资产（`.xml / .stl / index.html`）强制返回 `Cache-Control: no-cache, must-revalidate`，前端离线兜底徽章显式标注 `OFFLINE · CFD LUT` 与在线 `RTX 5080 4-PINO+6D · 5.71M` 严格区分；
+  4. **高频同步物理步进饿死 `asyncio` 事件循环与慢速隧道 TCP 发送积压**：单帧连续同步跑 `33` 步 MuJoCo + PINO 会挤占事件循环导致 `PING/PONG` 超时。**准则**：内循环每 `8` 步（`< 4 ms`）`await asyncio.sleep(0)` 让出协程调度、对齐 PINO 子步同步频率，当单客户端 `transport.get_write_buffer_size() > 256 KB` 时优雅跳帧防拥塞断连，并将 `heartbeat` 放宽至 `55s`；
+  5. **非有限浮点（`NaN / Inf`）JSON 污染防御与半开死连接看门狗**：Python `json.dumps` 默认允许输出非法 JSON 字面量 `NaN` 导致浏览器 `JSON.parse` 抛错丢帧。**准则**：服务端强制 `allow_nan=False` 配合非有限值归零清洗、广播循环异常自愈与 `qpos` 非有限值自动复位；前端配套前台可见 `5s` 无新帧看门狗主动重握手（`0.9s` 快速重连）。
 
 ---
 
