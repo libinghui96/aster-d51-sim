@@ -441,11 +441,13 @@ class AsterD51Thermo3DGPU:
         _, nx4, ny4, nz4 = self.D4_SHAPE
         self.d4_xr, self.d4_yr, self.d4_zr = (-16.0, 18.0), (-9.0, 9.0), (-10.0, 25.0)
         self.d4_dx_mm = (self.d4_xr[1] - self.d4_xr[0]) / (nx4 - 1)
-        s4_cyl = voxelize_stl_cuda(tris_cyl_L, self.d4_xr, self.d4_yr, self.d4_zr, (nx4, ny4, nz4), dev)
+        tris_cyl_d4 = tris_cyl_L.copy()
+        tris_cyl_d4[:, :, 0] -= 4.2
+        s4_cyl = voxelize_stl_cuda(tris_cyl_d4, self.d4_xr, self.d4_yr, self.d4_zr, (nx4, ny4, nz4), dev)
 
         tris_val_in_cyl = tris_val_L.copy()
-        tris_val_in_cyl[:, :, 0] += (109.574 - 126.0)
-        tris_val_in_cyl[:, :, 1] += (36.0 - 32.5)
+        tris_val_in_cyl[:, :, 0] += (109.574 - 130.2)
+        tris_val_in_cyl[:, :, 1] += 0.0
         tris_val_in_cyl[:, :, 2] += 18.5
         self.s4_valve_tpl = voxelize_stl_cuda(tris_val_in_cyl, self.d4_xr, self.d4_yr, self.d4_zr, (nx4, ny4, nz4), dev)
 
@@ -459,8 +461,8 @@ class AsterD51Thermo3DGPU:
         X4, Y4, Z4 = torch.meshgrid(xs4, ys4, zs4, indexing="ij")
         self.X4, self.Y4, self.Z4 = X4, Y4, Z4
         r4_bore = torch.hypot(Y4, Z4)
-        in_bore = (X4 >= -14.8) & (X4 <= 14.8) & (r4_bore <= 7.50)
-        in_chest = (X4 >= -13.0) & (X4 <= 13.0) & (Y4.abs() <= 6.5) & (Z4 >= 15.2) & (Z4 <= 23.2)
+        in_bore = (X4 >= -11.5) & (X4 <= 12.2) & (r4_bore <= 7.50)
+        in_chest = (X4 >= -10.2) & (X4 <= 11.2) & (Y4 >= -2.2) & (Y4 <= 6.8) & (Z4 >= 14.8) & (Z4 <= 22.0)
         port_head = ((X4 - (3.8 + 0.85 * (15.4 - Z4))).abs() <= 0.95) & (Y4.abs() <= 3.3) & (Z4 >= 7.0) & (Z4 <= 15.8)
         port_crank = ((X4 - (-3.8 - 0.85 * (15.4 - Z4))).abs() <= 0.95) & (Y4.abs() <= 3.3) & (Z4 >= 7.0) & (Z4 <= 15.8)
         port_exh = (X4.abs() <= 1.25) & (Y4.abs() <= 3.3) & (Z4 >= 12.5) & (Z4 <= 15.8)

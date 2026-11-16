@@ -36,22 +36,21 @@ interface InteractivePartEntry {
 }
 
 const INTERACTIVE_PART_META: Record<string, { label: string; kind: InteractivePartEntry["kind"] }> = {
-  cab_regulator_vis: { label: "11-11 加減弁ハンドル (上下ドラッグで蒸気開度 11-10 扇形案内)", kind: "drag" },
-  cab_reverser_wheel_vis: { label: "8-16 左運転台・扇形ノッチ式逆転機レバー (ドラッグで前後進カットオフ)", kind: "drag" },
-  cab_blower_vis: { label: "11-13 左上3本スポーク通風弁手輪 → 13-8 外側通風管 (ドラッグで強制ドラフト)", kind: "drag" },
-  cab_whistle_vis: { label: "11-3 左上外 S字汽笛レバー → 13-3 → 11-8 缶胴下真鍮汽笛 (押下ホールドで吹鳴)", kind: "momentary" },
-  cab_sight_drain_vis: { label: "11-5 右側外縁(-Y) 11-7 水面計下部六角ドレン栓 (クリックでフラッシュ洗浄)", kind: "toggle" },
-  cab_blowdown_vis: { label: "11-16/11-17 左中下マイナス溝ブロー弁 (ドラッグ/クリックで缶底排泥ブロー)", kind: "drag" },
-  cab_fire_door_vis: { label: "12-1 低位中央・右ヒンジ火室扉 (ドラッグで開閉・二次空気流入)", kind: "drag" },
+  cab_regulator_vis: { label: "11-11 加減弁ハンドル (上下ドラッグで蒸気開度 11-10 二耳グランド)", kind: "drag" },
+  cab_reverser_wheel_vis: { label: "8-16 左運転台・ねじ式逆転機双柄クランク (ドラッグで前後進カットオフ)", kind: "drag" },
+  cab_blower_vis: { label: "11-13 左上3本スポーク通風弁手輪 → 13-8 炉内ステー管 → 17-3 (ドラッグで強制ドラフト)", kind: "drag" },
+  cab_whistle_vis: { label: "11-3 左上外汽笛レバー → 13-3 直立管 → 11-8 火室左頬下汽笛 (押下ホールドで吹鳴)", kind: "momentary" },
+  cab_sight_drain_vis: { label: "13-5#3/1-1 右外縁(-Y) 11-7 水面計下部同軸ドレン栓 (クリックでフラッシュ洗浄)", kind: "toggle" },
+  cab_blowdown_vis: { label: "11-16/11-17 左床下横向き(+Y)マイナス溝排水弁 (ドラッグで缶底排泥ブロー)", kind: "drag" },
+  cab_fire_door_vis: { label: "12-1 低位中央・底ヒンジバタフライ火室扉 (ドラッグで開閉・二次空気流入)", kind: "drag" },
   cab_bypass_vis: { label: "6-9/8-7 右後床面・同軸給水バイパス弁コック (ドラッグで 31-14 戻水量調整)", kind: "drag" },
   cab_roof_hatch_vis: { label: "21-15/21-28 運転室屋根ベンチレーター天窓 (クリックで前ヒンジ開閉)", kind: "toggle" },
   drain_pull_rod_vis: { label: "8-6/8-5 右床下ドレン弁水平引き棒 (クリックで8段排液リンク開閉)", kind: "toggle" },
-  tender_handpump_vis: { label: "31-3/31-5 炭水車後部水槽内・横型プランジャ手動ポンプ揺腕 (クリックで圧送)", kind: "pump" },
+  tender_handpump_vis: { label: "31-3/31-5 炭水車水槽内・4節リンク手動ポンプ立柱 (クリックで圧送)", kind: "pump" },
   tender_drain_plug_vis: { label: "31-11/31-9 水槽内・上引き排水スタンドパイプ栓 (クリックで炭水車底から放水)", kind: "toggle" },
-  tender_coal_cover_vis: { label: "36-1/36-2 後部給水ハッチ折り蓋 (クリックで開閉・給水口/31-3/31-14 露出)", kind: "toggle" },
-  tender_water_lid_vis: { label: "35-6 後端点検マンホール丸蓋 (クリックで開閉)", kind: "toggle" },
-  tender_fuel_valve_vis: { label: "36-6 前部アルコール槽・左前ニードル弁 (ドラッグで 34-2 サンプ供油開度)", kind: "drag" },
-  tender_fuel_cap_vis: { label: "36-5 前部アルコール槽・右気密燃料蓋 (クリックで開閉・開弁時マリオット負圧喪失)", kind: "toggle" },
+  tender_coal_cover_vis: { label: "36-1/36-2 着脱式角丸給水口蓋＋中央石炭仕切板 (クリックで着脱)", kind: "toggle" },
+  tender_fuel_valve_vis: { label: "36-6 前部アルコール槽・左前T字ニードル弁 (ドラッグで 34-2 サンプ供油開度)", kind: "drag" },
+  tender_fuel_cap_vis: { label: "36-5 前部アルコール槽・右気密ローレット蓋 (クリックで開閉・開弁時マリオット負圧喪失)", kind: "toggle" },
 };
 
 function createPg20DialTexture(): THREE.CanvasTexture {
@@ -468,7 +467,6 @@ async function main() {
       "j_tender_hp_ram",
       "j_tender_drain_plug",
       "j_tender_coal_cover",
-      "j_tender_water_lid",
       "j_tender_fuel_valve",
       "j_tender_fuel_cap",
     ]) {
@@ -1010,7 +1008,6 @@ async function main() {
       case "tender_handpump_vis": return "クリック圧送";
       case "tender_drain_plug_vis": return ctrl.tenderDrainOpen ? "放水中" : "閉";
       case "tender_coal_cover_vis": return ctrl.coalCoverOpen ? "開" : "閉";
-      case "tender_water_lid_vis": return ctrl.waterLidOpen ? "開" : "閉";
       case "tender_fuel_valve_vis": return `${Math.round(ctrl.fuelValve * 100)}%`;
       case "tender_fuel_cap_vis": return ctrl.fuelCapOpen ? "開 (大気開放)" : "気密閉";
       default: return "";
@@ -1106,8 +1103,6 @@ async function main() {
         ctrl.tenderDrainOpen = !ctrl.tenderDrainOpen;
       } else if (gn === "tender_coal_cover_vis") {
         ctrl.coalCoverOpen = !ctrl.coalCoverOpen;
-      } else if (gn === "tender_water_lid_vis") {
-        ctrl.waterLidOpen = !ctrl.waterLidOpen;
       } else if (gn === "tender_fuel_cap_vis") {
         if (aiMode !== "off") setAiModeLocal("off", false);
         ctrl.fuelCapOpen = !ctrl.fuelCapOpen;
@@ -1239,7 +1234,6 @@ async function main() {
       j_cab_roof_hatch: ctrl.cabRoofOpen ? 2.10 : 0.0,
       j_tender_drain_plug: ctrl.tenderDrainOpen ? 0.0050 : 0.0,
       j_tender_coal_cover: openWaterBay ? 0.026 : 0.0,
-      j_tender_water_lid: ctrl.waterLidOpen ? 1.45 : 0.0,
       j_tender_fuel_valve: 1.50 * ctrl.fuelValve,
       j_tender_fuel_cap: ctrl.fuelCapOpen ? 0.0045 : 0.0,
     };

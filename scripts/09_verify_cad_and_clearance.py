@@ -301,8 +301,8 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
     mesh_dir = PROJECT_ROOT / "models" / "meshes"
     stl_files = sorted(mesh_dir.glob("*.stl"))
 
-    if len(stl_files) < 96:
-        return False, [f"FAIL: Expected >= 96 STL files, found {len(stl_files)}"], {}
+    if len(stl_files) < 95:
+        return False, [f"FAIL: Expected >= 95 STL files, found {len(stl_files)}"], {}
 
     stl_tris_mm: Dict[str, np.ndarray] = {}
     total_tris = 0
@@ -370,7 +370,7 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
         "coupling_rod_rear",
         "combination_lever",
     ]
-    strict_com_sym_names = [n for n in sym_names if n != "boiler_superstructure"]
+    strict_com_sym_names = [n for n in sym_names if n not in ("boiler_superstructure", "displacement_lubricator")]
     mass_props = json.loads((PROJECT_ROOT / "configs" / "d51_mass_props.json").read_text(encoding="utf-8"))["parts"]
 
     max_sym_err = 0.0
@@ -1834,7 +1834,7 @@ def verify_gate_14() -> Tuple[bool, List[str]]:
             f"left 11-3 whistle Y=+{y_wl*1000:.1f}mm; right drain rod 8-5 Y={y_dp*1000:.1f}mm)"
         )
 
-    # 14.2 核验 8 级排液阀拉杆多项式耦合 & 19 个驾驶室/煤水车可动关节同步动画
+    # 14.2 核验 8 级排液阀拉杆多项式耦合 & 18 个驾驶室/煤水车真实可动关节同步动画 (静态假人孔 35-6 已融合至 tender_body)
     vis_joints = [
         "j_reverser_wheel",
         "j_reverser_nut",
@@ -1852,7 +1852,6 @@ def verify_gate_14() -> Tuple[bool, List[str]]:
         "j_tender_hp_ram",
         "j_tender_drain_plug",
         "j_tender_coal_cover",
-        "j_tender_water_lid",
         "j_tender_fuel_valve",
         "j_tender_fuel_cap",
     ]
@@ -1861,7 +1860,6 @@ def verify_gate_14() -> Tuple[bool, List[str]]:
     runner.ctrl.regulator = 0.65
     runner.ctrl.whistle_valve = 1.0
     runner.ctrl.firebox_door = 0.70
-    runner.ctrl.water_lid_open = True
     runner.trigger_hand_pump(1)
     for _ in range(450):
         runner.step_once()
@@ -1870,7 +1868,7 @@ def verify_gate_14() -> Tuple[bool, List[str]]:
     jid_dp = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_drain_pull")
     q_dc = float(d.qpos[m.jnt_qposadr[jid_dc]])
     q_dp = float(d.qpos[m.jnt_qposadr[jid_dp]])
-    dp_err_mm = abs(q_dp - (-0.0114 * math.sin(q_dc))) * 1000.0
+    dp_err_mm = abs(q_dp - (-0.0118 * math.sin(q_dc))) * 1000.0
     q_reg_vis = abs(float(d.qpos[m.jnt_qposadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_regulator")]]))
     q_fd_vis = abs(float(d.qpos[m.jnt_qposadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_fire_door")]]))
 
@@ -2619,6 +2617,132 @@ def verify_gate_19(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
 
 
 # ==============================================================================
+# Gate 20: Stage 15 多图纸联立交叉定标与全车可动/影响行为零件 1:1 真值门禁
+# ==============================================================================
+
+def verify_gate_20(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
+    ok = True
+    msgs: List[str] = []
+
+    m = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / "models" / "d51_full.xml"))
+    d = mujoco.MjData(m)
+    mujoco.mj_forward(m, d)
+
+    # 20.1 核验气缸/滑阀多图纸真值 (イラスト 1, 10, 20):
+    #   - 1-22 阀杆 + 1-5 滑阀框 + 1-6 平面 D 型滑阀与 20-1 前导套 100% 同轴位于配气平面 (|Y|=36.0mm -> y_cyl=+3.5mm)，彻底删除狗腿折弯；
+    #   - 1-28 活塞前端无先导尻棒 (piston_crosshead_L x_max <= +42.0mm)，蒸汽室内部真实镂空，20-1/20-2 护套采用黑色材质 mat_black_iron。
+    sv_pts = stl_tris_mm["slide_valve_L"].reshape(-1, 3)
+    sv_valve_y_mean = float(sv_pts[sv_pts[:, 0] >= 14.0][:, 1].mean())
+    vss_pts = stl_tris_mm["valve_spindle_sheath_L"].reshape(-1, 3)
+    vss_y_mean = float(vss_pts[:, 1].mean())
+    pc_pts = stl_tris_mm["piston_crosshead_L"].reshape(-1, 3)
+    pc_x_max = float(pc_pts[:, 0].max())
+    gid_pts = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "piston_tail_sheath_vis_L")
+    gid_vss = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "valve_spindle_sheath_vis_L")
+    mid_blk = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_MATERIAL, "mat_black_iron")
+    sheaths_black = int(m.geom_matid[gid_pts]) == mid_blk and int(m.geom_matid[gid_vss]) == mid_blk
+
+    if not (abs(sv_valve_y_mean) <= 0.15 and 3.3 <= vss_y_mean <= 3.7 and pc_x_max <= 42.0 and sheaths_black):
+        ok = False
+        msgs.append(
+            f"FAIL: Cylinder/Slide-Valve multi-drawing check failed: sv_y={sv_valve_y_mean:.2f}mm, "
+            f"20-1_y={vss_y_mean:.2f}mm, piston_xmax={pc_x_max:.2f}mm, sheaths_black={sheaths_black}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Cylinder & D-slide valve 1:1 blueprint truth verified (coaxial 1-22/1-5/1-6 y={sv_valve_y_mean:+.2f}mm, "
+            f"20-1 sheath y=+{vss_y_mean:.1f}mm [|Y|=36.0mm], zero piston tail_rod x_max={pc_x_max:.1f}mm, black 20-1/20-2)"
+        )
+
+    # 20.2 核验烟室前后层次与车头外观多图纸真值 (イラスト 4, 7, 17, 18, 20, 28, 29):
+    #   - 18-28 ペチコート 底部喇叭外径 <= 16.0mm (零夸张大漏斗)，17-3 通风管自过热集箱下方 (Z<=42.5mm) 穿出前管板，17-5 过热管水平直插；
+    #   - 4-2 置换注油毛细管沿 +Y=+7.5mm 绕过前低位 7-8 接后高位 7-9；
+    #   - 车头具备全宽前端梁 8-1/8-2 + 车钩 29-2 (X_max >= +190mm, 正视遮蔽 4-2 油箱)、圆润烟囱 (Z>=85mm 处 |Y|<=9.5mm 零大方块) 与带观察窗全长除烟板 (X_max >= +175mm)。
+    pet_pts = stl_tris_mm["smokebox_petticoat"].reshape(-1, 3)
+    pet_low_pts = pet_pts[pet_pts[:, 2] <= 66.0]
+    pet_od_low = 2.0 * float(np.max(np.hypot(pet_low_pts[:, 0] - 130.0, pet_low_pts[:, 1])))
+    b173_pts = stl_tris_mm["blower_nozzle_17_3"].reshape(-1, 3)
+    b173_tp_zmax = float(b173_pts[(b173_pts[:, 0] >= 90.0) & (b173_pts[:, 0] <= 105.0)][:, 2].max())
+    lub_pts = stl_tris_mm["displacement_lubricator"].reshape(-1, 3)
+    lub_front_y = float(lub_pts[lub_pts[:, 0] <= 130.0][:, 1].mean())
+    bs_pts = stl_tris_mm["boiler_superstructure"].reshape(-1, 3)
+    bs_xmax = float(bs_pts[:, 0].max())
+    defl_xmax = float(bs_pts[np.abs(bs_pts[:, 1]) >= 39.5][:, 0].max())
+    chim_top_pts = bs_pts[(bs_pts[:, 0] >= 115.0) & (bs_pts[:, 0] <= 145.0) & (bs_pts[:, 2] >= 86.0)]
+    chim_top_ymax = float(np.abs(chim_top_pts[:, 1]).max()) if len(chim_top_pts) else 99.0
+    defl_win_pts = bs_pts[
+        (bs_pts[:, 0] >= 112.5)
+        & (bs_pts[:, 0] <= 127.5)
+        & (np.abs(bs_pts[:, 1]) >= 39.8)
+        & (bs_pts[:, 2] >= 42.0)
+        & (bs_pts[:, 2] <= 49.5)
+    ]
+
+    if not (
+        pet_od_low <= 16.0
+        and b173_tp_zmax <= 43.0
+        and 6.5 <= lub_front_y <= 8.5
+        and bs_xmax >= 190.0
+        and defl_xmax >= 175.0
+        and chim_top_ymax <= 9.6
+        and len(defl_win_pts) == 0
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Smokebox/Front-End multi-drawing check failed: pet_od={pet_od_low:.1f}mm, 17-3_z={b173_tp_zmax:.1f}mm, "
+            f"lub_y={lub_front_y:.2f}mm, bs_xmax={bs_xmax:.1f}mm, defl_xmax={defl_xmax:.1f}mm, chim_y={chim_top_ymax:.1f}mm, win_pts={len(defl_win_pts)}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Smokebox & Front-End multi-drawing truth verified (18-28 OD={pet_od_low:.1f}mm, 17-3 Z_tp={b173_tp_zmax:.1f}mm below 17-5, "
+            f"4-2 oil Y=+{lub_front_y:.1f}mm into 7-9, front beam/coupler X_max=+{bs_xmax:.1f}mm, round chimney, deflector window clear)"
+        )
+
+    # 20.3 核验驾驶室阀件朝向/高度、扁钢拱曲逆转拉杆与煤水车 33.2mm 煤壁 + 固定 35-5/35-6 多图纸真值:
+    jid_bd = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_blowdown")
+    bd_axis = m.jnt_axis[jid_bd]
+    aux_pts = stl_tris_mm["boiler_aux_valves"].reshape(-1, 3)
+    clack_pts = aux_pts[(aux_pts[:, 0] <= -113.0) & (aux_pts[:, 1] >= -12.5) & (aux_pts[:, 1] <= -6.0) & (aux_pts[:, 2] <= 38.0)]
+    fw_pts = stl_tris_mm["feedwater_piping"].reshape(-1, 3)
+    riser_zmax = float(fw_pts[fw_pts[:, 0] >= -120.0][:, 2].max()) if len(fw_pts) else 99.0
+    rr_pts = stl_tris_mm["cab_reach_rod"].reshape(-1, 3)
+    rr_arch_zmax = float(rr_pts[:, 2].max()) + 33.5  # 世界系 Z_peak >= +44.0mm > +42.2mm 走台隆起桥!
+    bid_rw = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cab_reverser_wheel")
+    lf_pos = d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "loco_frame")]
+    rw_z_mm = float((d.xpos[bid_rw, 2] - lf_pos[2]) * 1000.0)
+    cc_pts = stl_tris_mm["tender_coal_cover"].reshape(-1, 3)
+    cc_yspan = float(cc_pts[:, 1].max() - cc_pts[:, 1].min())
+    tb_pts = stl_tris_mm["tender_body"].reshape(-1, 3)
+    fixed_355_pts = tb_pts[(np.abs(tb_pts[:, 0] - (-52.1)) <= 1.2) & (np.abs(tb_pts[:, 1]) >= 20.0) & (tb_pts[:, 2] >= 68.0)]
+    no_fake_wlid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_water_lid") < 0
+
+    if not (
+        abs(float(bd_axis[1]) - 1.0) < 1e-4
+        and len(clack_pts) >= 20
+        and riser_zmax <= 28.5
+        and rr_arch_zmax >= 44.0
+        and rw_z_mm >= 40.0
+        and 33.0 <= cc_yspan <= 36.5
+        and len(fixed_355_pts) >= 8
+        and no_fake_wlid
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Cab/Reverser/Tender multi-drawing check failed: bd_axis={bd_axis.round(2)}, clack_pts={len(clack_pts)}, "
+            f"6-8_zmax={riser_zmax:.1f}mm, 8-18_Zpeak={rr_arch_zmax:.1f}mm, 8-16_Z={rw_z_mm:.1f}mm, 36-1/2_W={cc_yspan:.1f}mm, "
+            f"35-5_pts={len(fixed_355_pts)}, no_fake_wlid={no_fake_wlid}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Cab/Reverser/Tender multi-drawing truth verified (+Y 11-17 blowdown axis=({int(bd_axis[0])}, {int(bd_axis[1])}, {int(bd_axis[2])}), "
+            f"low-right 13-2 clack + short 6-8 Z_max={riser_zmax:.1f}mm, arched flat-blade 8-18 Z_peak=+{rr_arch_zmax:.1f}mm, "
+            f"window-height 8-16 crank Z=+{rw_z_mm:.1f}mm, 36-1/36-2 cover W={cc_yspan:.1f}mm between fixed 35-5x2 & static 35-6)"
+        )
+
+    return ok, msgs
+
+
+# ==============================================================================
 # 主入口
 # ==============================================================================
 
@@ -2728,9 +2852,15 @@ def main() -> int:
         print(f"  - {m}")
     all_ok &= g19_ok
 
+    g20_ok, g20_msgs = verify_gate_20(stl_tris_mm)
+    print(f"\n[Gate 20] Stage 15 Multi-Drawing Cross-Verification & Moving/Behavioral Part 1:1 Truth -> {'PASS' if g20_ok else 'FAIL'}")
+    for m in g20_msgs:
+        print(f"  - {m}")
+    all_ok &= g20_ok
+
     print("\n" + "=" * 88)
     if all_ok:
-        print(" [ALL GATES 1-19 PASSED] STAGE 14 (FACTORY PIPING/LINKAGES + STEAM + BOIL-OFF) VERIFIED 100%")
+        print(" [ALL GATES 1-20 PASSED] STAGE 15 (MULTI-DRAWING 1:1 TRUE PARTS & LINKAGES) VERIFIED 100%")
         print("=" * 88)
         return 0
     else:

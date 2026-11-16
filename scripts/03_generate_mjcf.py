@@ -465,7 +465,12 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     for s_tag, sgn_f in [("L", +1.0), ("R", -1.0)]:
         ET.SubElement(
             frame, "geom", name=f"main_chassis_{s_tag}", type="box",
-            pos=f"0.020 {sgn_f * 0.0135:.6f} 0.004", size="0.165 0.00175 0.008",
+            pos=f"0.056 {sgn_f * 0.0135:.6f} 0.004", size="0.122 0.00175 0.008",
+            material="mat_black_iron", rgba="0.12 0.12 0.14 1", mass="0", contype="0", conaffinity="0"
+        )
+        ET.SubElement(
+            frame, "geom", name=f"rear_chassis_{s_tag}", type="box",
+            pos=f"-0.103 {sgn_f * 0.0135:.6f} 0.0092", size="0.043 0.00175 0.0040",
             material="mat_black_iron", rgba="0.12 0.12 0.14 1", mass="0", contype="0", conaffinity="0"
         )
         ET.SubElement(
@@ -803,8 +808,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_reverser_shaft", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
     )
 
-    # Tier 3: 8-18 左侧 (+Y 左驾司机位) 逆转长拉杆 (通过零齿隙 <equality><joint> 定比联动，零新增执行器)
-    reach_body = ET.SubElement(frame, "body", name="cab_reach_rod", pos=f"{rev_x:.6f} 0.033500 {rev_z + 0.007:.6f}")
+    # Tier 3: 8-18 左侧 (+Y=+32.5mm 左驾司机位) 扁钢拱曲逆转长拉杆 (通过零齿隙 <equality><joint> 定比联动，零新增执行器)
+    reach_body = ET.SubElement(frame, "body", name="cab_reach_rod", pos=f"{rev_x:.6f} 0.032500 {rev_z + 0.007:.6f}")
     attach_part_inertial(reach_body, parts_mp["cab_reach_rod"])
     ET.SubElement(
         reach_body, "joint", name="j_reach_rod", type="slide", axis="1 0 0",
@@ -843,11 +848,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     )
     ET.SubElement(
         equality, "joint", name="couple_drain_rod",
-        joint1="j_drain_pull", joint2="j_drain_cock", polycoef="0 -0.0114 0 0.001900 0"
+        joint1="j_drain_pull", joint2="j_drain_cock", polycoef="0 -0.0118 0 0.001967 0"
     )
 
-    # P3-CAB: 驾驶室原厂全真值可动操纵阀件、螺旋逆转机滑块与天窗刚体链 (イラスト 8, 11, 12, 13, 17, 21 & p45)
-    rev_wheel = ET.SubElement(frame, "body", name="cab_reverser_wheel", pos="-0.127500 0.032500 0.034500")
+    # P3-CAB: 驾驶室原厂全真值可动操纵阀件、窗高双柄螺旋逆转机滑块与天窗刚体链 (イラスト 8, 11, 12, 13, 17, 21 & p45)
+    rev_wheel = ET.SubElement(frame, "body", name="cab_reverser_wheel", pos="-0.127500 0.032500 0.041200")
     attach_part_inertial(rev_wheel, parts_mp["cab_reverser_wheel"])
     ET.SubElement(rev_wheel, "joint", name="j_reverser_wheel", type="hinge", axis="1 0 0", damping="0.002")
     ET.SubElement(
@@ -859,7 +864,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         joint1="j_reverser_wheel", joint2="j_reverser", polycoef="0 10.0 0 0 0"
     )
 
-    rev_nut = ET.SubElement(frame, "body", name="cab_reverser_nut", pos="-0.127500 0.032500 0.034500")
+    rev_nut = ET.SubElement(frame, "body", name="cab_reverser_nut", pos="-0.127500 0.032500 0.041200")
     attach_part_inertial(rev_nut, parts_mp["cab_reverser_nut"])
     ET.SubElement(
         rev_nut, "joint", name="j_reverser_nut", type="slide", axis="1 0 0",
@@ -874,8 +879,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         joint1="j_reverser_nut", joint2="j_reverser", polycoef="0 0.007 0 -0.001167 0"
     )
 
-    # 11-11 顶中 (-119.5, 0.0, +68.2mm) 加减阀长柄: q=0 水平指向左驾 (+Y) 为全闭，向上扫掠 (0 -> +1.15 rad) 开启主蒸汽
-    reg_lev = ET.SubElement(frame, "body", name="cab_regulator_lever", pos="-0.119500 0.000000 0.068200")
+    # 11-11 顶中 (-121.2, 0.0, +68.5mm) 镂空扁平加减阀长柄: q=0 水平指向左驾 (+Y) 为全闭，向上扫掠开启主蒸汽
+    reg_lev = ET.SubElement(frame, "body", name="cab_regulator_lever", pos="-0.121200 0.000000 0.068500")
     attach_part_inertial(reg_lev, parts_mp["cab_regulator_lever"])
     ET.SubElement(
         reg_lev, "joint", name="j_cab_regulator", type="hinge", axis="1 0 0",
@@ -886,10 +891,10 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_regulator_lever", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
 
-    # 11-13 左上内 (+Y=+5.6, Z=+61.4mm, X=-120.2mm) 11-14 通风阀直向后三辐圆形黄铜手轮
+    # 11-13 左上内 (+Y=+5.1, Z=+64.2mm, X=-118.8mm) 11-15 左下一体 11-14 通风阀三辐圆形黄铜手轮
     blw_whl = ET.SubElement(
         frame, "body", name="cab_blower_wheel",
-        pos="-0.120200 0.005600 0.061400"
+        pos="-0.118800 0.005100 0.064200"
     )
     attach_part_inertial(blw_whl, parts_mp["cab_blower_wheel"])
     ET.SubElement(
@@ -901,8 +906,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_blower_wheel", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
 
-    # 11-3 左上外 (+Y=+14.5, Z=+62.0mm) 11-1 汽笛阀底部上翘触发拨柄
-    whi_lev = ET.SubElement(frame, "body", name="cab_whistle_lever", pos="-0.116200 0.014500 0.062000")
+    # 11-3 左上外 (+Y=+18.2, Z=+62.0mm) 11-1 汽笛阀底部上翘触发拨柄
+    whi_lev = ET.SubElement(frame, "body", name="cab_whistle_lever", pos="-0.115800 0.018200 0.062000")
     attach_part_inertial(whi_lev, parts_mp["cab_whistle_lever"])
     ET.SubElement(
         whi_lev, "joint", name="j_cab_whistle", type="hinge", axis="1 0 0",
@@ -913,8 +918,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_whistle_lever", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
 
-    # 1-1/1-2/1-3 右侧外缘 (-Y=-31.3mm) 水面计下座同轴一字槽排污螺塞
-    sg_drn = ET.SubElement(frame, "body", name="cab_sight_drain", pos="-0.118500 -0.031300 0.027800")
+    # 13-5#3 + 1-1/1-2/1-3 右侧外缘 (-Y=-31.3mm) 水面计下座同轴一字槽排污螺塞
+    sg_drn = ET.SubElement(frame, "body", name="cab_sight_drain", pos="-0.118500 -0.031300 0.028800")
     attach_part_inertial(sg_drn, parts_mp["cab_sight_drain"])
     ET.SubElement(
         sg_drn, "joint", name="j_cab_sight_drain", type="slide", axis="0 0 -1",
@@ -937,11 +942,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_pressure_needle", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
     )
 
-    # 11-17 左床下 (+Y=+18.5mm, Z=+14.5mm) 11-16 锅炉排水阀一字槽针阀螺杆 (イラスト 11, 13)
-    bd_scr = ET.SubElement(frame, "body", name="cab_blowdown_screw", pos="-0.118000 0.018500 0.014500")
+    # 11-17 左床下 (+Y=+20.6mm, Z=+15.8mm) 11-16 锅炉排水阀横向 (+Y 朝左外侧螺丝刀口) 一字槽针阀螺杆 (イラスト 11, 13 & Manual p.43)
+    bd_scr = ET.SubElement(frame, "body", name="cab_blowdown_screw", pos="-0.115500 0.020600 0.015800")
     attach_part_inertial(bd_scr, parts_mp["cab_blowdown_screw"])
     ET.SubElement(
-        bd_scr, "joint", name="j_cab_blowdown", type="hinge", axis="1 0 0",
+        bd_scr, "joint", name="j_cab_blowdown", type="hinge", axis="0 1 0",
         limited="true", range="-6.28 6.28", damping="0.001"
     )
     ET.SubElement(
@@ -1015,13 +1020,13 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         )
         ET.SubElement(
             frame, "geom", name=f"piston_tail_sheath_vis_{tag}", type="mesh",
-            mesh=f"m_piston_tail_sheath_{tag}", material="mat_machined_steel",
+            mesh=f"m_piston_tail_sheath_{tag}", material="mat_black_iron",
             pos=f"{rc_cfg['cylinder_center_x']*s:.6f} {y_cyl:.6f} {rc_cfg['cylinder_center_z']*s:.6f}",
             mass="0", contype="0", conaffinity="0"
         )
         ET.SubElement(
             frame, "geom", name=f"valve_spindle_sheath_vis_{tag}", type="mesh",
-            mesh=f"m_valve_spindle_sheath_{tag}", material="mat_machined_steel",
+            mesh=f"m_valve_spindle_sheath_{tag}", material="mat_black_iron",
             pos=f"{rc_cfg['cylinder_center_x']*s:.6f} {y_cyl:.6f} {rc_cfg['cylinder_center_z']*s:.6f}",
             mass="0", contype="0", conaffinity="0"
         )
@@ -1444,7 +1449,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             mesh="m_tender_drain_plug", material="mat_brass", contype="0", conaffinity="0", mass="0"
         )
 
-        coal_cov = ET.SubElement(tender, "body", name="tender_coal_cover", pos="-0.045000 0.000000 0.062600")
+        coal_cov = ET.SubElement(tender, "body", name="tender_coal_cover", pos="-0.045000 0.000000 0.063800")
         attach_part_inertial(coal_cov, parts_mp["tender_coal_cover"])
         ET.SubElement(
             coal_cov, "joint", name="j_tender_coal_cover", type="slide", axis="0 0 1",
@@ -1455,18 +1460,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             mesh="m_tender_coal_cover", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
         )
 
-        wt_lid = ET.SubElement(tender, "body", name="tender_water_lid", pos="-0.085000 0.000000 0.062000")
-        attach_part_inertial(wt_lid, parts_mp["tender_water_lid"])
-        ET.SubElement(
-            wt_lid, "joint", name="j_tender_water_lid", type="hinge", axis="0 1 0",
-            limited="true", range="0.0 1.65", damping="0.003"
-        )
-        ET.SubElement(
-            wt_lid, "geom", name="tender_water_lid_vis", type="mesh",
-            mesh="m_tender_water_lid", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
-        )
-
-        fv_tee = ET.SubElement(tender, "body", name="tender_fuel_valve", pos="0.023000 -0.006800 0.066600")
+        fv_tee = ET.SubElement(tender, "body", name="tender_fuel_valve", pos="0.021700 -0.006000 0.066600")
         attach_part_inertial(fv_tee, parts_mp["tender_fuel_valve"])
         ET.SubElement(
             fv_tee, "joint", name="j_tender_fuel_valve", type="hinge", axis="0 0 1",
@@ -1477,7 +1471,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             mesh="m_tender_fuel_valve", material="mat_brass", contype="0", conaffinity="0", mass="0"
         )
 
-        fc_cap = ET.SubElement(tender, "body", name="tender_fuel_cap", pos="0.034800 0.005600 0.065800")
+        fc_cap = ET.SubElement(tender, "body", name="tender_fuel_cap", pos="0.032700 0.006500 0.065800")
         attach_part_inertial(fc_cap, parts_mp["tender_fuel_cap"])
         ET.SubElement(
             fc_cap, "joint", name="j_tender_fuel_cap", type="slide", axis="0 0 1",

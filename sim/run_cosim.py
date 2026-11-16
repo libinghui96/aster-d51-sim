@@ -260,7 +260,6 @@ class CoSimRunner:
             "j_tender_handpump",
             "j_tender_drain_plug",
             "j_tender_coal_cover",
-            "j_tender_water_lid",
             "j_tender_fuel_valve",
             "j_tender_fuel_cap",
         ):
@@ -346,7 +345,6 @@ class CoSimRunner:
             "j_cab_roof_hatch": 2.10 if bool(getattr(self.ctrl, "cab_roof_open", False)) else 0.0,
             "j_tender_drain_plug": 0.0050 if bool(getattr(self.ctrl, "tender_drain_open", False)) else 0.0,
             "j_tender_coal_cover": 0.026 if open_water_bay else 0.0,
-            "j_tender_water_lid": 1.45 if self.ctrl.water_lid_open else 0.0,
             "j_tender_fuel_valve": 1.50 * self.ctrl.fuel_valve,
             "j_tender_fuel_cap": 0.0045 if self.ctrl.fuel_cap_open else 0.0,
         }
