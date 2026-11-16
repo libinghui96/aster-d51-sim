@@ -373,7 +373,8 @@ class GPU3DRealtimeBridge:
                 raise web.HTTPForbidden()
 
         if target.is_file():
-            return web.FileResponse(target)
+            hdrs = {} if rel.startswith("assets/") else {"Cache-Control": "no-cache, must-revalidate"}
+            return web.FileResponse(target, headers=hdrs)
         if rel == "favicon.ico":
             return web.Response(status=204)
         raise web.HTTPNotFound()
@@ -472,7 +473,7 @@ async def async_main(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Aster D51 RTX 5080 真 3D 多相热流 HTTP + WebSocket 一体化服务")
-    parser.add_argument("--host", type=str, default="127.0.0.1")
+    parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--scene", choices=["roller", "curve"], default="roller")
     parser.add_argument("--preset", choices=["cold", "hot"], default="hot")

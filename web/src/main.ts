@@ -247,11 +247,12 @@ async function main() {
   const explicitWs = urlParams.get("ws");
   const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const hostName = window.location.hostname || "127.0.0.1";
+  const sameOriginWs = `${wsProto}//${window.location.host}/ws`;
   const wsCandidates: string[] = explicitWs
     ? [explicitWs]
-    : import.meta.env.DEV
-      ? [`ws://${hostName}:8765`, "ws://127.0.0.1:8765"]
-      : [`${wsProto}//${window.location.host}/ws`, `ws://${hostName}:8765`, "ws://127.0.0.1:8765"];
+    : window.location.protocol === "https:"
+      ? [sameOriginWs]
+      : Array.from(new Set([sameOriginWs, `ws://${hostName}:8765/ws`, "ws://127.0.0.1:8765/ws"]));
   let wsCandidateIdx = 0;
 
   const sendWsMessage = (payload: Record<string, any>) => {
@@ -271,7 +272,7 @@ async function main() {
   };
 
   const connectLocalGpuServer = () => {
-    if (window.location.protocol === "https:" && !explicitWs) {
+    if (wsCandidates.length === 0) {
       return;
     }
     const targetUrl = wsCandidates[wsCandidateIdx % wsCandidates.length];
@@ -1426,9 +1427,11 @@ async function main() {
           : sp.pinoActive
             ? `RTX 5080 PINO+IAPWS · ${mVox}M`
             : `RTX 5080 LIVE 3D · ${mVox}M VOX`;
+        badgeEl.title = "已连接本地 RTX 5080 实时 5.71M 体素 + 四算子 PINO 物理推流服务";
         badgeEl.classList.add("live-3d");
       } else {
-        badgeEl.textContent = out.lutActive ? "RTX 5080 CFD LUT" : "1D ANALYTIC";
+        badgeEl.textContent = out.lutActive ? "OFFLINE · CFD LUT" : "1D ANALYTIC";
+        badgeEl.title = "未连接本地 gpu_3d_server WebSocket，当前运行浏览器离线 WASM + CFD LUT 兜底求解器";
         badgeEl.classList.remove("live-3d");
       }
 
