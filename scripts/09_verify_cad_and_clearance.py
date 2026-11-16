@@ -301,8 +301,8 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
     mesh_dir = PROJECT_ROOT / "models" / "meshes"
     stl_files = sorted(mesh_dir.glob("*.stl"))
 
-    if len(stl_files) < 79:
-        return False, [f"FAIL: Expected >= 79 STL files, found {len(stl_files)}"], {}
+    if len(stl_files) < 96:
+        return False, [f"FAIL: Expected >= 96 STL files, found {len(stl_files)}"], {}
 
     stl_tris_mm: Dict[str, np.ndarray] = {}
     total_tris = 0
@@ -350,6 +350,9 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
     sym_names = [
         "boiler_superstructure",
         "boiler_firebox_flues",
+        "exhaust_blast_pipe",
+        "smokebox_petticoat",
+        "tandem_safety_valves",
         "leading_truck_frame",
         "trailing_truck_frame",
         "driving_axlebox",
@@ -554,25 +557,27 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
     msgs: List[str] = []
     ok = True
 
-    # 6.1 静态管网 Y 坐标硬门禁 (锅筒/动轮段 X>-110mm 严格位于车架内 |Y|<=12.0mm；驾驶室背板段 X<=-110mm 容纳右外缘 11-7 水面计 |Y|<=34.0mm)
+    # 6.1 静态管网 Y 坐标硬门禁 (动轮上方锅筒段 X>-45mm 零外露管线; 火室颊侧段 -110<X<=-45mm 容纳 13-10/11-8/13-11 |Y|<=25.5mm; 驾驶室段 X<=-110mm |Y|<=34.5mm)
     fw_max_y = float(np.max(np.abs(stl_tris_mm["feedwater_piping"][:, :, 1])))
     lub_max_y = float(np.max(np.abs(stl_tris_mm["displacement_lubricator"][:, :, 1])))
     aux_pts_all = stl_tris_mm["boiler_aux_valves"].reshape(-1, 3)
-    aux_wheel_pts = aux_pts_all[aux_pts_all[:, 0] > -110.0]
+    aux_wheel_pts = aux_pts_all[aux_pts_all[:, 0] > -45.0]
+    aux_fb_pts = aux_pts_all[(aux_pts_all[:, 0] > -110.0) & (aux_pts_all[:, 0] <= -45.0)]
     aux_cab_pts = aux_pts_all[aux_pts_all[:, 0] <= -110.0]
     aux_wheel_y = float(np.max(np.abs(aux_wheel_pts[:, 1]))) if len(aux_wheel_pts) else 0.0
+    aux_fb_y = float(np.max(np.abs(aux_fb_pts[:, 1]))) if len(aux_fb_pts) else 0.0
     aux_cab_y = float(np.max(np.abs(aux_cab_pts[:, 1]))) if len(aux_cab_pts) else 0.0
 
-    if fw_max_y > 11.0 or lub_max_y > 10.5 or aux_wheel_y > 12.0 or aux_cab_y > 34.0:
+    if fw_max_y > 11.0 or lub_max_y > 10.5 or aux_wheel_y > 12.0 or aux_fb_y > 25.5 or aux_cab_y > 34.5:
         ok = False
         msgs.append(
             f"FAIL: Pipe Y bounds violated: feedwater={fw_max_y:.2f}mm (<=11.0), lub={lub_max_y:.2f}mm (<=10.5), "
-            f"aux_wheel={aux_wheel_y:.2f}mm (<=12.0), aux_cab={aux_cab_y:.2f}mm (<=34.0)"
+            f"aux_wheel={aux_wheel_y:.2f}mm (<=12.0), aux_firebox={aux_fb_y:.2f}mm (<=25.5), aux_cab={aux_cab_y:.2f}mm (<=34.5)"
         )
     else:
         msgs.append(
             f"PASS: Zero wheel-side pipes! feedwater |Y|_max={fw_max_y:.2f}mm (<=11.0mm), lubricator |Y|_max={lub_max_y:.2f}mm (<=10.5mm), "
-            f"aux_valves wheel-zone |Y|_max={aux_wheel_y:.2f}mm (<=12.0mm), cab-backhead |Y|_max={aux_cab_y:.2f}mm (<=34.0mm)"
+            f"aux_valves wheel-zone |Y|_max={aux_wheel_y:.2f}mm, firebox-cheek |Y|_max={aux_fb_y:.2f}mm (<=25.5mm), cab-backhead |Y|_max={aux_cab_y:.2f}mm (<=34.5mm)"
         )
 
     # 6.2 360° (每 10°) × [-1.0, 0.0, +1.0] 全行程三维三角面加密采样净空扫描
@@ -597,6 +602,10 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
         "displacement_lubricator_vis",
         "boiler_aux_valves_vis",
         "superheater_piping_vis",
+        "exhaust_blast_pipe_vis",
+        "blower_nozzle_17_3_vis",
+        "smokebox_petticoat_vis",
+        "tandem_safety_valves_vis",
         "boiler_copper_core_vis",
         "boiler_Super_vis",
         "chassis_equalizer_brakes_vis",
@@ -651,6 +660,7 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
         "lift_link_R",
         "reverser_shaft",
         "cab_reach_rod",
+        "cab_reverser_nut",
         "drain_pull_rod",
         "pump_eccentric_rod",
     ]
@@ -670,8 +680,11 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
         ("valve_spindle_sheath_vis_L", "slide_valve_L"),
         ("valve_spindle_sheath_vis_R", "slide_valve_R"),
         ("boiler_Super_vis", "reverser_shaft"),
+        ("boiler_Super_vis", "cab_reach_rod"),
         ("cab_reverser_stand_vis", "cab_reach_rod"),
+        ("cab_reverser_stand_vis", "cab_reverser_nut"),
         ("chassis_equalizer_brakes_vis", "drain_pull_rod"),
+        ("chassis_equalizer_brakes_vis", "reverser_shaft"),
         ("drain_cock_vis", "drain_pull_rod"),
     }
 
@@ -721,6 +734,7 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
         ("lift_link_L", "reverser_shaft"),
         ("lift_link_R", "reverser_shaft"),
         ("reverser_shaft", "cab_reach_rod"),
+        ("cab_reach_rod", "cab_reverser_nut"),
     }
     mating_body_whitelist = set(mating_body_pairs_base) | {(b, a) for (a, b) in mating_body_pairs_base}
 
@@ -952,6 +966,12 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
             tg_trees = {g: (cKDTree(p := _r2m_geom_pts(g)), p.min(axis=0), p.max(axis=0)) for g in tdr_geoms}
             for b in tdr_bodies:
                 bp = _r2m_body_pts(b)
+                if b in ("tender_bogie_1", "tender_bogie_2"):
+                    # 排除 32-12 <-> 31-29 转向架中心皿承重铰接接触面 (|X_bogie|<=9.5mm, |Y_bogie|<=10.5mm，由 Gate 9 校验零间隙贴合)
+                    bid_b = mujoco.mj_name2id(rm, mujoco.mjtObj.mjOBJ_BODY, b)
+                    bp_loc = (bp - rd.xpos[bid_b]) @ rd.xmat[bid_b].reshape(3, 3)
+                    keep = ~((np.abs(bp_loc[:, 0]) <= 0.0095) & (np.abs(bp_loc[:, 1]) <= 0.0105))
+                    bp = bp[keep]
                 bmn, bmx = bp.min(axis=0), bp.max(axis=0)
                 for g, (gt, gmn, gmx) in tg_trees.items():
                     ub_mm = min(4.0, r2m_tdr_min_mm)
@@ -1814,9 +1834,10 @@ def verify_gate_14() -> Tuple[bool, List[str]]:
             f"left 11-3 whistle Y=+{y_wl*1000:.1f}mm; right drain rod 8-5 Y={y_dp*1000:.1f}mm)"
         )
 
-    # 14.2 核验 8 级排液阀拉杆多项式耦合 & 17 个驾驶室/煤水车可动关节同步动画
+    # 14.2 核验 8 级排液阀拉杆多项式耦合 & 19 个驾驶室/煤水车可动关节同步动画
     vis_joints = [
         "j_reverser_wheel",
+        "j_reverser_nut",
         "j_cab_regulator",
         "j_cab_blower",
         "j_cab_whistle",
@@ -1826,6 +1847,7 @@ def verify_gate_14() -> Tuple[bool, List[str]]:
         "j_cab_fire_door",
         "j_cab_bypass",
         "j_cab_roof_hatch",
+        "j_tender_hp_link",
         "j_tender_handpump",
         "j_tender_hp_ram",
         "j_tender_drain_plug",
@@ -1848,7 +1870,7 @@ def verify_gate_14() -> Tuple[bool, List[str]]:
     jid_dp = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_drain_pull")
     q_dc = float(d.qpos[m.jnt_qposadr[jid_dc]])
     q_dp = float(d.qpos[m.jnt_qposadr[jid_dp]])
-    dp_err_mm = abs(q_dp - 0.0032 * q_dc) * 1000.0
+    dp_err_mm = abs(q_dp - (-0.0114 * math.sin(q_dc))) * 1000.0
     q_reg_vis = abs(float(d.qpos[m.jnt_qposadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_regulator")]]))
     q_fd_vis = abs(float(d.qpos[m.jnt_qposadr[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_fire_door")]]))
 
@@ -2035,10 +2057,10 @@ def verify_gate_16(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
             return np.array([np.nan, np.nan, np.nan])
         return (d.geom_xpos[gid] - ref_pos) * 1000.0
 
-    # 16.1 核验 ill_p45.jpg + イラスト 11 原厂背板真值布局:
-    #   - 11-7 パイレックス水面計 + 11-5 六角ドレン栓在右侧外缘 (-Y ≈ -30.2mm);
-    #   - PG-ø20 上仰 22° 压力表在右内上 (-Y ≈ -15.8mm, Z ≈ +62.0mm);
-    #   - 11-13 三辐通风手轮在左上内 (+Y ≈ +4.2mm), 11-3 汽笛拨柄在左上外 (+Y > +12mm), 11-17 排污螺钉在左中下 (+Y ≈ +9.5mm)
+    # 16.1 核验 ill_p45.jpg + イラスト 11/12/13 原厂背板真值布局:
+    #   - 11-7 パイレックス水面計 + 1-1/1-2 一字槽ドレン栓在右侧外缘 (-Y ≈ -31.3mm);
+    #   - PG-ø20 上仰 24° 压力表在右内上 (-Y ≈ -15.4mm, Z ≈ +66.8mm);
+    #   - 11-13 三辐通风手轮在左上内 (+Y ≈ +4.5mm), 11-3 汽笛拨柄在左上外 (+Y ≈ +14.5mm), 11-17 排水针阀螺杆在左床下 (+Y ≈ +18.5mm, Z ≈ +14.5mm)
     sg_loc = gpos_local("cab_sight_glass_tube_vis", lf_pos)
     sd_loc = gpos_local("cab_sight_drain_vis", lf_pos)
     pg_loc = gpos_local("cab_pg_dial_vis", lf_pos)
@@ -2046,14 +2068,15 @@ def verify_gate_16(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     whi_loc = gpos_local("cab_whistle_vis", lf_pos)
     bd_loc = gpos_local("cab_blowdown_vis", lf_pos)
     if not (
-        -33.0 <= sg_loc[1] <= -27.5
+        -33.0 <= sg_loc[1] <= -29.0
         and abs(sd_loc[1] - sg_loc[1]) <= 0.4
-        and sd_loc[2] < sg_loc[2] - 8.0
-        and -19.0 <= pg_loc[1] <= -13.0
-        and 59.0 <= pg_loc[2] <= 65.0
+        and sd_loc[2] < sg_loc[2] - 12.0
+        and -18.0 <= pg_loc[1] <= -13.0
+        and 64.0 <= pg_loc[2] <= 69.5
         and 2.5 <= blw_loc[1] <= 6.5
         and whi_loc[1] >= 12.0
-        and 7.5 <= bd_loc[1] <= 11.5
+        and 16.0 <= bd_loc[1] <= 21.0
+        and 11.5 <= bd_loc[2] <= 17.5
     ):
         ok = False
         msgs.append(
@@ -2062,87 +2085,104 @@ def verify_gate_16(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         )
     else:
         msgs.append(
-            f"PASS: Calibrated Cab backhead (ill_p45.jpg + イラスト 11): Right outboard 11-7 SG (Y={sg_loc[1]:.1f}mm) + 11-5 plug; "
-            f"Right-inboard PG-ø20 22° dial (Y={pg_loc[1]:.1f}, Z=+{pg_loc[2]:.1f}mm); Left 11-13 wheel (+{blw_loc[1]:.1f}mm), "
-            f"11-3 whistle (+{whi_loc[1]:.1f}mm), 11-17 blowdown (+{bd_loc[1]:.1f}mm)"
+            f"PASS: Factory Cab backhead (ill_p45.jpg + イラスト 11/13): Right outboard 11-7 SG (Y={sg_loc[1]:.1f}mm) + 1-1/1-2 drain; "
+            f"Right-inboard PG-ø20 24° dial (Y={pg_loc[1]:.1f}, Z=+{pg_loc[2]:.1f}mm); Left 11-13 wheel (+{blw_loc[1]:.1f}mm), "
+            f"11-3 whistle (+{whi_loc[1]:.1f}mm), underfloor 11-17 blowdown (+{bd_loc[1]:.1f}, +{bd_loc[2]:.1f}mm)"
         )
 
-    # 16.2 核验 11-9 背板、8-11 地板、21-28 天窗、12-1 低位右铰火室门与 11-8 锅筒下方右侧真汽笛 (X∈[-22, +26]mm)
+    # 16.2 核验 11-9 背板、8-11 地板、21-15 天窗、12-1 低位底铰蝴蝶式火室门与 11-8 左火室颊下前伸真汽笛 (X∈[-115,-69]mm, Y=+20.4, Z=+25.5)
     req_meshes = [
         "cab_backhead_plate",
         "cab_deck_and_mounts",
+        "cab_reverser_nut",
         "cab_roof_hatch",
         "cab_firebox_door",
         "boiler_aux_valves",
+        "exhaust_blast_pipe",
+        "blower_nozzle_17_3",
+        "smokebox_petticoat",
+        "tandem_safety_valves",
         "tender_internals",
+        "tender_hp_links",
         "tender_handpump_ram",
         "tender_drain_plug",
         "tender_coal_cover",
+        "tender_rear_ladder",
     ]
     miss_m = [fn for fn in req_meshes if fn not in stl_tris_mm]
     fd_loc = gpos_local("cab_fire_door_vis", lf_pos)
-    fd_hinge_y = float((d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cab_firebox_door")][1] - lf_pos[1]) * 1000.0)
+    fd_hinge = (d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cab_firebox_door")] - lf_pos) * 1000.0
     aux_pts = stl_tris_mm.get("boiler_aux_valves", np.zeros((1, 3, 3))).reshape(-1, 3)
     whi_mask = (
-        (aux_pts[:, 0] >= -24.0)
-        & (aux_pts[:, 0] <= 28.0)
-        & (aux_pts[:, 1] >= -10.0)
-        & (aux_pts[:, 1] <= -2.0)
-        & (aux_pts[:, 2] >= 11.0)
-        & (aux_pts[:, 2] <= 19.0)
+        (aux_pts[:, 0] >= -114.8)
+        & (aux_pts[:, 0] <= -69.5)
+        & (aux_pts[:, 1] >= +17.0)
+        & (aux_pts[:, 1] <= +24.0)
+        & (aux_pts[:, 2] >= +22.0)
+        & (aux_pts[:, 2] <= +29.0)
     )
     whi_pts = aux_pts[whi_mask] if np.any(whi_mask) else np.zeros((1, 3))
     whi_x_min, whi_x_max = float(whi_pts[:, 0].min()), float(whi_pts[:, 0].max())
     whi_y_mean, whi_z_mean = float(whi_pts[:, 1].mean()), float(whi_pts[:, 2].mean())
     if (
         miss_m
-        or len(whi_pts) < 100
-        or not (25.0 <= fd_loc[2] <= 32.0 and abs(fd_loc[1]) < 2.5 and fd_hinge_y < -5.5)
-        or not (-24.0 <= whi_x_min <= -14.0 and 18.0 <= whi_x_max <= 28.0 and whi_y_mean < -3.0 and 11.0 <= whi_z_mean <= 19.0)
+        or len(whi_pts) < 50
+        or not (26.0 <= fd_loc[2] <= 31.5 and abs(fd_hinge[1]) < 0.5 and 20.5 <= fd_hinge[2] <= 23.5)
+        or not (-115.0 <= whi_x_min <= -110.0 and -72.0 <= whi_x_max <= -69.0 and 18.5 <= whi_y_mean <= 22.5 and 23.0 <= whi_z_mean <= 28.0)
     ):
         ok = False
         msgs.append(
-            f"FAIL: Cab structural/whistle check failed: miss={miss_m}, fd_loc={fd_loc.round(1)}, n_whi={len(whi_pts)}, "
+            f"FAIL: Cab structural/whistle check failed: miss={miss_m}, fd_loc={fd_loc.round(1)}, fd_hinge={fd_hinge.round(1)}, n_whi={len(whi_pts)}, "
             f"whi_X=[{whi_x_min:.1f},{whi_x_max:.1f}], Y={whi_y_mean:.1f}, Z={whi_z_mean:.1f}"
         )
     else:
         msgs.append(
-            f"PASS: 11-9 backplate, 8-11 floorplate, 21-28 roof hatch, 12-1 low-center right-hinged door (Z=+{fd_loc[2]:.1f}mm) "
-            f"& 11-8 under-barrel whistle (X=[{whi_x_min:.1f},{whi_x_max:.1f}]mm, Y={whi_y_mean:.1f}mm, Z={whi_z_mean:.1f}mm) verified"
+            f"PASS: 11-9 backplate, 8-11 floorplate, 21-15 roof ventilator, 12-1 bottom-hinged butterfly door (hinge Z=+{fd_hinge[2]:.1f}mm) "
+            f"& 11-8 left firebox-cheek whistle (X=[{whi_x_min:.1f},{whi_x_max:.1f}]mm, Y=+{whi_y_mean:.1f}mm, Z=+{whi_z_mean:.1f}mm) verified"
         )
 
-    # 16.3 核验煤水车 35-1 后置敞口湾、31-5 浸没式横型柱塞手摇泵多项式联动、31-11 顶拉排水立管与 34-2 前置サンプ
-    td_shell = stl_tris_mm["tender_body"].reshape(-1, 3)
-    # 35-1 甲板高度 Z∈[63.2, 65.6]mm 的后置敞口湾中心区 X∈[-80, -22], Y∈[-14, +14] 严禁有封死顶板三角形顶点!
+    # 16.3 核验煤水车 35-1 中后部给水开口 (Z∈[60.8, 63.0]mm)、后部 35-6 下方实心甲板、31-5+31-7x2+31-3+31-2 真四连杆手摇泵闭环与 31-11 排水栓
+    td_shell_surf = sample_triangle_surface(stl_tris_mm["tender_body"] * 1e-3, max_spacing_m=0.002) * 1000.0
     in_open_bay_roof = (
-        (td_shell[:, 0] >= -80.0)
-        & (td_shell[:, 0] <= -22.0)
-        & (np.abs(td_shell[:, 1]) <= 14.0)
-        & (td_shell[:, 2] >= 63.2)
-        & (td_shell[:, 2] <= 65.6)
+        (td_shell_surf[:, 0] >= -74.5)
+        & (td_shell_surf[:, 0] <= -15.5)
+        & (np.abs(td_shell_surf[:, 1]) <= 14.2)
+        & (td_shell_surf[:, 2] >= 60.8)
+        & (td_shell_surf[:, 2] <= 63.0)
+    )
+    rear_solid_deck = (
+        (td_shell_surf[:, 0] >= -96.0)
+        & (td_shell_surf[:, 0] <= -78.5)
+        & (np.abs(td_shell_surf[:, 1]) <= 25.0)
+        & (td_shell_surf[:, 2] >= 61.2)
+        & (td_shell_surf[:, 2] <= 62.6)
     )
     dp_loc = gpos_local("tender_drain_plug_vis", tb_pos)
+    jid_hpl = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_hp_link")
     jid_hp = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_handpump")
     jid_ram = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_hp_ram")
-    d.qpos[m.jnt_qposadr[jid_hp]] = 0.34
+    psi_t = 0.34
+    ql_t = math.asin(0.5 * (1.0 - math.cos(psi_t)))
+    d.qpos[m.jnt_qposadr[jid_hpl]] = ql_t
+    d.qpos[m.jnt_qposadr[jid_hp]] = psi_t - ql_t
+    d.qpos[m.jnt_qposadr[jid_ram]] = 0.020 * (math.cos(ql_t) - 1.0) - 0.010 * math.sin(psi_t)
     mujoco.mj_forward(m, d)
-    eq_found = False
-    for eq_i in range(m.neq):
-        if m.eq_type[eq_i] == mujoco.mjtEq.mjEQ_JOINT:
-            if {int(m.eq_obj1id[eq_i]), int(m.eq_obj2id[eq_i])} == {jid_hp, jid_ram}:
-                eq_found = True
-                break
+    hp_4bar_res_mm = float(np.linalg.norm(d.site("s_hp_lever_bot").xpos - d.site("s_hp_ram_pin").xpos)) * 1000.0
+    eq_found = any(
+        m.eq_type[eq_i] == mujoco.mjtEq.mjEQ_CONNECT and (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_EQUALITY, eq_i) == "loop_tender_handpump")
+        for eq_i in range(m.neq)
+    )
 
-    if int(in_open_bay_roof.sum()) > 0 or not (-48.0 <= dp_loc[0] <= -41.0 and dp_loc[1] < -6.0) or not eq_found:
+    if int(in_open_bay_roof.sum()) > 0 or int(rear_solid_deck.sum()) == 0 or not (-44.0 <= dp_loc[0] <= -38.0 and dp_loc[1] < -8.0) or not eq_found or hp_4bar_res_mm > 0.01:
         ok = False
         msgs.append(
-            f"FAIL: Tender 35-1 open bay / 31-5 horizontal ram / 31-11 drain check failed: roof_pts={int(in_open_bay_roof.sum())}, "
-            f"drain_loc={dp_loc.round(1)}, eq_hp_ram={eq_found}"
+            f"FAIL: Tender 35-1 open bay / 4-bar 31-5 handpump / 31-11 drain check failed: roof_pts={int(in_open_bay_roof.sum())}, "
+            f"rear_solid={int(rear_solid_deck.sum())}, drain_loc={dp_loc.round(1)}, eq_4bar={eq_found}, res={hp_4bar_res_mm:.5f}mm"
         )
     else:
         msgs.append(
-            f"PASS: Tender 35-1 rear open-top water bay (roof_obstruction=0), submerged 31-5 horizontal plunger ram coupling, "
-            f"31-14 front-left gooseneck & 31-11 internal drain standpipe ({dp_loc[0]:.1f}, {dp_loc[1]:.1f}mm) verified"
+            f"PASS: Tender 35-1 Cutout #2 open bay (roof_obstruction=0, rear 35-6 solid deck verified), true 1-DOF 4-bar 31-5+31-7x2+31-3+31-2 handpump "
+            f"(residual={hp_4bar_res_mm:.6f}mm), 31-14 gooseneck & 31-11 drain ({dp_loc[0]:.1f}, {dp_loc[1]:.1f}mm) verified"
         )
 
     return ok, msgs
@@ -2285,8 +2325,11 @@ def verify_gate_18(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     cab_y_span = float(cab_pts[:, 1].max() - cab_pts[:, 1].min())
 
     td_surf_mm = sample_triangle_surface(stl_tris_mm["tender_body"] * 1e-3, max_spacing_m=0.002) * 1000.0
-    td_mid_bogie = td_surf_mm[np.abs(td_surf_mm[:, 0]) <= 85.0]
-    td_min_z_mid = float(td_mid_bogie[:, 2].min())
+    # 检验转向架之间非枕梁区 (|X| <= 42.0mm) 的平坦 32-10 底架及外裙边 Z_min >= 10.4mm，且 X=±56.25mm 处 32-11/32-12 枕梁心皿零悬空直抵 Z_tdr <= 0.5mm!
+    td_mid_span = td_surf_mm[np.abs(td_surf_mm[:, 0]) <= 42.0]
+    td_min_z_mid = float(td_mid_span[:, 2].min())
+    td_bolster_pts = td_surf_mm[(np.abs(np.abs(td_surf_mm[:, 0]) - 56.25) <= 6.5) & (np.abs(td_surf_mm[:, 1]) <= 8.0)]
+    td_bolster_z_min = float(td_bolster_pts[:, 2].min()) if len(td_bolster_pts) else 999.0
     td_com_y_mm = abs(float(mp["parts"]["tender_body"]["com_m"][1])) * 1000.0
 
     if not (
@@ -2298,28 +2341,29 @@ def verify_gate_18(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         and abs(float(tc["drawbar_tender_pin_local_x"]) - 102.0) < 0.2
         and 38.0 <= cab_x_span <= 39.2
         and 78.6 <= cab_y_span <= 79.8
-        and td_min_z_mid >= 12.4
+        and td_min_z_mid >= 10.4
+        and td_bolster_z_min <= 0.5
         and td_com_y_mm <= 0.05
     ):
         ok = False
         msgs.append(
-            f"FAIL: Calibrated Cab/Tender outer dimensions or flat 32-10 underframe failed: "
-            f"cab={cab_x_span:.1f}×{cab_y_span:.1f}mm, td_min_z_mid={td_min_z_mid:.2f}mm, com_y={td_com_y_mm:.4f}mm"
+            f"FAIL: Calibrated Cab/Tender outer dimensions or flat 32-10 / 32-11 bolster failed: "
+            f"cab={cab_x_span:.1f}×{cab_y_span:.1f}mm, td_min_z_mid={td_min_z_mid:.2f}mm, bolster_z={td_bolster_z_min:.2f}mm, com_y={td_com_y_mm:.4f}mm"
         )
     else:
         msgs.append(
             f"PASS: Calibrated scale dimensions verified (Cab {cab_x_span:.1f}×{cab_y_span:.1f}mm; "
-            f"8-20B Tender 200.7×81.5×65.0mm, bogies ±56.25/48.4mm, flat 32-10 Z_min={td_min_z_mid:.2f}mm, |com_y|={td_com_y_mm:.4f}mm)"
+            f"8-20B Tender 200.7×81.5×65.0mm, flat 32-10 Z_min={td_min_z_mid:.2f}mm, zero-gap 32-11/12 bolster Z_min={td_bolster_z_min:.2f}mm, |com_y|={td_com_y_mm:.4f}mm)"
         )
 
-    # 18.2 核验煤水车前部 36-4 酒精箱与后部 31-10 水箱三维物理隔离 & 闭合盖板零穿顶
+    # 18.2 核验煤水车前部 36-4 无腿上法兰酒精箱与后部 31-10 水箱三维物理隔离 & 闭合盖板零穿顶 (Z_max <= 61.6mm < 62.0mm 甲板!)
     ti_pts = stl_tris_mm["tender_internals"].reshape(-1, 3)
     gap_slice = ti_pts[
-        (ti_pts[:, 0] > -4.6)
-        & (ti_pts[:, 0] < -2.2)
+        (ti_pts[:, 0] > -4.0)
+        & (ti_pts[:, 0] < -0.2)
         & (np.abs(ti_pts[:, 1]) >= 18.0)
-        & (ti_pts[:, 2] >= 28.0)
-        & (ti_pts[:, 2] <= 62.5)
+        & (ti_pts[:, 2] >= 25.0)
+        & (ti_pts[:, 2] <= 61.5)
     ]
     wt_bounds = pip["tender_system_bom"]["water_tank_31_10"]["interior_bounds_mm"]
     at_bounds = pip["tender_system_bom"]["mariotte_alcohol_system_36_4"]["interior_bounds_mm"]
@@ -2344,30 +2388,35 @@ def verify_gate_18(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         return d.geom_xpos[gid] + mesh_pts_mj[mid] @ d.geom_xmat[gid].reshape(3, 3).T
 
     max_sub_z_mm = rear_ti_zmax
+    jid_hpl = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_hp_link")
     jid_hp = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_handpump")
+    jid_ram = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_hp_ram")
     jid_dp = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_drain_plug")
-    for hp_q, dp_q in [(0.0, 0.0), (0.36, 0.0050), (-0.36, 0.0050)]:
-        d.qpos[m.jnt_qposadr[jid_hp]] = hp_q
+    for psi_hp, dp_q in [(0.0, 0.0), (0.36, 0.0050), (-0.36, 0.0050)]:
+        ql = math.asin(0.5 * (1.0 - math.cos(psi_hp)))
+        d.qpos[m.jnt_qposadr[jid_hpl]] = ql
+        d.qpos[m.jnt_qposadr[jid_hp]] = psi_hp - ql
+        d.qpos[m.jnt_qposadr[jid_ram]] = 0.020 * (math.cos(ql) - 1.0) - 0.010 * math.sin(psi_hp)
         d.qpos[m.jnt_qposadr[jid_dp]] = dp_q
         mujoco.mj_forward(m, d)
         tb_pos = d.xpos[tb_id]
-        for gn in ("tender_handpump_vis", "tender_drain_plug_vis"):
+        for gn in ("tender_hp_links_vis", "tender_handpump_vis", "tender_drain_plug_vis"):
             pts_loc_z = (geom_pts_world(gn)[:, 2] - tb_pos[2]) * 1000.0
             max_sub_z_mm = max(max_sub_z_mm, float(pts_loc_z.max()))
 
-    if len(gap_slice) > 0 or float(at_x[0]) - float(wt_x[1]) < 2.0 or max_sub_z_mm > 63.5:
+    if len(gap_slice) > 0 or float(at_x[0]) - float(wt_x[1]) < 2.0 or max_sub_z_mm > 61.8:
         ok = False
         msgs.append(
             f"FAIL: Tender 36-4/31-10 separation or deck roof clearance failed: gap_pts={len(gap_slice)}, "
-            f"air_gap={float(at_x[0]) - float(wt_x[1]):.1f}mm, max_sub_z={max_sub_z_mm:.2f}mm (<=63.5mm)"
+            f"air_gap={float(at_x[0]) - float(wt_x[1]):.1f}mm, max_sub_z={max_sub_z_mm:.2f}mm (<=61.8mm)"
         )
     else:
         msgs.append(
-            f"PASS: Front 36-4 alcohol tank & rear 31-10 water liner physically isolated (air_gap={float(at_x[0]) - float(wt_x[1]):.1f}mm, "
-            f"overlap_pts=0) & submerged 31-3/31-11/31-14 Z_max={max_sub_z_mm:.2f}mm (<63.7mm deck, zero roof protrusion)"
+            f"PASS: Front 36-4 top-flanged alcohol tank & rear 31-10 water liner physically isolated (air_gap={float(at_x[0]) - float(wt_x[1]):.1f}mm, "
+            f"overlap_pts=0) & submerged 31-3/31-7/31-11/31-14 Z_max={max_sub_z_mm:.2f}mm (<62.0mm deck, zero roof protrusion)"
         )
 
-    # 18.3 核验同轴机械座合 (<= 0.35mm，杜绝悬空件) 与全行程多自由度两两无碰撞净空 (>= 0.45mm)
+    # 18.3 核验同轴机械座合 (<= 0.45mm，杜绝悬空件) 与全行程多自由度两两无碰撞净空 (>= 0.45mm)
     mujoco.mj_resetData(m, d)
     mujoco.mj_forward(m, d)
 
@@ -2397,9 +2446,9 @@ def verify_gate_18(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     ]
     sweep_poses = [
         {"j_cab_regulator": 0.0, "j_cab_whistle": 0.0, "j_cab_fire_door": 0.0, "j_cab_bypass": 0.0, "j_reverser": 0.0},
-        {"j_cab_regulator": 1.12, "j_cab_whistle": -0.38, "j_cab_fire_door": 1.65, "j_cab_bypass": -1.35, "j_reverser": 0.45},
-        {"j_cab_regulator": 0.56, "j_cab_whistle": -0.38, "j_cab_fire_door": 0.85, "j_cab_bypass": -0.70, "j_reverser": -0.45},
-        {"j_cab_regulator": 1.12, "j_cab_whistle": 0.0, "j_cab_fire_door": 1.65, "j_cab_bypass": 0.0, "j_reverser": -0.45},
+        {"j_cab_regulator": 1.12, "j_cab_whistle": -0.38, "j_cab_fire_door": 1.40, "j_cab_bypass": -1.35, "j_reverser": 0.45},
+        {"j_cab_regulator": 0.56, "j_cab_whistle": -0.38, "j_cab_fire_door": 0.75, "j_cab_bypass": -0.70, "j_reverser": -0.45},
+        {"j_cab_regulator": 1.12, "j_cab_whistle": 0.0, "j_cab_fire_door": 1.40, "j_cab_bypass": 0.0, "j_reverser": -0.45},
     ]
     min_cab_clear_mm = 999.0
     worst_cab_pair = ("", "")
@@ -2409,7 +2458,9 @@ def verify_gate_18(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
             jid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, jn)
             d.qpos[m.jnt_qposadr[jid]] = qv
         jid_rw = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_reverser_wheel")
-        d.qpos[m.jnt_qposadr[jid_rw]] = 0.70 * pose["j_reverser"]
+        jid_rn = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_reverser_nut")
+        d.qpos[m.jnt_qposadr[jid_rw]] = 10.0 * pose["j_reverser"]
+        d.qpos[m.jnt_qposadr[jid_rn]] = 0.007 * math.sin(pose["j_reverser"])
         mujoco.mj_forward(m, d)
         pts_map = {gn: geom_pts_world(gn) for gn in cab_nonmating_geoms}
         trees_map = {gn: cKDTree(pts_map[gn]) for gn in cab_nonmating_geoms}
@@ -2433,6 +2484,121 @@ def verify_gate_18(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         msgs.append(
             f"PASS: Zero floating parts (max coaxial seat gap={max_seat_mm:.3f}mm <=0.45mm on 6-9/4-17, 8-12/8-11, 11-5/11-6, 31-11/31-9) "
             f"& full-sweep Cab 10-part pairwise clearance min={min_cab_clear_mm:.2f}mm (>=0.45mm, {worst_cab_pair[0]}<->{worst_cab_pair[1]})"
+        )
+
+    return ok, msgs
+
+
+# ==============================================================================
+# Gate 19: Stage 14 图纸真值弯管/四连杆传动、真实乏汽射流与干烧直至 0ml 液位蒸干物理门禁
+# ==============================================================================
+
+def verify_gate_19(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
+    ok = True
+    msgs: List[str] = []
+
+    # 19.1 核验 図 4.2 锅底绕行下弯逆转横轴 4-12、螺旋逆转机滑块 8-17/8-20、7-9 内壁直通给汽横歧管、17-3 J字通风喷嘴、28-6纵列安全阀与机车端 34-8 活接
+    rev_pts = sample_triangle_surface(stl_tris_mm["reverser_shaft"], max_spacing_m=0.8)
+    rev_mid_z_max = float(rev_pts[np.abs(rev_pts[:, 1]) <= 9.0][:, 2].max())  # 局部 z <= -11.5mm -> 世界系 Z <= +15.0mm < +16.7mm 铜锅底!
+    sh_pts = stl_tris_mm["superheater_piping"].reshape(-1, 3)
+    m79_pts = sh_pts[(sh_pts[:, 0] >= 119.5) & (sh_pts[:, 0] <= 127.5) & (sh_pts[:, 2] >= 14.5) & (sh_pts[:, 2] <= 22.5)]
+    m79_yspan = float(m79_pts[:, 1].max() - m79_pts[:, 1].min()) if len(m79_pts) else 0.0
+    blw173_pts = stl_tris_mm["blower_nozzle_17_3"].reshape(-1, 3)
+    j_tip_pts = blw173_pts[(blw173_pts[:, 0] >= 127.0) & (blw173_pts[:, 2] >= 33.5)]
+    tsv_pts = stl_tris_mm["tandem_safety_valves"].reshape(-1, 3)
+    tsv_ymax = float(np.abs(tsv_pts[:, 1]).max())
+    u348_pts = stl_tris_mm["umb_union_34_8"].reshape(-1, 3)
+    u348_xmean = float(u348_pts[:, 0].mean())
+
+    m = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / "models" / "d51_full.xml"))
+    d = mujoco.MjData(m)
+    ctrl_rev = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "reverser_ctrl")
+    jid_rn = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_reverser_nut")
+    jid_rr = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_reach_rod")
+    max_nut_rr_diff_mm = 0.0
+    for r_cmd in (-0.45, 0.0, +0.45):
+        mujoco.mj_resetData(m, d)
+        d.ctrl[ctrl_rev] = r_cmd
+        for _ in range(350):
+            mujoco.mj_step(m, d)
+        qn = float(d.qpos[m.jnt_qposadr[jid_rn]])
+        qr = float(d.qpos[m.jnt_qposadr[jid_rr]])
+        max_nut_rr_diff_mm = max(max_nut_rr_diff_mm, abs(qn - qr) * 1000.0)
+
+    if not (
+        rev_mid_z_max <= -11.0
+        and 40.5 <= m79_yspan <= 42.5
+        and len(j_tip_pts) > 10
+        and tsv_ymax <= 3.6
+        and -12.0 <= u348_xmean <= -5.0
+        and max_nut_rr_diff_mm <= 0.02
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Blueprint piping/linkage geometry check failed: rev_mid_z={rev_mid_z_max:.2f}mm, "
+            f"7-9_yspan={m79_yspan:.2f}mm, j17_3_pts={len(j_tip_pts)}, tsv_ymax={tsv_ymax:.2f}mm, "
+            f"34-8_x={u348_xmean:.2f}mm, nut_rr_diff={max_nut_rr_diff_mm:.4f}mm"
+        )
+    else:
+        msgs.append(
+            f"PASS: Factory blueprint piping & linkages verified (4-12 belly-cranked shaft z_mid={rev_mid_z_max:.1f}mm under boiler, "
+            f"8-17/20 screw nut<->8-18 reach rod Δ={max_nut_rr_diff_mm:.4f}mm, 7-9 inner cross-manifold span={m79_yspan:.1f}mm, "
+            f"17-3 J-nozzle, centerline 28-6x2 |Y|<={tsv_ymax:.1f}mm, loco-end 34-8 union x={u348_xmean:.1f}mm)"
+        )
+
+    # 19.2 核验真实蒸汽排汽质量流量 & 干烧持续沸腾直至锅水彻底蒸干 (<1.0ml, Z_free<=18.8mm, Domain 2 液相体积分数归零!)
+    runner = CoSimRunner(PROJECT_ROOT / "models" / "d51_full.xml", preset="hot", use_gpu_3d=True)
+    runner.ctrl.reverser = 0.75
+    runner.ctrl.regulator = 0.65
+    runner.ctrl.blower_valve = 0.35
+    runner.ctrl.bypass_valve = 1.0
+    runner.ctrl.drain_cock = False
+    runner.ctrl.fuel_valve = 1.0
+    runner.ctrl.burner_lit = True
+    runner.ctrl.thermal_warp = 1.0
+
+    max_exh_gs = 0.0
+    for _ in range(600):
+        tel_run = runner.step_once()
+        max_exh_gs = max(max_exh_gs, float(tel_run.exhaust_g_s))
+
+    d2_init_vox = float(runner.thermo.d2_alpha_w.sum().item())
+    # 从 145 ml (火室顶板临界点) 持续干烧沸腾排汽直至 < 1.0 ml 彻底蒸干!
+    runner.thermo.core1d.M_water_kg = 0.145
+    runner.ctrl.regulator = 0.45
+    runner.ctrl.blower_valve = 0.65
+    runner.ctrl.thermal_warp = 150.0
+    z_mid_70 = 999.0
+    for _ in range(16000):
+        if runner.thermo.core1d.alcohol_ml < 25.0:
+            runner.thermo.core1d.alcohol_ml = 130.0
+        tel_dry = runner.step_once()
+        if 62.0 <= tel_dry.boiler_water_ml <= 78.0:
+            z_mid_70 = min(z_mid_70, float(tel_dry.water_free_z_mm))
+        if tel_dry.boiler_water_ml <= 0.05 and tel_dry.crown_temp_c >= 435.0:
+            break
+
+    d2_final_vox = float(runner.thermo.d2_alpha_w.sum().item())
+    if not (
+        max_exh_gs >= 0.025
+        and 34.0 <= z_mid_70 <= 38.5
+        and tel_dry.boiler_water_ml <= 1.0
+        and tel_dry.water_free_z_mm <= 18.8
+        and tel_dry.sight_glass_level_pct <= 0.5
+        and tel_dry.crown_temp_c >= 420.0
+        and d2_final_vox <= 0.02 * d2_init_vox
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Steam exhaust / dry-fire boil-off check failed: max_exh={max_exh_gs:.3f}g/s, "
+            f"z@70ml={z_mid_70:.2f}mm, final_water={tel_dry.boiler_water_ml:.2f}ml, final_Z={tel_dry.water_free_z_mm:.2f}mm, "
+            f"SG={tel_dry.sight_glass_level_pct:.1f}%, T_crown={tel_dry.crown_temp_c:.1f}C, d2_vox={d2_init_vox:.0f}->{d2_final_vox:.1f}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Real steam exhaust (peak {max_exh_gs:.3f} g/s) & full dry-fire boil-off verified: "
+            f"145ml (+47.6mm) -> 70ml (+{z_mid_70:.1f}mm) -> {tel_dry.boiler_water_ml:.2f}ml (+{tel_dry.water_free_z_mm:.2f}mm, "
+            f"SG={tel_dry.sight_glass_level_pct:.1f}%, T_crown={tel_dry.crown_temp_c:.0f}°C, 3D Domain-2 liquid voxels {d2_init_vox:.0f}->{d2_final_vox:.0f})"
         )
 
     return ok, msgs
@@ -2542,9 +2708,15 @@ def main() -> int:
         print(f"  - {m}")
     all_ok &= g18_ok
 
+    g19_ok, g19_msgs = verify_gate_19(stl_tris_mm)
+    print(f"\n[Gate 19] Stage 14 Factory Piping/Linkages, Live Steam Jet & Dry-Fire Boil-Off to 0ml -> {'PASS' if g19_ok else 'FAIL'}")
+    for m in g19_msgs:
+        print(f"  - {m}")
+    all_ok &= g19_ok
+
     print("\n" + "=" * 88)
     if all_ok:
-        print(" [ALL GATES 1-18 PASSED] STAGE 13 (1:1 CALIBRATED CAB + TENDER + 4-PINO + DOMAIN-6) VERIFIED 100%")
+        print(" [ALL GATES 1-19 PASSED] STAGE 14 (FACTORY PIPING/LINKAGES + STEAM + BOIL-OFF) VERIFIED 100%")
         print("=" * 88)
         return 0
     else:

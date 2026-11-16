@@ -438,6 +438,7 @@ async function main() {
       "j_cab_fire_door",
       "j_cab_bypass",
       "j_cab_roof_hatch",
+      "j_tender_hp_link",
       "j_tender_handpump",
       "j_tender_hp_ram",
       "j_tender_drain_plug",
@@ -599,14 +600,14 @@ async function main() {
             const posAttr = rawGeom.getAttribute("position");
             aligned.setAttribute("aCadPos", posAttr.clone());
             if (meshKey === "cab_pg_dial") {
-              // 将 256×256 PG-ø20 白底刻度盘平面投影至 +22° 倾斜表盘面 (法向 [-cos22°, 0, +sin22°])
+              // 将 256×256 PG-ø20 白底刻度盘平面投影至 +24° 倾斜表盘面 (法向 [-cos24°, 0, +sin24°])
               const uvArr = new Float32Array(posAttr.count * 2);
               for (let vi = 0; vi < posAttr.count; vi++) {
                 const px = posAttr.getX(vi);
                 const py = posAttr.getY(vi);
                 const pz = posAttr.getZ(vi);
                 const u = 0.5 - py / 0.0168;
-                const v = 0.5 + (0.374607 * px + 0.927184 * pz) / 0.0168;
+                const v = 0.5 + (0.406737 * px + 0.913545 * pz) / 0.0168;
                 uvArr[2 * vi] = Math.max(0.02, Math.min(0.98, u));
                 uvArr[2 * vi + 1] = Math.max(0.02, Math.min(0.98, v));
               }
@@ -636,7 +637,7 @@ async function main() {
           attachCopperBoilerShader(cuMat, fluidVis.uniforms);
           copperCoreMats.push(cuMat);
           mat = cuMat;
-        } else if (meshKey === "superheater_piping") {
+        } else if (meshKey === "superheater_piping" || meshKey === "exhaust_blast_pipe") {
           mat = matSuperheater;
         } else if (meshKey === "feedwater_piping") {
           mat = matFeedwater;
@@ -1166,6 +1167,7 @@ async function main() {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
+  let hpPsiSmooth = 0.0;
   function syncWasmVisualJoints(dtStep: number, pGaugeKgf: number) {
     let hpTgt = 0.0;
     if (aiMode === "human" && Math.abs(humanAgent.handpumpAnimRad) > 1e-4) {
@@ -1178,6 +1180,24 @@ async function main() {
       handpumpVisPhase = 0.0;
     }
 
+    const alpha = Math.min(1.0, dtStep * 22.0);
+    hpPsiSmooth = hpPsiSmooth + alpha * (hpTgt - hpPsiSmooth);
+    const sinQL = Math.max(-0.99, Math.min(0.99, 0.5 * (1.0 - Math.cos(hpPsiSmooth))));
+    const qLink = Math.asin(sinQL);
+    const qLev = hpPsiSmooth - qLink;
+    const qRam = 0.020 * (Math.cos(qLink) - 1.0) - 0.010 * Math.sin(hpPsiSmooth);
+    for (const [jnHp, valHp] of [
+      ["j_tender_hp_link", qLink],
+      ["j_tender_handpump", qLev],
+      ["j_tender_hp_ram", qRam],
+    ] as const) {
+      const addrsHp = visJointMap[jnHp];
+      if (addrsHp) {
+        data.qpos[addrsHp[0]] = valHp;
+        data.qvel[addrsHp[1]] = 0.0;
+      }
+    }
+
     const pNorm = Math.max(0.0, Math.min(1.05, pGaugeKgf / 6.0));
     const openWaterBay =
       ctrl.coalCoverOpen || ctrl.waterFillValve > 0.02 || ctrl.tenderDrainOpen || Math.abs(hpTgt) > 0.01;
@@ -1188,18 +1208,15 @@ async function main() {
       j_cab_sight_drain: ctrl.sightDrainValve ? 0.0016 : 0.0,
       j_cab_pg_needle: -2.10 + pNorm * 4.20,
       j_cab_blowdown: 3.14 * ctrl.blowdownValve,
-      j_cab_fire_door: +1.65 * ctrl.fireboxDoor,
+      j_cab_fire_door: +1.40 * ctrl.fireboxDoor,
       j_cab_bypass: -1.35 * ctrl.bypassValve,
       j_cab_roof_hatch: ctrl.cabRoofOpen ? 2.10 : 0.0,
-      j_tender_handpump: hpTgt,
-      j_tender_hp_ram: 0.008 * hpTgt,
       j_tender_drain_plug: ctrl.tenderDrainOpen ? 0.0050 : 0.0,
-      j_tender_coal_cover: openWaterBay ? 1.75 : 0.0,
+      j_tender_coal_cover: openWaterBay ? 0.026 : 0.0,
       j_tender_water_lid: ctrl.waterLidOpen ? 1.45 : 0.0,
       j_tender_fuel_valve: 1.50 * ctrl.fuelValve,
       j_tender_fuel_cap: ctrl.fuelCapOpen ? 0.0045 : 0.0,
     };
-    const alpha = Math.min(1.0, dtStep * 22.0);
     for (const [jn, tgt] of Object.entries(targets)) {
       const addrs = visJointMap[jn];
       if (addrs) {
@@ -1213,13 +1230,22 @@ async function main() {
   function unpackWsFrameToOutput(frame: any): StepOutput {
     const t = frame.tel;
     const sp: SpatialFluidState = frame.spatial;
-    const exhL =
-      Math.max(0, -(sp.valvePortOpenL[0] ?? 0)) * (sp.cylLPKgf[0] ?? 0) +
-      Math.max(0, -(sp.valvePortOpenL[1] ?? 0)) * (sp.cylLPKgf[1] ?? 0);
-    const exhR =
-      Math.max(0, -(sp.valvePortOpenR[0] ?? 0)) * (sp.cylRPKgf[0] ?? 0) +
-      Math.max(0, -(sp.valvePortOpenR[1] ?? 0)) * (sp.cylRPKgf[1] ?? 0);
-    const chuffExh = Math.min(1.0, 0.32 * (exhL + exhR) + 0.45 * Math.min(1.0, t.steamGenGS / 0.35));
+    if (typeof t.waterFreeZMm === "number") {
+      sp.waterFreeZMm = t.waterFreeZMm;
+    }
+    const portExhMag =
+      Math.max(0, -(sp.valvePortOpenL[0] ?? 0)) +
+      Math.max(0, -(sp.valvePortOpenL[1] ?? 0)) +
+      Math.max(0, -(sp.valvePortOpenR[0] ?? 0)) +
+      Math.max(0, -(sp.valvePortOpenR[1] ?? 0));
+    const exhMassGS = t.exhaustGS ?? 0.0;
+    const blwMassGS = t.blowerGS ?? 0.0;
+    const chuffExh = Math.min(
+      1.0,
+      1.65 * exhMassGS +
+        2.40 * blwMassGS +
+        (t.steamChestKgf > 0.04 ? (0.16 + 0.36 * portExhMag) * Math.min(1.0, t.steamChestKgf / 1.4) : 0.0)
+    );
     const boilProg =
       typeof t.boilingProgressPct === "number"
         ? t.boilingProgressPct
@@ -1265,6 +1291,10 @@ async function main() {
       whistleSteamGS: t.whistleSteamGS ?? 0.0,
       blowdownGS: t.blowdownGS ?? 0.0,
       sightPurgeGS: t.sightPurgeGS ?? 0.0,
+      exhaustGS: exhMassGS,
+      blowerGS: blwMassGS,
+      safetyGS: t.safetyGS ?? 0.0,
+      boilerWaterMl: t.boilerWaterMl,
       lubricatorOilPct: t.lubricatorOilPct,
       wheelRpm: t.wheelRpm,
       scaleSpeedKmh: t.scaleSpeedKmh,
@@ -1344,7 +1374,7 @@ async function main() {
         data.qfrc_applied[idxMap.qvelValR] = out.valveFrictionR;
         data.qfrc_applied[idxMap.qvelPump] = out.forcePump;
         if (idxMap.qvelDrain >= 0) {
-          data.qfrc_applied[idxMap.qvelDrain] = ctrl.drainCock ? 0.0085 : 0.0;
+          data.qfrc_applied[idxMap.qvelDrain] = ctrl.drainCock ? 0.022 : 0.0;
         }
         if (isRollerMode) {
           data.qfrc_applied[idxMap.qvelW3] = -0.0022 * w3 - 0.00012 * w3 * Math.abs(w3);
@@ -1482,10 +1512,15 @@ async function main() {
 
       const sgShow = out.sightGlassLevelPct ?? out.waterLevelPct;
       const lvlDiff = Math.abs(sgShow - out.trueWaterLevelPct);
+      const bWaterMl = out.boilerWaterMl;
       document.getElementById("txt-water")!.textContent =
-        lvlDiff > 0.6
-          ? `${sgShow.toFixed(1)}% (実${out.trueWaterLevelPct.toFixed(0)}%)`
-          : `${sgShow.toFixed(1)} %`;
+        bWaterMl !== undefined && bWaterMl < 139.5
+          ? bWaterMl < 0.5
+            ? `0.0% (完全蒸発 0ml)`
+            : `0.0% (空焚き残 ${bWaterMl.toFixed(0)}ml)`
+          : lvlDiff > 0.6
+            ? `${sgShow.toFixed(1)}% (実${out.trueWaterLevelPct.toFixed(0)}%)`
+            : `${sgShow.toFixed(1)} %`;
       (document.getElementById("bar-water") as HTMLElement).style.width = `${sgShow}%`;
 
       document.getElementById("txt-steam")!.textContent = `${out.steamChestKgf.toFixed(2)} kgf | ${out.superheatTempC.toFixed(0)}°C`;

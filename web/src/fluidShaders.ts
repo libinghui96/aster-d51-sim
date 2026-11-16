@@ -32,8 +32,12 @@ export class FluidPartVisualizer {
 
   private waterSurfaceMat: THREE.ShaderMaterial;
   private waterVolumeMat: THREE.ShaderMaterial;
+  private steamHeadspaceMat: THREE.ShaderMaterial;
+  private smokeboxBlastMat: THREE.ShaderMaterial;
   private waterSurfaceMesh: THREE.Mesh;
   private waterVolumeMesh: THREE.Mesh;
+  private steamHeadspaceMesh: THREE.Mesh;
+  private smokeboxBlastMeshes: THREE.Mesh[] = [];
 
   private bubblePoints: THREE.Points;
   private bubblePositions: Float32Array;
@@ -315,6 +319,145 @@ export class FluidPartVisualizer {
     this.waterVolumeMesh.visible = false;
     this.root.add(this.waterVolumeMesh);
 
+    // 2A. 锅筒汽空间 (z > zSurf) 三维加压饱和蒸汽体积云着色器 (随锅炉表压、沸腾强度与主蒸汽抽吸流动翻涌)
+    this.steamHeadspaceMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.BackSide,
+      blending: THREE.NormalBlending,
+      uniforms: {
+        uTime: { value: 0.0 },
+        uWaterZ: { value: 0.0555 },
+        uSloshTan: { value: 0.0 },
+        uPressureNorm: { value: 0.0 },
+        uBoil: { value: 0.0 },
+        uSteamFlow: { value: 0.0 },
+      },
+      vertexShader: /* glsl */ `
+        varying vec3 vLocalPos;
+        void main() {
+          vLocalPos = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uWaterZ;
+        uniform float uSloshTan;
+        uniform float uPressureNorm;
+        uniform float uBoil;
+        uniform float uSteamFlow;
+        varying vec3 vLocalPos;
+
+        float hash21(vec2 p) {
+          p = fract(p * vec2(127.1, 311.7));
+          p += dot(p, p + 34.5);
+          return fract(p.x * p.y);
+        }
+        float noise2(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+            mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
+            f.y
+          );
+        }
+        void main() {
+          float dens = clamp(0.65 * uPressureNorm + 0.55 * uBoil, 0.0, 1.0);
+          if (dens < 0.03) discard;
+          float zSurf = uWaterZ + (vLocalPos.x + 0.010) * uSloshTan;
+          if (vLocalPos.z <= zSurf + 0.0005) discard;
+          if (vLocalPos.x < -0.0468 && vLocalPos.z < 0.0475 && abs(vLocalPos.y) < 0.0195) discard;
+
+          float drift = uTime * (0.9 + 3.2 * uSteamFlow);
+          float f1 = noise2(vec2(vLocalPos.x * 46.0 + drift, vLocalPos.z * 78.0 - uTime * 1.4));
+          float f2 = noise2(vec2(vLocalPos.x * 96.0 - drift * 0.7, (vLocalPos.y + vLocalPos.z) * 110.0 + uTime * 2.1));
+          float wisp = 0.62 * f1 + 0.38 * f2;
+
+          float crownGlow = smoothstep(0.044, 0.069, vLocalPos.z);
+          vec3 satMist = mix(vec3(0.76, 0.90, 0.98), vec3(0.96, 0.98, 1.00), wisp);
+          float alpha = dens * (0.12 + 0.24 * wisp) * (0.65 + 0.35 * crownGlow);
+          gl_FragColor = vec4(satMist, clamp(alpha, 0.0, 0.42));
+        }
+      `,
+    });
+    const hsGeom = new THREE.CylinderGeometry(0.0252, 0.0252, 0.198, 32, 12, false);
+    hsGeom.rotateZ(Math.PI * 0.5);
+    hsGeom.translate(-0.010, 0.0, 0.0440);
+    this.steamHeadspaceMesh = new THREE.Mesh(hsGeom, this.steamHeadspaceMat);
+    this.steamHeadspaceMesh.renderOrder = 3;
+    this.steamHeadspaceMesh.visible = false;
+    this.root.add(this.steamHeadspaceMesh);
+
+    // 2B. 烟室 20-7 乏汽喷嘴 / 17-3 通风喷嘴 -> 18-28 ペチコート -> 18-25 烟囱 三维文丘里高速射流锥
+    this.smokeboxBlastMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uTime: { value: 0.0 },
+        uJet: { value: 0.0 },
+        uDryness: { value: 0.92 },
+      },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uJet;
+        uniform float uDryness;
+        varying vec2 vUv;
+
+        float hash21(vec2 p) {
+          p = fract(p * vec2(233.34, 511.21));
+          p += dot(p, p + 29.17);
+          return fract(p.x * p.y);
+        }
+        float noise2(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+            mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
+            f.y
+          );
+        }
+        void main() {
+          if (uJet < 0.02) discard;
+          float h = clamp(vUv.y, 0.0, 1.0);
+          float r = abs(vUv.x - 0.5) * 2.0;
+          // 射流自 ø4.2mm 喷嘴 (h=0) 扩散射入 18-28 喇叭口喉部 (h=0.45) 并直冲烟囱顶 (h=1.0)
+          float jetHalfW = mix(0.18, 0.62, pow(h, 0.72));
+          float n = 0.65 * noise2(vec2(vUv.x * 7.0, h * 9.0 - uTime * (16.0 + 18.0 * uJet)))
+                  + 0.35 * noise2(vec2(vUv.x * 15.0 + 2.3, h * 18.0 - uTime * 26.0));
+          float cone = smoothstep(jetHalfW + 0.14 * n, jetHalfW * 0.12, r) * smoothstep(0.0, 0.06, h) * smoothstep(1.0, 0.82, h);
+          if (cone < 0.015) discard;
+          vec3 coreCol = mix(vec3(0.55, 0.88, 1.00), vec3(0.94, 0.98, 1.00), clamp(1.0 - h * 0.5 + 0.3 * (1.0 - uDryness), 0.0, 1.0));
+          float alpha = cone * clamp(0.18 + 0.58 * uJet, 0.0, 0.75) * (0.68 + 0.42 * n);
+          gl_FragColor = vec4(coreCol, alpha);
+        }
+      `,
+    });
+    for (const ang of [0.0, Math.PI * 0.5]) {
+      const bjGeom = new THREE.PlaneGeometry(0.017, 0.057, 4, 12);
+      bjGeom.rotateX(Math.PI * 0.5);
+      bjGeom.rotateZ(ang);
+      bjGeom.translate(0.130, 0.0, 0.0630);
+      const bjMesh = new THREE.Mesh(bjGeom, this.smokeboxBlastMat);
+      bjMesh.renderOrder = 5;
+      bjMesh.visible = false;
+      this.smokeboxBlastMeshes.push(bjMesh);
+      this.root.add(bjMesh);
+    }
+
     // 180 颗核态沸腾上升蒸汽泡 (从紫铜火室顶板及 5 根烟管外壁核化升起至自由液面破裂)
     this.bubblePositions = new Float32Array(this.bubbleCount * 3);
     this.bubbleSeeds = new Float32Array(this.bubbleCount);
@@ -365,7 +508,7 @@ export class FluidPartVisualizer {
     this.bubblePoints.visible = false;
     this.root.add(this.bubblePoints);
 
-    // 11-7 驾驶室右侧外缘 (-Y=-0.0302) パイレックス玻璃管水面计实况液柱 (X=-0.1185, Y=-0.0302, Z=0.0398..0.0562)
+    // 11-7 驾驶室右侧外缘 (-Y=-0.0313) パイレックス玻璃管水面计实况液柱 (X=-0.1185, Y=-0.0313, Z=0.0375..0.0545)
     const sgGeom = new THREE.CylinderGeometry(0.00108, 0.00108, 1.0, 14);
     sgGeom.rotateX(Math.PI * 0.5);
     sgGeom.translate(0, 0, 0.5);
@@ -375,8 +518,8 @@ export class FluidPartVisualizer {
       opacity: 0.88,
     });
     this.sightGlassWaterMesh = new THREE.Mesh(sgGeom, sgMat);
-    this.sightGlassWaterMesh.position.set(-0.1185, -0.0302, 0.0398);
-    this.sightGlassWaterMesh.scale.set(1, 1, 0.0082);
+    this.sightGlassWaterMesh.position.set(-0.1185, -0.0313, 0.0375);
+    this.sightGlassWaterMesh.scale.set(1, 1, 0.0085);
     this.sightGlassWaterMesh.renderOrder = 5;
     this.root.add(this.sightGlassWaterMesh);
 
@@ -386,7 +529,7 @@ export class FluidPartVisualizer {
       menGeom,
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.96 })
     );
-    this.sightGlassMeniscusMesh.position.set(-0.1185, -0.0302, 0.0480);
+    this.sightGlassMeniscusMesh.position.set(-0.1185, -0.0313, 0.0460);
     this.sightGlassMeniscusMesh.renderOrder = 6;
     this.root.add(this.sightGlassMeniscusMesh);
 
@@ -450,14 +593,57 @@ export class FluidPartVisualizer {
     // 4. 左右主气缸前后腔蒸汽膨胀云 + 滑阀进排汽口脉冲 + 底部冷凝水池 + 4-2 置换注油器油水分层芯
     // -----------------------------------------------------------------------
     const makeCylChamberMesh = (yCenter: number): THREE.Mesh => {
-      const g = new THREE.CylinderGeometry(0.0069, 0.0069, 1.0, 22);
+      const g = new THREE.CylinderGeometry(0.0070, 0.0070, 1.0, 22);
       g.rotateZ(Math.PI * 0.5);
-      const m = new THREE.MeshBasicMaterial({
-        color: 0xffb86c,
+      const m = new THREE.ShaderMaterial({
         transparent: true,
-        opacity: 0.0,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
+        uniforms: {
+          uTime: { value: 0.0 },
+          uPressNorm: { value: 0.0 },
+          uSuperheatNorm: { value: 0.3 },
+          uOpacity: { value: 0.0 },
+        },
+        vertexShader: /* glsl */ `
+          varying vec3 vLocal;
+          void main() {
+            vLocal = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uTime;
+          uniform float uPressNorm;
+          uniform float uSuperheatNorm;
+          uniform float uOpacity;
+          varying vec3 vLocal;
+
+          float hash21(vec2 p) {
+            p = fract(p * vec2(129.1, 317.7));
+            p += dot(p, p + 41.2);
+            return fract(p.x * p.y);
+          }
+          float noise2(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+            return mix(
+              mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+              mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
+              f.y
+            );
+          }
+          void main() {
+            if (uOpacity < 0.015) discard;
+            float n = 0.65 * noise2(vec2(vLocal.x * 6.5 - uTime * 11.0, (vLocal.y + vLocal.z) * 180.0))
+                    + 0.35 * noise2(vec2(vLocal.x * 14.0 + uTime * 17.0, (vLocal.y - vLocal.z) * 320.0));
+            vec3 exhMist = vec3(0.56, 0.88, 1.00);
+            vec3 liveHot = mix(vec3(0.95, 0.96, 1.00), vec3(1.00, 0.66, 0.24), uSuperheatNorm);
+            vec3 col = mix(exhMist, liveHot, clamp(uPressNorm * 1.25, 0.0, 1.0));
+            gl_FragColor = vec4(col, clamp(uOpacity * (0.68 + 0.52 * n), 0.0, 0.85));
+          }
+        `,
       });
       const mesh = new THREE.Mesh(g, m);
       mesh.position.set(0.126, yCenter, 0.0);
@@ -553,15 +739,15 @@ export class FluidPartVisualizer {
     this.root.add(this.lubeCoreMesh);
 
     // -----------------------------------------------------------------------
-    // 5. P3 煤水车 (Tender) 31-10 后置独立水箱 + 35-1 敞口湾 Domain 6 浅水波纹面 + 36-4 前置独立酒精箱
+    // 5. P3 煤水车 (Tender) 31-10 后置独立水箱 + 35-1 敞口湾 Domain 6 浅水波纹面 + 36-4 前置上法兰吊挂酒精箱
     // -----------------------------------------------------------------------
-    const twGeom = new THREE.BoxGeometry(0.080, 0.071, 1.0);
-    twGeom.translate(-0.0465, 0.0, 0.5);
+    const twGeom = new THREE.BoxGeometry(0.082, 0.074, 1.0);
+    twGeom.translate(-0.04675, 0.0, 0.5);
     this.tenderWaterMesh = new THREE.Mesh(
       twGeom,
       new THREE.MeshBasicMaterial({ color: 0x1e88e5, transparent: true, opacity: 0.34, depthWrite: false })
     );
-    this.tenderWaterMesh.position.set(0.0, 0.0, 0.0165);
+    this.tenderWaterMesh.position.set(0.0, 0.0, 0.0150);
     this.tenderWaterMesh.scale.set(1.0, 1.0, 0.036);
     this.tenderWaterMesh.renderOrder = 3;
     this.tenderWaterMesh.visible = false;
@@ -624,26 +810,26 @@ export class FluidPartVisualizer {
         }
       `,
     });
-    const obGeom = new THREE.PlaneGeometry(0.0645, 0.0328, 23, 9);
-    obGeom.translate(-0.05125, 0.0, 0.0);
+    const obGeom = new THREE.PlaneGeometry(0.0630, 0.0316, 23, 9);
+    obGeom.translate(-0.0450, 0.0, 0.0);
     this.tenderOpenBayWaterMesh = new THREE.Mesh(obGeom, this.tenderOpenBayMat);
     this.tenderOpenBayWaterMesh.renderOrder = 4;
     this.tenderOpenBayWaterMesh.visible = false;
     this.tenderRoot.add(this.tenderOpenBayWaterMesh);
 
-    const taGeom = new THREE.BoxGeometry(0.059, 0.061, 1.0);
-    taGeom.translate(+0.0290, 0.0, 0.5);
+    const taGeom = new THREE.BoxGeometry(0.0576, 0.0576, 1.0);
+    taGeom.translate(+0.0302, 0.0, 0.5);
     this.tenderAlcoholMesh = new THREE.Mesh(
       taGeom,
       new THREE.MeshBasicMaterial({ color: 0xf7b731, transparent: true, opacity: 0.38, depthWrite: false })
     );
-    this.tenderAlcoholMesh.position.set(0.0, 0.0, 0.0300);
-    this.tenderAlcoholMesh.scale.set(1.0, 1.0, 0.0335);
+    this.tenderAlcoholMesh.position.set(0.0, 0.0, 0.0258);
+    this.tenderAlcoholMesh.scale.set(1.0, 1.0, 0.0350);
     this.tenderAlcoholMesh.renderOrder = 3;
     this.tenderAlcoholMesh.visible = false;
     this.tenderRoot.add(this.tenderAlcoholMesh);
 
-    // 31-14 左前高位鹅颈回水喷流 (回水): 自 (-0.0305, +0.0090, +0.0530) 落入 35-1 敞口槽水面
+    // 31-14 左前防虹吸鹅颈回水喷流 (回水): 自 (-0.0260, +0.0110, +0.0537) 落入 35-1 敞口槽水面
     const rsGeom = new THREE.CylinderGeometry(0.0009, 0.0014, 1.0, 12);
     rsGeom.rotateX(Math.PI * 0.5);
     rsGeom.translate(0, 0, -0.5);
@@ -657,13 +843,13 @@ export class FluidPartVisualizer {
         blending: THREE.AdditiveBlending,
       })
     );
-    this.returnStreamMesh.position.set(-0.0305, 0.0090, 0.0530);
+    this.returnStreamMesh.position.set(-0.0260, 0.0110, 0.0537);
     this.returnStreamMesh.scale.set(1.0, 1.0, 0.012);
     this.returnStreamMesh.renderOrder = 5;
     this.returnStreamMesh.visible = false;
     this.tenderRoot.add(this.returnStreamMesh);
 
-    // 35-1 敞口注水槽 加水 水柱: 自上方 (-0.0512, 0.0, +0.0820) 垂直注入自由液面
+    // 35-1 敞口注水槽 加水 水柱: 自上方 (-0.0450, 0.0, +0.0820) 垂直注入自由液面
     const wfGeom = new THREE.CylinderGeometry(0.0018, 0.0013, 1.0, 14);
     wfGeom.rotateX(Math.PI * 0.5);
     wfGeom.translate(0, 0, -0.5);
@@ -676,13 +862,13 @@ export class FluidPartVisualizer {
         depthWrite: false,
       })
     );
-    this.waterFillStreamMesh.position.set(-0.0512, 0.0, 0.0820);
+    this.waterFillStreamMesh.position.set(-0.0450, 0.0, 0.0820);
     this.waterFillStreamMesh.scale.set(1.0, 1.0, 0.032);
     this.waterFillStreamMesh.renderOrder = 5;
     this.waterFillStreamMesh.visible = false;
     this.tenderRoot.add(this.waterFillStreamMesh);
 
-    // 31-11 -> 31-9 底部排水口 放水 水流: 自煤水车底板 (-0.0445, -0.0091, +0.013) 排向轨面
+    // 31-11 -> 31-9 底部排水口 放水 水流: 自煤水车底板 (-0.0410, -0.0103, +0.014) 排向轨面
     const tdGeom = new THREE.CylinderGeometry(0.0014, 0.0020, 0.034, 12);
     tdGeom.rotateX(Math.PI * 0.5);
     this.tenderDrainStreamMesh = new THREE.Mesh(
@@ -694,16 +880,16 @@ export class FluidPartVisualizer {
         depthWrite: false,
       })
     );
-    this.tenderDrainStreamMesh.position.set(-0.0445, -0.0091, -0.0040);
+    this.tenderDrainStreamMesh.position.set(-0.0410, -0.0103, -0.0030);
     this.tenderDrainStreamMesh.renderOrder = 5;
     this.tenderDrainStreamMesh.visible = false;
     this.tenderRoot.add(this.tenderDrainStreamMesh);
 
     this.mariotteBubblePos = new Float32Array(28 * 3);
     for (let i = 0; i < 28; i++) {
-      this.mariotteBubblePos[3 * i] = 0.0347 + (Math.random() - 0.5) * 0.008;
-      this.mariotteBubblePos[3 * i + 1] = 0.0060 + (Math.random() - 0.5) * 0.008;
-      this.mariotteBubblePos[3 * i + 2] = 0.0310 + Math.random() * 0.028;
+      this.mariotteBubblePos[3 * i] = 0.0348 + (Math.random() - 0.5) * 0.008;
+      this.mariotteBubblePos[3 * i + 1] = 0.0056 + (Math.random() - 0.5) * 0.008;
+      this.mariotteBubblePos[3 * i + 2] = 0.0265 + Math.random() * 0.032;
     }
     const mbGeom = new THREE.BufferGeometry();
     mbGeom.setAttribute("position", new THREE.BufferAttribute(this.mariotteBubblePos, 3));
@@ -716,24 +902,31 @@ export class FluidPartVisualizer {
     this.tenderRoot.add(this.mariotteBubblePoints);
   }
 
-  private respawnBubble(i: number, zFrac = 0.0): void {
-    // 45% 汽泡自紫铜火室顶板核化，55% 自 5 根烟管外壁核化
+  private respawnBubble(i: number, zFrac = 0.0, waterZ = 0.0555): void {
+    // 严格仅在当前真实液面 (waterZ) 以下浸没受热面上核化汽泡！干烧低水位时顶板/上烟管裸露处绝不悬空冒汽泡！
     let x: number, y: number, zBase: number;
-    if (Math.random() < 0.45) {
+    if (waterZ > 0.0492 && Math.random() < 0.45) {
       x = -0.105 + Math.random() * 0.056;
       y = (Math.random() - 0.5) * 0.036;
       zBase = 0.0478;
-    } else {
+    } else if (waterZ > 0.0375) {
       x = -0.046 + Math.random() * 0.134;
-      const fluePick = Math.floor(Math.random() * 5);
+      const validFlues = waterZ > 0.0505 ? [0, 1, 2, 3, 4] : [2, 3, 4];
+      const fluePick = validFlues[Math.floor(Math.random() * validFlues.length)];
       const fy = [-0.0115, +0.0115, -0.013, 0.0, +0.013][fluePick];
       const fz = [0.0465, 0.0465, 0.035, 0.0332, 0.035][fluePick];
       y = fy + (Math.random() - 0.5) * 0.006;
-      zBase = fz + 0.004;
+      zBase = Math.min(waterZ - 0.002, fz + 0.0025);
+    } else {
+      // 极低水位 (<37.5mm): 仅在锅底残水与火室两侧浸没水腿底部沸腾核化
+      x = -0.095 + Math.random() * 0.175;
+      y = x < -0.046 ? (Math.random() < 0.5 ? -0.0205 : +0.0205) : (Math.random() - 0.5) * 0.016;
+      zBase = Math.max(0.0186, Math.min(waterZ - 0.0014, 0.0195 + Math.random() * 0.006));
     }
+    const maxRise = Math.max(0.0005, waterZ - 0.001 - zBase);
     this.bubblePositions[3 * i] = x;
     this.bubblePositions[3 * i + 1] = y;
-    this.bubblePositions[3 * i + 2] = zBase + zFrac * 0.012;
+    this.bubblePositions[3 * i + 2] = zBase + zFrac * Math.min(0.012, maxRise);
   }
 
   private updateMidplaneTexture(sp: SpatialFluidState, boilerTempC: number): void {
@@ -798,15 +991,13 @@ export class FluidPartVisualizer {
     const len = Math.max(0.0012, xEnd - xStart);
     mesh.position.x = 0.5 * (xStart + xEnd);
     mesh.scale.set(len, 1.0, 1.0);
-    const mat = mesh.material as THREE.MeshBasicMaterial;
-    const pNorm = Math.max(0.0, Math.min(1.0, pKgf / 3.8));
+    const mat = mesh.material as THREE.ShaderMaterial;
+    const pNorm = Math.max(0.0, Math.min(1.0, pKgf / 3.4));
     const shNorm = Math.max(0.0, Math.min(1.0, (shTempC - 135.0) / 85.0));
-    // 高压进汽阶段呈明亮过热琥珀白，绝热膨胀做功阶段过渡为冰蓝白雾
-    const r = 0.38 + 0.62 * pNorm * (0.65 + 0.35 * shNorm);
-    const g = 0.68 + 0.18 * pNorm - 0.12 * shNorm * pNorm;
-    const b = 1.00 - 0.65 * pNorm * shNorm;
-    mat.color.setRGB(r, g, b);
-    mat.opacity = pKgf > 0.04 ? Math.min(0.68, 0.12 + 0.54 * pNorm) : 0.03;
+    mat.uniforms.uTime.value = this.elapsed;
+    mat.uniforms.uPressNorm.value = pNorm;
+    mat.uniforms.uSuperheatNorm.value = shNorm;
+    mat.uniforms.uOpacity.value = pKgf > 0.03 ? Math.min(0.78, 0.18 + 0.58 * pNorm) : 0.0;
   }
 
   update(
@@ -858,17 +1049,22 @@ export class FluidPartVisualizer {
     this.flameMat.uniforms.uTiltRad.value = (sp.flameTiltDeg * Math.PI) / 180.0;
     this.flameMat.uniforms.uIntensity.value = Math.min(1.2, 0.55 + out.smokeboxVacuumPa / 140.0);
 
-    // 2. 更新 11-7 驾驶室右侧外缘 (-Y) 水面计实况液柱 (常驻可见，响应 11-5 吹拔螺塞闪蒸降压!)
+    // 2. 更新 11-7 驾驶室右侧外缘 (-Y=-31.3mm) 水面计实况液柱 (0% 干烧时液柱真实归零排空!)
     const sgLevel = out.sightGlassLevelPct ?? out.waterLevelPct;
-    const sgFrac = Math.max(0.02, Math.min(0.98, sgLevel / 100.0));
-    const sgHeight = Math.max(0.0005, 0.0164 * sgFrac);
-    this.sightGlassWaterMesh.scale.set(1.0, 1.0, sgHeight);
-    this.sightGlassMeniscusMesh.position.z = 0.0398 + sgHeight;
+    const sgVisible = sgLevel > 0.35 && sp.waterFreeZMm > 46.8;
+    this.sightGlassWaterMesh.visible = sgVisible;
+    this.sightGlassMeniscusMesh.visible = sgVisible;
+    if (sgVisible) {
+      const sgFrac = Math.max(0.005, Math.min(0.98, sgLevel / 100.0));
+      const sgHeight = 0.0170 * sgFrac;
+      this.sightGlassWaterMesh.scale.set(1.0, 1.0, sgHeight);
+      this.sightGlassMeniscusMesh.position.z = 0.0375 + sgHeight;
+    }
 
     // 2b. 更新煤水车 35-1 后置敞口注水槽自由液面波纹 + 加水 / 31-14 回水 / 31-11 放水
     const hasTdr = !!tenderMatrix;
     const wFrac = Math.max(0.01, Math.min(1.0, out.tenderWaterMl / 340.0));
-    const zBayWater = 0.0165 + 0.045 * wFrac;
+    const zBayWater = 0.0152 + 0.0445 * wFrac;
     this.tenderOpenBayWaterMesh.visible = hasTdr && out.tenderWaterMl > 0.5;
     this.returnStreamMesh.visible = hasTdr && out.returnWaterMlS > 0.02;
     this.waterFillStreamMesh.visible = hasTdr && (out.waterFillMlS ?? 0) > 0.05;
@@ -913,10 +1109,20 @@ export class FluidPartVisualizer {
       }
     }
 
-    // 3. X-Ray 内窥零件级三维流体场更新
-    this.waterSurfaceMesh.visible = xray;
-    this.waterVolumeMesh.visible = xray;
-    this.bubblePoints.visible = xray && sp.boilingIntensity > 0.02;
+    // 3. X-Ray 内窥零件级三维流体场更新 (水位低于 19.0mm 即 <0.5ml 时锅水彻底蒸干消失!)
+    const waterZ = sp.waterFreeZMm * 0.001;
+    const hasBoilerWater = waterZ > 0.0190 && (out.boilerWaterMl === undefined || out.boilerWaterMl > 0.3);
+    const blastJetStrength = Math.min(
+      1.0,
+      out.exhaustPlume * 1.15 + ((out.blowerGS ?? 0) > 0.002 ? Math.min(0.85, (out.blowerGS ?? 0) * 8.0) : 0.0)
+    );
+    this.waterSurfaceMesh.visible = xray && hasBoilerWater;
+    this.waterVolumeMesh.visible = xray && hasBoilerWater;
+    this.steamHeadspaceMesh.visible = xray && (out.boilerPressureKgf > 0.03 || sp.boilingIntensity > 0.03);
+    for (const bm of this.smokeboxBlastMeshes) {
+      bm.visible = xray && blastJetStrength > 0.02;
+    }
+    this.bubblePoints.visible = xray && hasBoilerWater && sp.boilingIntensity > 0.02;
     this.sliceMesh.visible = xray;
     this.lubeCoreMesh.visible = xray;
     this.tenderWaterMesh.visible = xray && hasTdr && out.tenderWaterMl > 1.0;
@@ -929,29 +1135,28 @@ export class FluidPartVisualizer {
     if (!xray) return;
 
     if (hasTdr) {
-      this.tenderWaterMesh.scale.set(1.0, 1.0, 0.045 * wFrac);
+      this.tenderWaterMesh.scale.set(1.0, 1.0, 0.0445 * wFrac);
       const twMat = this.tenderWaterMesh.material as THREE.MeshBasicMaterial;
       const warm = Math.max(0.0, Math.min(1.0, (out.tenderWaterTempC - 25.0) / 40.0));
       twMat.color.setRGB(0.10 + 0.12 * warm, 0.52 + 0.30 * warm, 0.90);
 
       const aFrac = Math.max(0.02, Math.min(1.0, out.alcoholMl / 130.0));
-      this.tenderAlcoholMesh.scale.set(1.0, 1.0, 0.0335 * aFrac);
+      this.tenderAlcoholMesh.scale.set(1.0, 1.0, 0.0350 * aFrac);
       const taMat = this.tenderAlcoholMesh.material as THREE.MeshBasicMaterial;
       taMat.color.setHex(out.mariotteFloodAlarm ? 0xff4d29 : 0xf7b731);
 
       if (this.mariotteBubblePoints.visible) {
-        const zTop = 0.0300 + 0.0335 * aFrac;
+        const zTop = 0.0258 + 0.0350 * aFrac;
         for (let i = 0; i < 28; i++) {
           this.mariotteBubblePos[3 * i + 2] += (out.mariotteFloodAlarm ? 0.065 : 0.024) * dt;
           if (this.mariotteBubblePos[3 * i + 2] > zTop) {
-            this.mariotteBubblePos[3 * i + 2] = 0.0310;
+            this.mariotteBubblePos[3 * i + 2] = 0.0265;
           }
         }
         this.mariotteBubblePoints.geometry.attributes.position.needsUpdate = true;
       }
     }
 
-    const waterZ = sp.waterFreeZMm * 0.001;
     const sloshTan = Math.tan((sp.waterSloshPitchDeg * Math.PI) / 180.0);
     this.waterSurfaceMat.uniforms.uTime.value = this.elapsed;
     this.waterSurfaceMat.uniforms.uWaterZ.value = waterZ;
@@ -960,7 +1165,18 @@ export class FluidPartVisualizer {
     this.waterSurfaceMat.uniforms.uTempBottom.value = sp.waterLayerTempsC[0] ?? out.boilerTempC;
     this.waterSurfaceMat.uniforms.uTempTop.value = sp.waterLayerTempsC[3] ?? out.boilerTempC;
 
-    if (sp.boilingIntensity > 0.02) {
+    this.steamHeadspaceMat.uniforms.uTime.value = this.elapsed;
+    this.steamHeadspaceMat.uniforms.uWaterZ.value = hasBoilerWater ? waterZ : 0.0182;
+    this.steamHeadspaceMat.uniforms.uSloshTan.value = sloshTan;
+    this.steamHeadspaceMat.uniforms.uPressureNorm.value = Math.min(1.0, out.boilerPressureKgf / 3.8);
+    this.steamHeadspaceMat.uniforms.uBoil.value = sp.boilingIntensity;
+    this.steamHeadspaceMat.uniforms.uSteamFlow.value = this.uniforms.uSteamFlow.value;
+
+    this.smokeboxBlastMat.uniforms.uTime.value = this.elapsed;
+    this.smokeboxBlastMat.uniforms.uJet.value = blastJetStrength;
+    this.smokeboxBlastMat.uniforms.uDryness.value = sp.exhaustDryness;
+
+    if (hasBoilerWater && sp.boilingIntensity > 0.02) {
       this.bubbleMat.uniforms.uBoil.value = sp.boilingIntensity;
       const riseVel = 0.016 + 0.088 * sp.boilingIntensity;
       for (let i = 0; i < this.bubbleCount; i++) {
@@ -969,7 +1185,7 @@ export class FluidPartVisualizer {
         this.bubblePositions[3 * i + 2] += riseVel * (0.7 + 0.6 * this.bubbleSeeds[i]) * dt;
         const zCeil = waterZ + (bx + 0.010) * sloshTan - 0.0008;
         if (this.bubblePositions[3 * i + 2] >= zCeil) {
-          this.respawnBubble(i, 0.0);
+          this.respawnBubble(i, 0.0, waterZ);
         }
       }
       this.bubblePoints.geometry.attributes.position.needsUpdate = true;
@@ -1046,31 +1262,29 @@ export function attachSuperheaterShader(mat: THREE.MeshStandardMaterial, u: CadS
         "#include <emissivemap_fragment>",
         /* glsl */ `
         #include <emissivemap_fragment>
-        // 13-9 湿蒸汽调节管 -> 17-5 双 U 四程过热器 -> 13-4/7-9 过热给汽管 -> 20-7 排汽喷嘴
-        if (vCadPos.z > 0.055 && vCadPos.x < 0.104) {
-          // 13-9 锅筒顶部湿饱和蒸汽管: 冰青白色水滴流脉冲
+        // 炉内干汽管 (Z>0.056) -> 17-5 双 U 四程过热器 -> 中央下垂管 & 7-9 横向内侧给汽歧管 -> 7-8/20-7 排汽喷嘴
+        if (vCadPos.z > 0.056 && vCadPos.x < 0.111) {
           float wave = 0.5 + 0.5 * sin(vCadPos.x * 130.0 - uTime * (4.0 + 18.0 * uSteamFlow));
           vec3 wetCol = mix(vec3(0.18, 0.78, 1.0), vec3(0.82, 0.96, 1.0), uDomeDryness);
-          totalEmissiveRadiance += wetCol * uSteamFlow * (0.18 + 0.34 * wave);
-        } else if (vCadPos.x >= -0.026 && vCadPos.x <= 0.105 && vCadPos.z >= 0.040 && vCadPos.z <= 0.055 && abs(vCadPos.y) < 0.019) {
-          // 17-5 双 U 四程过热管: 湿蒸汽蒸发为干饱和并升温为琥珀橙红过热蒸汽
-          float s = clamp((vCadPos.x + 0.025) / 0.128, 0.0, 1.0);
+          totalEmissiveRadiance += wetCol * uSteamFlow * (0.18 + 0.36 * wave);
+        } else if (vCadPos.x >= -0.026 && vCadPos.x <= 0.111 && vCadPos.z >= 0.041 && vCadPos.z <= 0.056 && abs(vCadPos.y) < 0.019) {
+          float s = clamp((vCadPos.x + 0.025) / 0.132, 0.0, 1.0);
           float wave = 0.5 + 0.5 * sin(vCadPos.x * 165.0 - uTime * (6.0 + 22.0 * uSteamFlow));
           vec3 drySteam = vec3(0.85, 0.94, 1.0);
           vec3 superCol = vec3(1.0, 0.38, 0.06);
           vec3 shCol = mix(drySteam, superCol, clamp(s * (0.35 + 0.85 * uSuperheatNorm), 0.0, 1.0));
-          float glow = (0.14 + 0.42 * uSuperheatNorm) * (0.45 + 0.55 * uSteamFlow * wave);
+          float glow = (0.14 + 0.44 * uSuperheatNorm) * (0.45 + 0.55 * uSteamFlow * wave);
           totalEmissiveRadiance += shCol * glow;
-        } else if (vCadPos.x >= 0.098 && (abs(vCadPos.y) >= 0.008 || vCadPos.z > 0.048) && vCadPos.z < 0.056) {
-          // 13-4 / 7-9 过热给汽管: 沿管向两侧蒸汽室下行输送高温过热蒸汽
-          float pathCoord = vCadPos.x - vCadPos.z * 1.2 + abs(vCadPos.y) * 0.8;
-          float wave = 0.5 + 0.5 * sin(pathCoord * 150.0 - uTime * (5.0 + 20.0 * uSteamFlow));
+        } else if (vCadPos.x >= 0.107 && vCadPos.x <= 0.128 && vCadPos.z >= 0.014 && vCadPos.z < 0.048) {
+          // 17-5 中央下垂管 -> 17-4 -> 7-9 单根水平内壁给汽横歧管 (Y∈[-0.021,+0.021], Z=+0.0185)
+          float pathCoord = vCadPos.x - vCadPos.z * 1.1 + abs(vCadPos.y) * 1.2;
+          float wave = 0.5 + 0.5 * sin(pathCoord * 155.0 - uTime * (5.0 + 20.0 * uSteamFlow));
           vec3 delivCol = mix(vec3(1.0, 0.62, 0.18), vec3(1.0, 0.28, 0.04), uSuperheatNorm);
-          totalEmissiveRadiance += delivCol * (0.12 + 0.48 * uSteamFlow * wave) * (0.35 + 0.65 * uSuperheatNorm);
-        } else if (vCadPos.x >= 0.122 && vCadPos.x <= 0.138 && abs(vCadPos.y) < 0.008 && vCadPos.z >= 0.015 && vCadPos.z <= 0.056) {
-          // 7-8 / 20-7 中央排汽立管与文丘里喷嘴: 随四拍乏汽脉冲喷射发亮
-          float wave = 0.5 + 0.5 * sin(vCadPos.z * 190.0 - uTime * 28.0);
-          totalEmissiveRadiance += vec3(0.52, 0.86, 1.0) * uExhaustPulse * (0.28 + 0.45 * wave);
+          totalEmissiveRadiance += delivCol * (0.14 + 0.50 * uSteamFlow * wave) * (0.35 + 0.65 * uSuperheatNorm);
+        } else if (vCadPos.x >= 0.125 && vCadPos.x <= 0.136 && vCadPos.z >= 0.008 && vCadPos.z <= 0.036) {
+          // 7-8 / 20-7 排汽横歧管与文丘里喷嘴: 随四拍乏汽脉冲喷射发亮
+          float wave = 0.5 + 0.5 * sin((vCadPos.z - abs(vCadPos.y)) * 190.0 - uTime * 28.0);
+          totalEmissiveRadiance += vec3(0.52, 0.86, 1.0) * uExhaustPulse * (0.28 + 0.48 * wave);
         }
         `
       );

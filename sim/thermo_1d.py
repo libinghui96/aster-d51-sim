@@ -119,14 +119,41 @@ class ThermoTelemetry:
     water_fill_ml_s: float = 0.0           # 35-1 煤水车敞口水槽外部加水流量 (ml/s)
     tender_drain_ml_s: float = 0.0         # 31-11 -> 31-9 煤水车底部排水栓放水流量 (ml/s)
     tender_overflow_ml_s: float = 0.0      # 31-10 煤水车水箱满容 (340 ml) 溢流流量 (ml/s)
-    blowdown_g_s: float = 0.0              # 11-16/17 右下泥圈排污针阀排液率 (g/s)
-    sight_purge_g_s: float = 0.0           # 1-2 左侧水面计下座冲洗蒸汽吹扫率 (g/s)
-    whistle_steam_g_s: float = 0.0         # 11-8 车底真汽笛耗汽率 (g/s)
+    blowdown_g_s: float = 0.0              # 11-16/17 左床下排水针阀排液率 (g/s)
+    sight_purge_g_s: float = 0.0           # 1-2 右侧水面计下座冲洗蒸汽吹扫率 (g/s)
+    whistle_steam_g_s: float = 0.0         # 11-8 左火室颊下真汽笛耗汽率 (g/s)
+    exhaust_g_s: float = 0.0               # 20-7 烟室乏汽喷嘴瞬时排汽质量流率 (g/s)
+    blower_g_s: float = 0.0                # 17-3 烟室通风喷嘴瞬时蒸汽流率 (g/s)
+    safety_g_s: float = 0.0                # 28-6x2 双安全阀超压泄放蒸汽流率 (g/s)
+    boiler_water_ml: float = 210.0         # 锅筒实时残余液态水体积 (ml, 干烧可直至 0.0 ml)
+    water_free_z_mm: float = 55.5          # 锅筒自由液面真实物理高度 Z (mm, 18.2..69.5 mm)
     steam_gen_g_s: float = 0.0
     force_L: float = 0.0
     force_R: float = 0.0
     wheel_rpm: float = 0.0
     scale_speed_kmh: float = 0.0
+
+
+def water_volume_to_free_z_mm(water_ml: float) -> float:
+    """
+    ø51.6mm 紫铜锅筒 (Z_axis=+44.0mm, 内底 +18.2mm, 内顶 +69.8mm, 扣减火室与 5 烟管排体积) 精确容积->自由液面高度反解:
+      - 350 ml -> +68.2 mm (满水上限)
+      - 280 ml -> +62.5 mm (11-7 水面计 100%)
+      - 210 ml -> +55.5 mm (11-7 水面计 50% 标准水位)
+      - 140 ml -> +47.0 mm (11-7 水面计 0%, 低于 +47.5mm 紫铜火室顶板 -> 空焚き开始!)
+      -  70 ml -> +36.2 mm (上排双过热烟管完全裸露，下排 3 火管半露)
+      -  20 ml -> +25.0 mm (5 根烟管全部裸露，仅剩锅底残水与火室水腿)
+      -   0 ml -> +18.2 mm (锅筒彻底蒸干!)
+    """
+    v = max(0.0, min(360.0, float(water_ml)))
+    knots_v = (0.0, 20.0, 70.0, 140.0, 210.0, 280.0, 360.0)
+    knots_z = (18.2, 25.0, 36.2, 47.0, 55.5, 62.5, 68.8)
+    for i in range(len(knots_v) - 1):
+        v0, v1 = knots_v[i], knots_v[i + 1]
+        if v <= v1:
+            t = (v - v0) / max(1e-9, v1 - v0)
+            return knots_z[i] + t * (knots_z[i + 1] - knots_z[i])
+    return knots_z[-1]
 
 
 def sat_pressure_pa(temp_c: float) -> float:
@@ -225,6 +252,7 @@ class AsterD51Thermo1D:
         self.T_boiler_c = 25.0
         self.T_crown_c = 25.0
         self.M_water_kg = 0.210                                         # 210g -> 水位计 50%
+        self.water_free_z_mm = water_volume_to_free_z_mm(210.0)
         self.P_boiler = P_ATM
         self.P_steam_chest = P_ATM
         self.T_superheat_c = 25.0
@@ -502,7 +530,7 @@ class AsterD51Thermo1D:
         # --- 2. 蒸汽室 (Steam Chest)、过热器与双缸 4 子步充放气 + 水锤检测 ---
         a_regulator = 3.2e-6 * (ctrl.regulator ** 1.35)
         t_boil_k = self.T_boiler_c + 273.15
-        has_steam = self.M_water_kg > 0.012 and self.P_boiler > P_ATM
+        has_steam = (self.M_water_kg > 1.0e-4 or self.P_boiler > P_ATM + 1500.0) and self.P_boiler > P_ATM
 
         if self.ext_pino_cab is not None and has_steam and ctrl.regulator > 1e-4:
             mdot_reg = max(0.0, float(self.ext_pino_cab[1])) * 1e-3
@@ -619,13 +647,13 @@ class AsterD51Thermo1D:
             self.turret_pressure_kgf = max(0.0, float(self.ext_pino_cab[0])) if has_steam else 0.0
             mdot_blw = (max(0.0, float(self.ext_pino_cab[2])) * 1e-3) if (has_steam and ctrl.blower_valve > 1e-4) else 0.0
             mdot_whistle = (max(0.0, float(self.ext_pino_cab[3])) * 1e-3) if (has_steam and a_whistle > 0.0) else 0.0
-            mdot_blowdown_liq = (max(0.0, float(self.ext_pino_cab[4])) * 1e-3) if (blowdown_open > 0.01 and self.M_water_kg > 0.025) else 0.0
+            mdot_blowdown_liq = (max(0.0, float(self.ext_pino_cab[4])) * 1e-3) if (blowdown_open > 0.01 and self.M_water_kg > 2.0e-4) else 0.0
             mdot_sg_purge = (max(0.0, float(self.ext_pino_cab[5])) * 1e-3) if (has_steam and sg_drain_open > 0.5) else 0.0
         else:
             mdot_blw = orifice_mass_flow(self.P_boiler, P_ATM, t_boil_k, a_blower) if has_steam else 0.0
             mdot_whistle = orifice_mass_flow(self.P_boiler, P_ATM, t_boil_k, a_whistle) if has_steam else 0.0
             mdot_sg_purge = orifice_mass_flow(self.P_boiler, P_ATM, t_boil_k, a_sg_purge) if has_steam else 0.0
-            if blowdown_open > 0.01 and self.M_water_kg > 0.025:
+            if blowdown_open > 0.01 and self.M_water_kg > 2.0e-4:
                 dp_bd = max(1500.0, self.P_boiler - P_ATM + 1500.0)
                 mdot_blowdown_liq = 0.62 * (0.45e-6 * blowdown_open) * math.sqrt(2.0 * RHO_LIQ_WATER * dp_bd)
             else:
@@ -686,13 +714,17 @@ class AsterD51Thermo1D:
             self.sump_fuel_ml -= used_ml
             mdot_alc_kg_s = (used_ml / dt_th) * 789e-6 if dt_th > 0 else 0.0
             if pino_on and self.ext_pino_burner is not None:
-                # 严格受化学释放总能量上限与 PINO 三维表面换热积分共同约束 (缺氧时 PINO 壁面热流自动跌落!)
+                # 严格受化学释放总能量上限与 (PINO 三维对流换热积分 + 火室 H2O/CO2 气体热辐射 Stefan-Boltzmann 通量) 共同约束
                 q_chem_max = 0.58 * lhv_ethanol * mdot_alc_kg_s
-                q_comb_w = min(q_chem_max, float(self.ext_pino_burner["q_boiler_w"])) * door_chill
+                a_fb_m2 = 8.20e-3  # 65x36x29mm 紫铜火室五面受火内表面积
+                t_flame_rad_k = 980.0 + 140.0 * min(1.2, draft_eff)
+                q_rad_fb_w = 0.34 * 5.670374e-8 * a_fb_m2 * max(0.0, (t_flame_rad_k ** 4) - (t_boil_k ** 4))
+                q_comb_w = min(q_chem_max, max(float(self.ext_pino_burner["q_boiler_w"]), q_rad_fb_w)) * door_chill
             else:
                 # 漫油富燃时大量酒精在缺氧下不完全燃烧，热效率下降但耗醇激增
                 flood_eff_pen = 0.72 if self.mariotte_flood_active else 1.0
-                q_comb_w = eta_boil_eff * flood_eff_pen * door_chill * lhv_ethanol * mdot_alc_kg_s
+                eta_with_rad = max(0.18, eta_boil_eff)
+                q_comb_w = eta_with_rad * flood_eff_pen * door_chill * lhv_ethanol * mdot_alc_kg_s
         else:
             q_comb_w = 0.0
 
@@ -846,24 +878,28 @@ class AsterD51Thermo1D:
         tan_th = math.tan(theta_eff)
 
         water_ml = self.M_water_kg * 1000.0
+        z_free_static_mm = water_volume_to_free_z_mm(water_ml)
         true_level_pct = 100.0 * (water_ml - self.water_min_ml) / (self.water_max_ml - self.water_min_ml)
-        # 水面计距液面几何中心后偏 68mm; 液位总高程差约 14.7mm 对应 0~100%
+        # 水面计距液面几何中心后偏 68mm; 液位总高程差约 15.5mm (+47.0..+62.5mm) 对应 0~100%
         dh_gauge_mm = +68.0 * tan_th
-        apparent_level_pct = true_level_pct + (dh_gauge_mm / 14.7) * 100.0
+        apparent_level_pct = true_level_pct + (dh_gauge_mm / 15.5) * 100.0
 
-        # 火室顶板最高受火前缘在静水位 50% (210ml) 时浸没深度 11.5mm，在 ~145ml (3.5%) 时裸露为 0mm
-        h_crown_static_mm = (water_ml - 145.0) * (11.5 / 65.0)
-        # 火室顶板前缘位于锅筒中心偏前 24mm (上坡时前缘水浅，下坡急刹时后缘水浅 -> 取前/后最不利浅点!)
+        # 火室顶板 (+47.5mm) 真实浸没水深: 210ml (+55.5mm) 时浸没 +8.0mm, ~144ml (+47.5mm) 时裸露为 0mm, 0ml 时为 -29.3mm!
+        h_crown_static_mm = z_free_static_mm - 47.5
         dh_crown_worst_mm = -24.0 * abs(tan_th)
         crown_submerged_mm = h_crown_static_mm + dh_crown_worst_mm
         f_wet = max(0.0, min(1.0, crown_submerged_mm / 4.0))
+        # 5 根烟管 (+33.2..+46.5mm) 与火室水腿 (+18.2..+47.5mm) 浸没换热面积比: 直至锅水彻底蒸干 (18.2mm) 前持续沸腾蒸发!
+        f_wet_tubes = max(0.0, min(1.0, (z_free_static_mm - 18.2) / 26.5))
 
-        # 火焰 58% 辐射/强对流打在紫铜火室顶板，42% 由火管传向锅水
+        # 火焰 58% 辐射/强对流打在紫铜火室顶板及水腿，42% 由 5 根烟管传向锅水
         q_fire_crown = 0.58 * q_comb_w
         q_fire_tubes = 0.42 * q_comb_w
-        # 顶板—锅水传热导率: 浸没核态沸腾 22 W/K vs 干蒸汽弱对流 0.36 W/K
-        g_crown_to_water = 22.0 * f_wet + 0.36 * (1.0 - f_wet)
+        # 顶板/高导热无氧紫铜锅筒壁—锅水传热导率: 浸没核态沸腾 22 W/K vs 干烧时沿 C1100 紫铜筒壁向锅底残水导热 (随残水浸润面积 (V/18ml)^(2/3) 归零)
+        g_dry_cu_cond = 0.68 * (min(1.0, max(0.0, water_ml) / 18.0) ** 0.67)
+        g_crown_to_water = 22.0 * f_wet + g_dry_cu_cond * (1.0 - f_wet)
         q_crown_to_water = g_crown_to_water * (self.T_crown_c - self.T_boiler_c)
+        q_waterleg_boil = 0.28 * q_fire_crown * (1.0 - f_wet) * f_wet_tubes
         q_crown_rad_loss = 0.08 * max(0.0, self.T_crown_c - 25.0)
 
         # 高温干烧状态下突然打入冷水 -> 灼热顶板表面急剧膜态闪蒸直接产生气相超压尖峰 (Flash Steam Spike)
@@ -883,7 +919,7 @@ class AsterD51Thermo1D:
             self._flash_overpressure_pa *= math.exp(-1.2 * dt_th)
 
         c_crown = self.M_copper_crown * CP_COPPER
-        dT_crown = (q_fire_crown - q_crown_to_water - q_crown_rad_loss - q_flash_w) / c_crown
+        dT_crown = (q_fire_crown - q_waterleg_boil - q_crown_to_water - q_crown_rad_loss - q_flash_w) / c_crown
         self.T_crown_c = max(25.0, min(780.0, self.T_crown_c + dT_crown * dt_th))
 
         # 紫铜火室 >340°C 退火软化与 >520°C 银钎焊损伤累积
@@ -891,21 +927,22 @@ class AsterD51Thermo1D:
             dmg_rate = 0.0018 * ((self.T_crown_c - 340.0) / 80.0) ** 1.4
             self.copper_anneal_damage = min(1.0, self.copper_anneal_damage + dmg_rate * dt_th)
 
-        # --- 8. 两相热平衡锅筒能量与质量微分方程积分 ---
-        q_loss_w = 0.42 * (self.T_boiler_c - 25.0)
-        q_net_water_w = (q_fire_tubes * (0.25 + 0.75 * f_wet)) + q_crown_to_water + q_flash_w - q_loss_w
+        # --- 8. 两相热平衡锅筒能量与质量微分方程积分 (支持干烧直至 0.0 ml 彻底蒸干!) ---
+        q_loss_w = 0.42 * (0.18 + 0.82 * f_wet_tubes) * (self.T_boiler_c - 25.0)
+        q_net_water_w = (q_fire_tubes * (0.16 + 0.84 * f_wet_tubes)) + q_waterleg_boil + q_crown_to_water + q_flash_w - q_loss_w
 
         mdot_steam_out = mdot_reg + mdot_blw + mdot_whistle + mdot_sg_purge + mdot_sv + mdot_braze
         h_fg = latent_heat_j_kg(self.T_boiler_c)
         v_gas = max(2e-5, self.V_boiler_total - self.M_water_kg / 960.0)
 
+        evap_rate_kg_s = 0.0
         if self.T_boiler_c < 99.9 and not flash_spike:
             c_tot = self.M_water_kg * CP_WATER + self.M_copper_shell * CP_COPPER
             dT_dt = (q_net_water_w - mdot_fw_total * CP_WATER * (self.T_boiler_c - self.T_feedwater_c)) / max(60.0, c_tot)
             self.T_boiler_c += dT_dt * dt_th
             self.M_water_kg = max(0.0, min(0.350, self.M_water_kg + (mdot_fw_total - mdot_blowdown_liq) * dt_th))
             self.P_boiler = P_ATM
-        else:
+        elif self.M_water_kg > 1.0e-4 or flash_spike:
             p_s1 = sat_pressure_pa(self.T_boiler_c)
             p_s2 = sat_pressure_pa(self.T_boiler_c + 0.1)
             drho_dT = ((p_s2 / (R_STEAM * (t_boil_k + 0.1))) - (p_s1 / (R_STEAM * t_boil_k))) / 0.1
@@ -918,13 +955,18 @@ class AsterD51Thermo1D:
             ) / max(85.0, c_eff)
 
             self.T_boiler_c = max(25.0, min(198.0, self.T_boiler_c + dT_dt * dt_th))
+            evap_rate_kg_s = max(0.0, mdot_steam_out + v_gas * drho_dT * dT_dt)
             dM_dt = mdot_fw_total - mdot_steam_out - mdot_blowdown_liq - v_gas * drho_dT * dT_dt
             self.M_water_kg = max(0.0, min(0.350, self.M_water_kg + dM_dt * dt_th))
-            self.P_boiler = (
-                max(P_ATM, sat_pressure_pa(self.T_boiler_c) + self._flash_overpressure_pa)
-                if self.M_water_kg > 0.012
-                else P_ATM
-            )
+            dry_taper = min(1.0, self.M_water_kg / 0.0025) if not flash_spike else 1.0
+            self.P_boiler = P_ATM + max(0.0, (sat_pressure_pa(self.T_boiler_c) - P_ATM) * dry_taper + self._flash_overpressure_pa)
+        else:
+            # 锅筒液态水已彻底蒸干 (M_water_kg <= 0.1 ml): 残余蒸汽随开阀排空至大气压，若补水则恢复
+            dp_vent = (R_STEAM * t_boil_k / v_gas) * mdot_steam_out * dt_th
+            self.P_boiler = max(P_ATM, self.P_boiler - dp_vent - 18000.0 * dt_th + self._flash_overpressure_pa)
+            self.M_water_kg = max(0.0, min(0.350, self.M_water_kg + mdot_fw_total * dt_th))
+
+        self.water_free_z_mm = water_volume_to_free_z_mm(self.M_water_kg * 1000.0)
 
         # --- 9. 水面计弯月面动态响应 (11-7 + 1-2 冲洗吹落) 与 13-1 下部 U 弯冷凝水虹吸波登管缓冲 ---
         p_gauge_now = max(0.0, (self.P_boiler - P_ATM) / PA_PER_KGF_CM2)
@@ -993,7 +1035,12 @@ class AsterD51Thermo1D:
             blowdown_g_s=mdot_blowdown_liq * 1000.0,
             sight_purge_g_s=mdot_sg_purge * 1000.0,
             whistle_steam_g_s=mdot_whistle * 1000.0,
-            steam_gen_g_s=mdot_steam_out * 1000.0,
+            exhaust_g_s=mdot_cyl_exh * 1000.0,
+            blower_g_s=mdot_blw * 1000.0,
+            safety_g_s=mdot_sv * 1000.0,
+            boiler_water_ml=self.M_water_kg * 1000.0,
+            water_free_z_mm=self.water_free_z_mm,
+            steam_gen_g_s=max(mdot_steam_out, evap_rate_kg_s) * 1000.0,
             force_L=F_L,
             force_R=F_R,
             wheel_rpm=rpm,

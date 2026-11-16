@@ -131,6 +131,10 @@ export interface StepOutput {
   whistleSteamGS: number;
   blowdownGS: number;
   sightPurgeGS: number;
+  exhaustGS?: number;
+  blowerGS?: number;
+  safetyGS?: number;
+  boilerWaterMl?: number;
   lubricatorOilPct: number;
   wheelRpm: number;
   scaleSpeedKmh: number;
@@ -170,6 +174,19 @@ function satTempC(pPa: number): number {
 
 function latentHeatJKg(tempC: number): number {
   return Math.max(1.5e6, (2501.0 - 2.36 * tempC) * 1e3);
+}
+
+export function waterVolumeToFreeZMm(waterMl: number): number {
+  const v = Math.max(0.0, Math.min(360.0, waterMl));
+  const kv = [0.0, 20.0, 70.0, 140.0, 210.0, 280.0, 360.0];
+  const kz = [18.2, 25.0, 36.2, 47.0, 55.5, 62.5, 68.8];
+  for (let i = 0; i < kv.length - 1; i++) {
+    if (v <= kv[i + 1]) {
+      const t = (v - kv[i]) / Math.max(1e-9, kv[i + 1] - kv[i]);
+      return kz[i] + t * (kz[i + 1] - kz[i]);
+    }
+  }
+  return kz[kz.length - 1];
 }
 
 function orificeMassFlow(pUp: number, pDown: number, tempK: number, area: number, cd = 0.68): number {
@@ -475,7 +492,7 @@ export class AsterD51Thermo1D {
 
     const aReg = 3.2e-6 * Math.pow(ctrl.regulator, 1.35);
     const tBoilK = this.T_boilerC + 273.15;
-    const hasSteam = this.M_waterKg > 0.012 && this.P_boiler > P_ATM;
+    const hasSteam = (this.M_waterKg > 1.0e-4 || this.P_boiler > P_ATM + 1500.0) && this.P_boiler > P_ATM;
     const mdotReg = hasSteam ? orificeMassFlow(this.P_boiler, this.P_steamChest, tBoilK, aReg) : 0.0;
 
     const areasL = this.valveAreas(qVL, this.calib.qValveCenterL);
@@ -558,14 +575,13 @@ export class AsterD51Thermo1D {
     const mdotSv = hasSteam && this.safetyValveOpen ? orificeMassFlow(this.P_boiler, P_ATM, tBoilK, 3.6e-6) : 0.0;
     const mdotBraze = hasSteam ? orificeMassFlow(this.P_boiler, P_ATM, tBoilK, aBrazeLeak) : 0.0;
     let mdotBlowdownLiq = 0.0;
-    if (ctrl.blowdownValve > 0.01 && this.M_waterKg > 0.02) {
+    if (ctrl.blowdownValve > 0.01 && this.M_waterKg > 2.0e-4) {
       const dpBd = Math.max(6000.0, this.P_boiler - P_ATM);
       mdotBlowdownLiq = 0.62 * (0.45e-6 * ctrl.blowdownValve) * Math.sqrt(2.0 * RHO_LIQ_WATER * dpBd);
     }
     let mdotSightPurge = 0.0;
-    if (ctrl.sightDrainValve && this.M_waterKg > 0.02) {
-      const dpSg = Math.max(5000.0, this.P_boiler - P_ATM);
-      mdotSightPurge = 0.58 * 0.18e-6 * Math.sqrt(2.0 * RHO_LIQ_WATER * dpSg);
+    if (ctrl.sightDrainValve && hasSteam) {
+      mdotSightPurge = orificeMassFlow(this.P_boiler, P_ATM, tBoilK, 0.14e-6);
     }
 
     let draftEff: number;
@@ -618,7 +634,8 @@ export class AsterD51Thermo1D {
       );
       this.sumpFuelMl -= usedMl;
       const effPenalty = floodMult > 1.05 ? 0.80 : 1.0;
-      qComb = etaBoilEff * effPenalty * 26.8e6 * ((usedMl / dtTh) * 789e-6);
+      const etaWithRad = Math.max(0.18, etaBoilEff);
+      qComb = etaWithRad * effPenalty * 26.8e6 * ((usedMl / dtTh) * 789e-6);
     }
 
     // 17-5 双 U 四程过热器 (上排 2 根 ø11.5mm 烟管内 504mm/47.5cm² SUS304 管壁对流热平衡)
@@ -703,21 +720,25 @@ export class AsterD51Thermo1D {
       forcePump = pLine * this.A_axlePump;
     }
 
-    // O4-1 / O4-2: 坡道假水位 + 紫铜火室顶板干烧退火与冷水闪蒸
+    // O4-1 / O4-2: 坡道假水位 + 紫铜火室顶板干烧退火与冷水闪蒸 (支持持续沸腾直至 0ml 蒸干!)
     const thetaEff = Math.max(-0.30, Math.min(0.30, pitchRad + (ctrl.gradeDeg * Math.PI) / 180.0 + Math.atan2(accelX, 9.81)));
     const tanTh = Math.tan(thetaEff);
     const waterMl = this.M_waterKg * 1000.0;
+    const zFreeStaticMm = waterVolumeToFreeZMm(waterMl);
     const trueLevelPct = (100.0 * (waterMl - this.waterMinMl)) / (this.waterMaxMl - this.waterMinMl);
-    const apparentLevelPct = trueLevelPct + ((68.0 * tanTh) / 14.7) * 100.0;
+    const apparentLevelPct = trueLevelPct + ((68.0 * tanTh) / 15.5) * 100.0;
 
-    const hCrownStaticMm = (waterMl - 145.0) * (11.5 / 65.0);
+    const hCrownStaticMm = zFreeStaticMm - 47.5;
     const crownSubmergedMm = hCrownStaticMm - 24.0 * Math.abs(tanTh);
     const fWet = Math.max(0.0, Math.min(1.0, crownSubmergedMm / 4.0));
+    const fWetTubes = Math.max(0.0, Math.min(1.0, (zFreeStaticMm - 18.2) / 26.5));
 
     const qFireCrown = 0.58 * qComb;
     const qFireTubes = 0.42 * qComb;
-    const gCrownWater = 22.0 * fWet + 0.36 * (1.0 - fWet);
+    const gDryCuCond = 0.68 * Math.pow(Math.min(1.0, Math.max(0.0, waterMl) / 18.0), 0.67);
+    const gCrownWater = 22.0 * fWet + gDryCuCond * (1.0 - fWet);
     const qCrownToWater = gCrownWater * (this.T_crownC - this.T_boilerC);
+    const qWaterlegBoil = 0.28 * qFireCrown * (1.0 - fWet) * fWetTubes;
     const qCrownRadLoss = 0.08 * Math.max(0.0, this.T_crownC - 25.0);
 
     let flashSpike = false;
@@ -734,24 +755,26 @@ export class AsterD51Thermo1D {
     }
 
     const cCrown = this.M_copperCrown * CP_COPPER;
-    const dTCrown = (qFireCrown - qCrownToWater - qCrownRadLoss - qFlashW) / cCrown;
+    const dTCrown = (qFireCrown - qWaterlegBoil - qCrownToWater - qCrownRadLoss - qFlashW) / cCrown;
     this.T_crownC = Math.max(25.0, Math.min(780.0, this.T_crownC + dTCrown * dtTh));
     if (this.T_crownC > 340.0) {
       const dmgRate = 0.0018 * Math.pow((this.T_crownC - 340.0) / 80.0, 1.4);
       this.copperAnnealDamage = Math.min(1.0, this.copperAnnealDamage + dmgRate * dtTh);
     }
 
-    const qNetWater = qFireTubes * (0.25 + 0.75 * fWet) + qCrownToWater + qFlashW - 0.42 * (this.T_boilerC - 25.0);
-    const mdotSteamOut = mdotReg + mdotBlw + mdotWhistle + mdotSv + mdotBraze;
+    const qLossW = 0.42 * (0.18 + 0.82 * fWetTubes) * (this.T_boilerC - 25.0);
+    const qNetWater = qFireTubes * (0.16 + 0.84 * fWetTubes) + qWaterlegBoil + qCrownToWater + qFlashW - qLossW;
+    const mdotSteamOut = mdotReg + mdotBlw + mdotWhistle + mdotSightPurge + mdotSv + mdotBraze;
     const hFg = latentHeatJKg(this.T_boilerC);
     const vGas = Math.max(2e-5, this.V_boilerTotal - this.M_waterKg / 960.0);
+    let evapRateKgS = 0.0;
 
     if (this.T_boilerC < 99.9 && !flashSpike) {
       const cTot = this.M_waterKg * CP_WATER + this.M_copperShell * CP_COPPER;
       this.T_boilerC += ((qNetWater - mdotFw * CP_WATER * (this.T_boilerC - this.T_tenderWaterC)) / Math.max(60.0, cTot)) * dtTh;
-      this.M_waterKg = Math.max(0.0, Math.min(0.35, this.M_waterKg + (mdotFw - mdotBlowdownLiq - mdotSightPurge) * dtTh));
+      this.M_waterKg = Math.max(0.0, Math.min(0.35, this.M_waterKg + (mdotFw - mdotBlowdownLiq) * dtTh));
       this.P_boiler = P_ATM;
-    } else {
+    } else if (this.M_waterKg > 1.0e-4 || flashSpike) {
       const p1 = satPressurePa(this.T_boilerC);
       const p2 = satPressurePa(this.T_boilerC + 0.1);
       const drhoDt = (p2 / (R_STEAM * (tBoilK + 0.1)) - p1 / (R_STEAM * tBoilK)) / 0.1;
@@ -760,11 +783,17 @@ export class AsterD51Thermo1D {
         (qNetWater - mdotSteamOut * hFg - mdotFw * CP_WATER * (this.T_boilerC - this.T_tenderWaterC)) /
         Math.max(85.0, cEff);
       this.T_boilerC = Math.max(25.0, Math.min(198.0, this.T_boilerC + dTdt * dtTh));
+      evapRateKgS = Math.max(0.0, mdotSteamOut + vGas * drhoDt * dTdt);
       this.M_waterKg = Math.max(
         0.0,
-        Math.min(0.35, this.M_waterKg + (mdotFw - mdotBlowdownLiq - mdotSightPurge - mdotSteamOut - vGas * drhoDt * dTdt) * dtTh)
+        Math.min(0.35, this.M_waterKg + (mdotFw - mdotBlowdownLiq - mdotSteamOut - vGas * drhoDt * dTdt) * dtTh)
       );
-      this.P_boiler = this.M_waterKg > 0.012 ? Math.max(P_ATM, satPressurePa(this.T_boilerC) + this.flashOverpressurePa) : P_ATM;
+      const dryTaper = flashSpike ? 1.0 : Math.min(1.0, this.M_waterKg / 0.0025);
+      this.P_boiler = P_ATM + Math.max(0.0, (satPressurePa(this.T_boilerC) - P_ATM) * dryTaper + this.flashOverpressurePa);
+    } else {
+      const dpVent = ((R_STEAM * tBoilK) / vGas) * mdotSteamOut * dtTh;
+      this.P_boiler = Math.max(P_ATM, this.P_boiler - dpVent - 18000.0 * dtTh + this.flashOverpressurePa);
+      this.M_waterKg = Math.max(0.0, Math.min(0.35, this.M_waterKg + mdotFw * dtTh));
     }
 
     const rpm = (omega3 / (2.0 * Math.PI)) * 60.0;
@@ -798,13 +827,15 @@ export class AsterD51Thermo1D {
     }
 
     const boilingIntensity =
-      this.T_boilerC >= 99.4 ? Math.max(0.0, Math.min(1.0, Math.max(0.0, qNetWater) / 680.0)) : 0.0;
+      this.T_boilerC >= 99.4 && this.M_waterKg > 2.5e-4
+        ? Math.max(0.0, Math.min(1.0, Math.max(0.0, qNetWater) / 560.0))
+        : 0.0;
     const carryOver = Math.max(0.0, (trueLevelPct - 66.0) / 34.0);
     const steamDrynessDome = Math.max(
       0.76,
       Math.min(0.992, 0.986 - 0.092 * boilingIntensity - 0.11 * carryOver)
     );
-    const waterFreeZMm = Math.max(32.0, Math.min(68.5, 55.5 + (trueLevelPct - 50.0) * 0.23));
+    const waterFreeZMm = waterVolumeToFreeZMm(this.M_waterKg * 1000.0);
     const coldFeedCool = Math.min(18.0, mdotFw * 14500.0);
     const waterLayerTempsC = [
       Math.max(25.0, this.T_boilerC - 5.5 - 0.85 * coldFeedCool),
@@ -910,7 +941,7 @@ export class AsterD51Thermo1D {
       condensateG: this.condensateKg * 1000.0,
       smokeboxVacuumPa: smokeboxVacPa,
       lutActive: this.lut !== null,
-      steamGenGS: mdotSteamOut * 1000.0,
+      steamGenGS: Math.max(mdotSteamOut, evapRateKgS) * 1000.0,
       feedwaterGS: mdotFw * 1000.0,
       alcoholMl: this.alcoholMl + this.sumpFuelMl,
       tenderWaterMl: this.tenderWaterMl,
@@ -925,6 +956,10 @@ export class AsterD51Thermo1D {
       whistleSteamGS: mdotWhistle * 1000.0,
       blowdownGS: mdotBlowdownLiq * 1000.0,
       sightPurgeGS: mdotSightPurge * 1000.0,
+      exhaustGS: mdotExh * 1000.0,
+      blowerGS: mdotBlw * 1000.0,
+      safetyGS: mdotSv * 1000.0,
+      boilerWaterMl: this.M_waterKg * 1000.0,
       lubricatorOilPct: this.lubricatorOilPct,
       wheelRpm: rpm,
       scaleSpeedKmh: speedKmh,

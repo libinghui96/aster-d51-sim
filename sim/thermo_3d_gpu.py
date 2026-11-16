@@ -61,6 +61,7 @@ from sim.thermo_1d import (
     latent_heat_j_kg,
     sat_pressure_pa,
     sat_temp_c,
+    water_volume_to_free_z_mm,
 )
 
 
@@ -496,22 +497,22 @@ class AsterD51Thermo3DGPU:
         self.d6_dx_m = (self.d6_xr[1] - self.d6_xr[0]) / (nx6 - 1) * 1e-3
         self.d6_dy_m = (self.d6_yr[1] - self.d6_yr[0]) / (ny6 - 1) * 1e-3
 
-        # 从真实煤水车外壳 STL (Z∈[63.2, 65.6]mm 35-1 甲板) 校验后置敞口槽 [-84.0, -18.5] × [-16.8, +16.8] mm
+        # 从真实煤水车外壳 STL (Z∈[60.8, 63.0]mm 35-1 主甲板) 校验中后部给水敞口槽 [-76.5, -13.5] × [-15.8, +15.8] mm
         tris_tdr_shell = load_stl_triangles_mm(mesh_dir / "tender_body.stl")
-        s6_shell_top = voxelize_stl_cuda(tris_tdr_shell, self.d6_xr, self.d6_yr, (63.2, 65.6), (nx6, ny6, 4), dev).amax(dim=-1)
-        self.d6_tank_mask = ((X6 >= -87.0) & (X6 <= -6.0) & (Y6.abs() <= 36.2)).float().unsqueeze(0).unsqueeze(0).contiguous()
+        s6_shell_top = voxelize_stl_cuda(tris_tdr_shell, self.d6_xr, self.d6_yr, (60.8, 63.0), (nx6, ny6, 4), dev).amax(dim=-1)
+        self.d6_tank_mask = ((X6 >= -87.8) & (X6 <= -5.6) & (Y6.abs() <= 37.0)).float().unsqueeze(0).unsqueeze(0).contiguous()
         self.d6_open_bay = (
-            ((X6 >= -84.0) & (X6 <= -18.5) & (Y6.abs() <= 16.8) & (s6_shell_top < 0.5))
+            ((X6 >= -76.5) & (X6 <= -13.5) & (Y6.abs() <= 15.8) & (s6_shell_top < 0.5))
             .float()
             .unsqueeze(0)
             .unsqueeze(0)
             .contiguous()
         )
-        # 35-1 敞口槽中央注水区 (-51.2, 0.0)、31-14 左前鹅颈回水落点 (-30.5, +9.0)、31-11/31-9 底部排水口 (-44.5, -9.1)、31-5 吸水阀塔 (-68.5, +4.0)
-        fill_g = torch.exp(-(((X6 + 51.2) / 8.0) ** 2 + (Y6 / 7.5) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
-        ret_g = torch.exp(-(((X6 + 30.5) / 5.2) ** 2 + ((Y6 - 9.0) / 5.2) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
-        drn_g = torch.exp(-(((X6 + 44.5) / 5.5) ** 2 + ((Y6 + 9.1) / 5.5) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
-        hp_g = torch.exp(-(((X6 + 68.5) / 6.0) ** 2 + ((Y6 - 4.0) / 6.0) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
+        # 35-1 敞口槽中央注水区 (-45.0, 0.0)、31-14 左前鹅颈回水落点 (-26.0, +11.0)、31-11/31-9 底部排水口 (-41.0, -10.3)、31-5 吸水阀塔 (-69.5, +4.0)
+        fill_g = torch.exp(-(((X6 + 45.0) / 8.0) ** 2 + (Y6 / 7.5) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
+        ret_g = torch.exp(-(((X6 + 26.0) / 5.2) ** 2 + ((Y6 - 11.0) / 5.2) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
+        drn_g = torch.exp(-(((X6 + 41.0) / 5.5) ** 2 + ((Y6 + 10.3) / 5.5) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
+        hp_g = torch.exp(-(((X6 + 69.5) / 6.0) ** 2 + ((Y6 - 4.0) / 6.0) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
         self.d6_fill_src = (fill_g / torch.clamp(fill_g.sum(), min=1e-5)).contiguous()
         self.d6_ret_src = (ret_g / torch.clamp(ret_g.sum(), min=1e-5)).contiguous()
         self.d6_drain_sink = (drn_g / torch.clamp(drn_g.sum(), min=1e-5)).contiguous()
@@ -1303,15 +1304,14 @@ class AsterD51Thermo3DGPU:
         Tg = torch.clamp(Tg + dT_comb - wall_sink, 295.0, 1540.0)
         self.d1_scal = torch.cat([Tg, Yf, YO2], dim=1)
 
-        # === [Domain 2] 锅筒三维 VOF 倾斜液面晃动 + 双路冷水射流热分层 + 浸没 Rohsenow 沸腾 / 裸露干烧 ===
+        # === [Domain 2] 锅筒三维 VOF 倾斜液面晃动 + 双路冷水射流热分层 + 浸没 Rohsenow 沸腾 / 裸露干烧 (支持直至 0ml 蒸干!) ===
         theta_eff = max(-0.30, min(0.30, pitch_rad + math.radians(ctrl.grade_deg) + math.atan2(accel_x, 9.81)))
         water_ml = self.core1d.M_water_kg * 1000.0
-        z_surf_center = 48.2 + (water_ml - 142.0) * (8.5 / 68.0)
-        slosh_wave = (0.22 + 0.72 * min(1.0, max(0.0, self.core1d.P_boiler - P_ATM) / (3.5 * PA_PER_KGF_CM2))) * math.sin(
-            0.18 * self._cfd_counter
-        )
+        z_surf_center = water_volume_to_free_z_mm(water_ml)
+        slosh_amp = (0.22 + 0.72 * min(1.0, max(0.0, self.core1d.P_boiler - P_ATM) / (3.5 * PA_PER_KGF_CM2))) if water_ml > 1.5 else 0.0
+        slosh_wave = slosh_amp * math.sin(0.18 * self._cfd_counter)
         z_free_3d = z_surf_center - (self.X2 + 12.0) * math.tan(theta_eff) + slosh_wave * torch.sin(0.085 * self.X2)
-        self.d2_alpha_w = (torch.sigmoid((z_free_3d - self.Z2) / 0.85) * self.d2_cavity).contiguous()
+        self.d2_alpha_w = (torch.sigmoid((z_free_3d - self.Z2) / 0.85) * self.d2_cavity * (1.0 if water_ml > 0.25 else 0.0)).contiguous()
 
         # 精确检测正上方 (+Z 偏移 3~5 体素 = +2.4..4.0mm) 的顶板覆水层，绝不误把火室两侧水腿当成顶板覆水！
         overlying_water = 0.5 * (

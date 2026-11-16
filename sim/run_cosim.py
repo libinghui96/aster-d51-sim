@@ -256,6 +256,7 @@ class CoSimRunner:
             "j_cab_fire_door",
             "j_cab_bypass",
             "j_cab_roof_hatch",
+            "j_tender_hp_link",
             "j_tender_handpump",
             "j_tender_drain_plug",
             "j_tender_coal_cover",
@@ -269,6 +270,7 @@ class CoSimRunner:
         jid_hpr = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_hp_ram")
         self.qpos_hp_ram = int(self.model.jnt_qposadr[jid_hpr]) if jid_hpr >= 0 else -1
         self.qvel_hp_ram = int(self.model.jnt_dofadr[jid_hpr]) if jid_hpr >= 0 else -1
+        self._hp_psi = 0.0
         self._last_v_hand_ram = 0.0
         self._handpump_vis_timer = 0.0
         self._handpump_vis_phase = 0.0
@@ -303,6 +305,35 @@ class CoSimRunner:
             or bool(getattr(self.ctrl, "tender_drain_open", False))
             or abs(hp_tgt) > 0.01
         )
+        alpha = min(1.0, dt * 24.0)
+        prev_psi = self._hp_psi
+        psi = prev_psi + alpha * (hp_tgt - prev_psi)
+        self._hp_psi = psi
+
+        # 31-5 + 31-7x2 + 31-3 + 31-2 真 1-DOF 浮动支点四连杆解析闭环解 (零重合残差!)
+        sin_ql = max(-0.99, min(0.99, 0.5 * (1.0 - math.cos(psi))))
+        q_link = math.asin(sin_ql)
+        q_lev = psi - q_link
+        q_ram = 0.020 * (math.cos(q_link) - 1.0) - 0.010 * math.sin(psi)
+
+        sin_ql_prev = max(-0.99, min(0.99, 0.5 * (1.0 - math.cos(prev_psi))))
+        q_link_prev = math.asin(sin_ql_prev)
+        q_ram_prev = 0.020 * (math.cos(q_link_prev) - 1.0) - 0.010 * math.sin(prev_psi)
+        self._last_v_hand_ram = (q_ram - q_ram_prev) / max(1e-6, dt)
+        if self.qpos_hp_ram >= 0:
+            self.data.qpos[self.qpos_hp_ram] = q_ram
+        if self.qvel_hp_ram >= 0:
+            self.data.qvel[self.qvel_hp_ram] = self._last_v_hand_ram
+
+        for j_hp_name, q_hp_val, q_hp_prev in (
+            ("j_tender_hp_link", q_link, q_link_prev),
+            ("j_tender_handpump", q_lev, prev_psi - q_link_prev),
+        ):
+            hp_addrs = self._vis_joints.get(j_hp_name)
+            if hp_addrs is not None:
+                self.data.qpos[hp_addrs[0]] = q_hp_val
+                self.data.qvel[hp_addrs[1]] = (q_hp_val - q_hp_prev) / max(1e-6, dt)
+
         targets = {
             "j_cab_regulator": 1.12 * self.ctrl.regulator,
             "j_cab_blower": 3.14 * self.ctrl.blower_valve,
@@ -310,32 +341,23 @@ class CoSimRunner:
             "j_cab_sight_drain": 0.0016 if bool(getattr(self.ctrl, "sight_drain_valve", False)) else 0.0,
             "j_cab_pg_needle": -2.10 + p_norm * 4.20,
             "j_cab_blowdown": 3.14 * float(getattr(self.ctrl, "blowdown_valve", 0.0)),
-            "j_cab_fire_door": +1.65 * self.ctrl.firebox_door,
+            "j_cab_fire_door": +1.40 * self.ctrl.firebox_door,
             "j_cab_bypass": -1.35 * self.ctrl.bypass_valve,
             "j_cab_roof_hatch": 2.10 if bool(getattr(self.ctrl, "cab_roof_open", False)) else 0.0,
-            "j_tender_handpump": hp_tgt,
             "j_tender_drain_plug": 0.0050 if bool(getattr(self.ctrl, "tender_drain_open", False)) else 0.0,
-            "j_tender_coal_cover": 1.75 if open_water_bay else 0.0,
+            "j_tender_coal_cover": 0.026 if open_water_bay else 0.0,
             "j_tender_water_lid": 1.45 if self.ctrl.water_lid_open else 0.0,
             "j_tender_fuel_valve": 1.50 * self.ctrl.fuel_valve,
             "j_tender_fuel_cap": 0.0045 if self.ctrl.fuel_cap_open else 0.0,
         }
-        alpha = min(1.0, dt * 24.0)
         for jname, tgt in targets.items():
             addrs = self._vis_joints.get(jname)
             if addrs is not None:
                 qadr, dadr = addrs
                 curr = float(self.data.qpos[qadr])
                 nxt = curr + alpha * (tgt - curr)
-                dq_dt = (nxt - curr) / max(1e-6, dt)
                 self.data.qpos[qadr] = nxt
-                self.data.qvel[dadr] = dq_dt if jname == "j_tender_handpump" else 0.0
-                if jname == "j_tender_handpump":
-                    self._last_v_hand_ram = 0.008 * dq_dt
-                    if self.qpos_hp_ram >= 0:
-                        self.data.qpos[self.qpos_hp_ram] = 0.008 * nxt
-                    if self.qvel_hp_ram >= 0:
-                        self.data.qvel[self.qvel_hp_ram] = self._last_v_hand_ram
+                self.data.qvel[dadr] = 0.0
 
     def apply_hot_preset(self) -> None:
         self.thermo.reset_hot_ready()

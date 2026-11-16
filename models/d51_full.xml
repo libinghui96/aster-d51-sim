@@ -46,6 +46,7 @@
     <mesh name="m_cab_deck_and_mounts" file="cab_deck_and_mounts.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_cab_reverser_stand" file="cab_reverser_stand.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_cab_reverser_wheel" file="cab_reverser_wheel.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_reverser_nut" file="cab_reverser_nut.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_cab_regulator_lever" file="cab_regulator_lever.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_cab_blower_wheel" file="cab_blower_wheel.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_cab_whistle_lever" file="cab_whistle_lever.stl" scale="0.001 0.001 0.001"/>
@@ -57,6 +58,7 @@
     <mesh name="m_cab_firebox_door" file="cab_firebox_door.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_cab_bypass_lever" file="cab_bypass_lever.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_cab_roof_hatch" file="cab_roof_hatch.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_hp_links" file="tender_hp_links.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_tender_handpump_lever" file="tender_handpump_lever.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_tender_handpump_ram" file="tender_handpump_ram.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_tender_drain_plug" file="tender_drain_plug.stl" scale="0.001 0.001 0.001"/>
@@ -64,6 +66,7 @@
     <mesh name="m_tender_water_lid" file="tender_water_lid.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_tender_fuel_valve" file="tender_fuel_valve.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_tender_fuel_cap" file="tender_fuel_cap.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_rear_ladder" file="tender_rear_ladder.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_umb_hose_fuel" file="umb_hose_fuel.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_umb_hose_fuel_r2m" file="umb_hose_fuel_r2m.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_umb_hose_feed" file="umb_hose_feed.stl" scale="0.001 0.001 0.001"/>
@@ -88,6 +91,10 @@
     <mesh name="m_boiler_superstructure" file="boiler_superstructure.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_boiler_firebox_flues" file="boiler_firebox_flues.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_superheater_piping" file="superheater_piping.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_exhaust_blast_pipe" file="exhaust_blast_pipe.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_blower_nozzle_17_3" file="blower_nozzle_17_3.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_smokebox_petticoat" file="smokebox_petticoat.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tandem_safety_valves" file="tandem_safety_valves.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_feedwater_piping" file="feedwater_piping.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_displacement_lubricator" file="displacement_lubricator.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_boiler_aux_valves" file="boiler_aux_valves.stl" scale="0.001 0.001 0.001"/>
@@ -110,7 +117,7 @@
     <light pos="0 -1.5 2.2" dir="0 0.4 -0.9" diffuse="0.92 0.92 0.92"/>
     <geom name="ground" type="plane" size="4.5 4.5 0.05" rgba="0.16 0.18 0.20 1" contype="0" conaffinity="0"/>
     <body name="loco_frame" pos="0.000000 0.000000 0.041900">
-      <inertial pos="0.021655 0.000037 0.034191" mass="3.668448" fullinertia="3.350541271e-03 3.676026317e-02 3.614194321e-02 -1.894792951e-05 1.468743192e-03 3.205413753e-06"/>
+      <inertial pos="0.023732 0.000123 0.034200" mass="3.609755" fullinertia="3.286983084e-03 3.627288535e-02 3.566008764e-02 1.200324096e-05 1.536301260e-03 9.234141643e-06"/>
       <geom name="main_chassis_L" type="box" pos="0.020 0.013500 0.004" size="0.165 0.00175 0.008" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="motion_bracket_vis_L" type="mesh" mesh="m_motion_bracket_L" material="mat_black_iron" pos="0.046500 0.036000 0.015500" mass="0" contype="0" conaffinity="0"/>
       <geom name="main_chassis_R" type="box" pos="0.020 -0.013500 0.004" size="0.165 0.00175 0.008" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
@@ -120,15 +127,19 @@
       <geom name="chassis_equalizer_brakes_vis" type="mesh" mesh="m_chassis_equalizer_brakes" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="boiler_copper_core_vis" type="mesh" mesh="m_boiler_firebox_flues" material="mat_copper" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="superheater_piping_vis" type="mesh" mesh="m_superheater_piping" material="mat_machined_steel" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="exhaust_blast_pipe_vis" type="mesh" mesh="m_exhaust_blast_pipe" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="blower_nozzle_17_3_vis" type="mesh" mesh="m_blower_nozzle_17_3" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="smokebox_petticoat_vis" type="mesh" mesh="m_smokebox_petticoat" material="mat_machined_steel" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="tandem_safety_valves_vis" type="mesh" mesh="m_tandem_safety_valves" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="feedwater_piping_vis" type="mesh" mesh="m_feedwater_piping" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="displacement_lubricator_vis" type="mesh" mesh="m_displacement_lubricator" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="alcohol_burner_vis" type="mesh" mesh="m_alcohol_burner" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="boiler_aux_valves_vis" type="mesh" mesh="m_boiler_aux_valves" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="cab_backhead_plate_vis" type="mesh" mesh="m_cab_backhead_plate" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="cab_deck_and_mounts_vis" type="mesh" mesh="m_cab_deck_and_mounts" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
-      <geom name="cab_sight_glass_tube_vis" type="mesh" mesh="m_cab_sight_glass_tube" material="mat_pyrex_glass" pos="-0.118500 -0.030200 0.048000" mass="0" contype="0" conaffinity="0"/>
-      <geom name="cab_pg_dial_vis" type="mesh" mesh="m_cab_pg_dial" material="mat_gauge_dial" pos="-0.122050 -0.015800 0.062020" mass="0" contype="0" conaffinity="0"/>
-      <geom name="cab_reverser_stand_vis" type="mesh" mesh="m_cab_reverser_stand" material="mat_black_iron" pos="-0.126000 0.031800 0.023500" mass="0" contype="0" conaffinity="0"/>
+      <geom name="cab_sight_glass_tube_vis" type="mesh" mesh="m_cab_sight_glass_tube" material="mat_pyrex_glass" pos="-0.118500 -0.031300 0.046000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="cab_pg_dial_vis" type="mesh" mesh="m_cab_pg_dial" material="mat_gauge_dial" pos="-0.122050 -0.015400 0.067040" mass="0" contype="0" conaffinity="0"/>
+      <geom name="cab_reverser_stand_vis" type="mesh" mesh="m_cab_reverser_stand" material="mat_black_iron" pos="-0.127500 0.032500 0.020000" mass="0" contype="0" conaffinity="0"/>
       <geom name="boiler_Super_vis" type="mesh" mesh="m_boiler_superstructure" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <body name="axlebox_1" pos="0.093000 0 0">
         <inertial pos="0.000000 -0.000000 0.001369" mass="0.011389" fullinertia="2.755510383e-06 3.103716658e-07 2.708600659e-06 -2.995648174e-23 9.719128651e-25 1.540332005e-23"/>
@@ -353,7 +364,7 @@
         <site name="s_pump_pin" pos="0 0 0"/>
       </body>
       <body name="reverser_shaft" pos="0.025500 0 0.026500">
-        <inertial pos="0.001103 0.003113 0.000278" mass="0.005521" fullinertia="3.996775842e-06 6.230943286e-08 4.032929059e-06 1.895677372e-08 1.691505058e-09 -4.660404039e-08"/>
+        <inertial pos="0.000744 0.003377 -0.005100" mass="0.005345" fullinertia="4.215261777e-06 3.128306395e-07 4.011619582e-06 1.343445714e-08 -4.845972832e-08 -1.434479953e-07"/>
         <joint name="j_reverser" type="hinge" axis="0 1 0" limited="true" range="-0.48 0.48" armature="0.0015" damping="0.6"/>
         <geom name="reverser_shaft_vis" type="mesh" mesh="m_reverser_shaft" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
         <body name="lift_link_L" pos="0.011000 0.036000 0" euler="0 0.000116 0">
@@ -370,67 +381,72 @@
         </body>
       </body>
       <body name="cab_reach_rod" pos="0.025500 0.033500 0.033500">
-        <inertial pos="-0.074666 0.000001 -0.000000" mass="0.003821" fullinertia="2.942831394e-09 9.411674998e-06 9.412227832e-06 -5.818440695e-11 4.952711645e-14 1.918666459e-16"/>
+        <inertial pos="-0.073761 0.000003 -0.000831" mass="0.003776" fullinertia="1.727631426e-08 9.170396715e-06 9.156183078e-06 4.517155643e-10 -2.297243314e-07 4.050693050e-11"/>
         <joint name="j_reach_rod" type="slide" axis="1 0 0" limited="true" range="-0.005 0.005" damping="0.02"/>
         <geom name="cab_reach_rod_vis" type="mesh" mesh="m_cab_reach_rod" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="drain_cock_linkage" pos="0.129000 0.000000 -0.014200">
-        <inertial pos="-0.000291 0.000000 -0.000551" mass="0.004131" fullinertia="2.617652717e-06 6.246700074e-08 2.642652423e-06 3.926434551e-23 6.456416156e-10 -1.672364000e-23"/>
-        <joint name="j_drain_cock" type="hinge" axis="0 1 0" limited="true" range="-0.35 0.35" stiffness="0.08" damping="0.008"/>
+      <body name="drain_cock_linkage" pos="0.124200 0.000000 -0.003800">
+        <inertial pos="0.000878 0.000000 -0.005198" mass="0.006562" fullinertia="4.050624764e-06 2.920274084e-07 3.877880944e-06 -2.281391260e-23 2.343693682e-08 3.543840535e-22"/>
+        <joint name="j_drain_cock" type="hinge" axis="0 -1 0" limited="true" range="-0.32 0.32" stiffness="0.08" damping="0.008"/>
         <geom name="drain_cock_vis" type="mesh" mesh="m_drain_cock_linkage" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
       <body name="drain_pull_rod" pos="0 0 0">
-        <inertial pos="-0.004039 -0.018600 0.007442" mass="0.004126" fullinertia="1.295895368e-07 3.141765492e-05 3.129000724e-05 4.220958685e-14 1.279982667e-06 -7.137500122e-15"/>
-        <joint name="j_drain_pull" type="slide" axis="1 0 0" limited="true" range="-0.004 0.004" damping="0.02"/>
+        <inertial pos="-0.015701 -0.017200 0.007600" mass="0.003623" fullinertia="1.794309426e-09 2.475999536e-05 2.475997997e-05 6.449194179e-14 -2.044318846e-13 -2.226290599e-16"/>
+        <joint name="j_drain_pull" type="slide" axis="1 0 0" limited="true" range="-0.005 0.005" damping="0.02"/>
         <geom name="drain_pull_rod_vis" type="mesh" mesh="m_drain_pull_rod" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_reverser_wheel" pos="-0.126000 0.031800 0.023500">
-        <inertial pos="0.000122 0.000028 0.010198" mass="0.001065" fullinertia="5.495096764e-08 5.519182872e-08 1.435400044e-09 1.093343796e-10 -6.732181998e-10 3.664285266e-10"/>
-        <joint name="j_reverser_wheel" type="hinge" axis="0 1 0" damping="0.002"/>
+      <body name="cab_reverser_wheel" pos="-0.127500 0.032500 0.034500">
+        <inertial pos="-0.006150 0.000000 0.000166" mass="0.001383" fullinertia="1.195681866e-08 7.823041604e-08 7.726364965e-08 2.462523379e-25 1.672575942e-09 -4.696591997e-25"/>
+        <joint name="j_reverser_wheel" type="hinge" axis="1 0 0" damping="0.002"/>
         <geom name="cab_reverser_wheel_vis" type="mesh" mesh="m_cab_reverser_wheel" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_regulator_lever" pos="-0.117000 0.000000 0.064500">
-        <inertial pos="-0.000706 0.005241 0.000000" mass="0.000548" fullinertia="1.326065160e-08 1.000000000e-09 1.351983438e-08 1.685617957e-09 4.823868904e-26 -2.788118222e-25"/>
+      <body name="cab_reverser_nut" pos="-0.127500 0.032500 0.034500">
+        <inertial pos="0.000000 0.000558 -0.001902" mass="0.000720" fullinertia="6.869804982e-09 6.448175523e-09 1.624186407e-09 -1.002321066e-26 9.388178718e-27 6.257226697e-10"/>
+        <joint name="j_reverser_nut" type="slide" axis="1 0 0" limited="true" range="-0.005 0.005" damping="0.02"/>
+        <geom name="cab_reverser_nut_vis" type="mesh" mesh="m_cab_reverser_nut" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="cab_regulator_lever" pos="-0.119500 0.000000 0.068200">
+        <inertial pos="-0.000575 0.005230 -0.000000" mass="0.000443" fullinertia="1.237036077e-08 1.000000000e-09 1.248881901e-08 1.289529990e-09 2.118522769e-26 -1.504050788e-25"/>
         <joint name="j_cab_regulator" type="hinge" axis="1 0 0" limited="true" range="0.0 1.15" damping="0.003"/>
         <geom name="cab_regulator_vis" type="mesh" mesh="m_cab_regulator_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_blower_wheel" pos="-0.120200 0.004200 0.061200">
-        <inertial pos="0.000380 0.000000 0.000000" mass="0.000325" fullinertia="1.410342968e-09 1.011587846e-09 1.011587846e-09 1.932459895e-26 1.308265441e-25 2.584240394e-26"/>
+      <body name="cab_blower_wheel" pos="-0.120200 0.005600 0.061400">
+        <inertial pos="0.000372 -0.000000 0.000000" mass="0.000309" fullinertia="1.400606333e-09 1.000000000e-09 1.000000000e-09 1.514998985e-27 1.267528102e-25 -4.709118599e-26"/>
         <joint name="j_cab_blower" type="hinge" axis="1 0 0" limited="true" range="-6.28 6.28" damping="0.001"/>
         <geom name="cab_blower_vis" type="mesh" mesh="m_cab_blower_wheel" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_whistle_lever" pos="-0.116800 0.013800 0.050200">
-        <inertial pos="-0.000365 0.002027 -0.002553" mass="0.000273" fullinertia="3.597941803e-09 2.380483803e-09 1.435094422e-09 2.062350378e-10 -2.738477518e-10 1.605519779e-09"/>
+      <body name="cab_whistle_lever" pos="-0.116200 0.014500 0.062000">
+        <inertial pos="-0.000267 0.003922 0.002053" mass="0.000283" fullinertia="5.224407461e-09 1.516445928e-09 3.861963824e-09 2.413507923e-10 1.401999727e-10 -2.172373428e-09"/>
         <joint name="j_cab_whistle" type="hinge" axis="1 0 0" limited="true" range="-0.45 0.45" stiffness="0.04" damping="0.002"/>
         <geom name="cab_whistle_vis" type="mesh" mesh="m_cab_whistle_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_sight_drain" pos="-0.118500 -0.030200 0.036800">
-        <inertial pos="-0.000000 0.000000 0.000065" mass="0.000248" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 -6.459901218e-27 1.247960529e-26 8.681438346e-28"/>
+      <body name="cab_sight_drain" pos="-0.118500 -0.031300 0.027800">
+        <inertial pos="-0.000000 -0.000000 -0.000003" mass="0.000370" fullinertia="1.021802338e-09 1.002354970e-09 1.000000000e-09 1.887379142e-26 1.385146644e-26 -1.508453233e-26"/>
         <joint name="j_cab_sight_drain" type="slide" axis="0 0 -1" limited="true" range="0.0 0.0018" stiffness="0.25" damping="0.008"/>
         <geom name="cab_sight_drain_vis" type="mesh" mesh="m_cab_sight_drain" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_pressure_needle" pos="-0.122660 -0.015800 0.062270">
-        <inertial pos="0.000095 -0.000000 0.000594" mass="0.000047" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 -2.071134664e-29 -4.728870249e-11 -4.134675227e-28"/>
-        <joint name="j_cab_pg_needle" type="hinge" axis="0.927184 0.000000 -0.374607" limited="true" range="-2.5 2.5" damping="0.0005"/>
+      <body name="cab_pressure_needle" pos="-0.122580 -0.015400 0.067150">
+        <inertial pos="0.000115 -0.000000 0.000590" mass="0.000047" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 -3.638982078e-28 -5.117949718e-11 1.192779214e-30"/>
+        <joint name="j_cab_pg_needle" type="hinge" axis="0.913545 0.000000 -0.406737" limited="true" range="-2.5 2.5" damping="0.0005"/>
         <geom name="cab_pg_needle_vis" type="mesh" mesh="m_cab_pressure_needle" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_blowdown_screw" pos="-0.117800 0.009500 0.041500">
-        <inertial pos="-0.000160 -0.000000 0.000000" mass="0.000365" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 1.012092594e-26 4.105785232e-26 -1.460832256e-26"/>
+      <body name="cab_blowdown_screw" pos="-0.118000 0.018500 0.014500">
+        <inertial pos="0.000185 -0.000000 0.000000" mass="0.000367" fullinertia="1.000000000e-09 1.033962475e-09 1.013637829e-09 -1.700663483e-26 1.579737078e-26 -3.401664450e-26"/>
         <joint name="j_cab_blowdown" type="hinge" axis="1 0 0" limited="true" range="-6.28 6.28" damping="0.001"/>
         <geom name="cab_blowdown_vis" type="mesh" mesh="m_cab_blowdown_screw" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_firebox_door" pos="-0.115000 -0.006500 0.028800">
-        <inertial pos="-0.000657 0.005543 0.000011" mass="0.001800" fullinertia="3.833018313e-08 1.148626274e-08 2.826273925e-08 1.538941400e-09 2.681007985e-11 -1.076790717e-10"/>
-        <joint name="j_cab_fire_door" type="hinge" axis="0 0 1" limited="true" range="0.0 1.85" damping="0.003"/>
+      <body name="cab_firebox_door" pos="-0.115400 0.000000 0.022000">
+        <inertial pos="-0.000554 0.000000 0.006072" mass="0.002895" fullinertia="9.651906181e-08 5.567730434e-08 4.270293253e-08 -3.639279716e-25 1.814642793e-09 5.111674493e-24"/>
+        <joint name="j_cab_fire_door" type="hinge" axis="0 -1 0" limited="true" range="0.0 1.45" damping="0.003"/>
         <geom name="cab_fire_door_vis" type="mesh" mesh="m_cab_firebox_door" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_bypass_lever" pos="-0.134500 -0.009200 0.023800">
-        <inertial pos="-0.001200 0.000000 -0.001776" mass="0.000673" fullinertia="4.951307937e-09 8.583806206e-09 4.445049225e-09 4.622327456e-26 2.102315287e-09 -7.043480926e-26"/>
+      <body name="cab_bypass_lever" pos="-0.134500 -0.008800 0.023800">
+        <inertial pos="-0.001245 -0.000000 -0.001821" mass="0.000683" fullinertia="5.239182003e-09 9.159509700e-09 4.738282111e-09 -4.913201739e-27 2.241136416e-09 -4.517342694e-26"/>
         <joint name="j_cab_bypass" type="hinge" axis="0 0 1" limited="true" range="-1.57 1.57" damping="0.002"/>
         <geom name="cab_bypass_vis" type="mesh" mesh="m_cab_bypass_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_roof_hatch" pos="-0.114500 0.000000 0.088800">
-        <inertial pos="-0.015559 0.000000 0.003392" mass="0.020608" fullinertia="2.096503976e-06 1.522937858e-06 3.504707534e-06 -1.070107982e-13 -3.051402788e-09 7.492963880e-15"/>
+      <body name="cab_roof_hatch" pos="-0.119500 0.000000 0.082200">
+        <inertial pos="-0.012099 -0.000000 0.002293" mass="0.014104" fullinertia="4.531609856e-07 7.189539226e-07 1.138578443e-06 6.222777687e-23 3.503478279e-09 -1.272848050e-23"/>
         <joint name="j_cab_roof_hatch" type="hinge" axis="0 1 0" limited="true" range="0.0 2.36" damping="0.008"/>
         <geom name="cab_roof_hatch_vis" type="mesh" mesh="m_cab_roof_hatch" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
       </body>
@@ -538,47 +554,55 @@
       </body>
     </body>
     <body name="tender_body" pos="-0.282000 0.000000 0.037800" euler="0 0 0.000000">
-      <inertial pos="-0.003120 0.000024 0.032318" mass="1.846730" fullinertia="2.067481463e-03 7.958204880e-03 8.540236824e-03 2.096672730e-06 -1.471054983e-04 -2.841395151e-07"/>
+      <inertial pos="-0.004703 0.000187 0.031182" mass="1.807499" fullinertia="1.957153328e-03 7.557284517e-03 8.150692089e-03 2.876773040e-05 -1.112891947e-04 -2.915601382e-06"/>
       <site name="s_tender_front_pin" pos="0.102000 0 -0.001900"/>
       <geom name="tender_internals_vis" type="mesh" mesh="m_tender_internals" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       <geom name="tender_body_vis" type="mesh" mesh="m_tender_body" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
-      <body name="tender_handpump_lever" pos="-0.035500 0.004000 0.018000">
-        <inertial pos="0.000782 -0.000000 0.018569" mass="0.003104" fullinertia="4.986971333e-07 4.996259319e-07 8.040126163e-09 2.255337517e-25 -2.297288078e-08 1.007017187e-24"/>
-        <joint name="j_tender_handpump" type="hinge" axis="0 1 0" limited="true" range="-0.38 0.38" damping="0.008"/>
-        <geom name="tender_handpump_vis" type="mesh" mesh="m_tender_handpump_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      <geom name="tender_rear_ladder_vis" type="mesh" mesh="m_tender_rear_ladder" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      <body name="tender_hp_links" pos="-0.047000 0.004000 0.031700">
+        <inertial pos="0.010000 -0.000000 0.000000" mass="0.002498" fullinertia="1.321935324e-08 1.356049445e-07 1.414585606e-07 -8.169430943e-17 -4.982677998e-24 -1.660894485e-25"/>
+        <joint name="j_tender_hp_link" type="hinge" axis="0 1 0" limited="true" range="-0.35 0.35" damping="0.004"/>
+        <geom name="tender_hp_links_vis" type="mesh" mesh="m_tender_hp_links" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <body name="tender_handpump_lever" pos="0.020000 0.000000 0.000000">
+          <inertial pos="-0.000000 0.000000 0.010829" mass="0.004333" fullinertia="5.287628532e-07 5.305500405e-07 1.566455985e-08 2.167477553e-25 -2.400408470e-24 9.114378937e-24"/>
+          <joint name="j_tender_handpump" type="hinge" axis="0 1 0" limited="true" range="-0.45 0.45" damping="0.008"/>
+          <geom name="tender_handpump_vis" type="mesh" mesh="m_tender_handpump_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+          <site name="s_hp_lever_bot" pos="0.000000 0.000000 -0.010000"/>
+        </body>
       </body>
-      <body name="tender_handpump_ram" pos="-0.046500 0.004000 0.021500">
-        <inertial pos="-0.003321 0.000000 0.000000" mass="0.004803" fullinertia="2.365816458e-08 1.818805135e-07 1.829868565e-07 -3.101205287e-25 -2.822597290e-23 -6.327289349e-25"/>
-        <joint name="j_tender_hp_ram" type="slide" axis="1 0 0" limited="true" range="-0.006 0.006" damping="0.04"/>
+      <body name="tender_handpump_ram" pos="-0.027000 0.004000 0.021700">
+        <inertial pos="-0.011391 -0.000000 -0.000000" mass="0.008312" fullinertia="5.188922227e-08 5.019156062e-07 5.068230454e-07 5.294071394e-20 1.155543727e-14 -8.452702232e-21"/>
+        <joint name="j_tender_hp_ram" type="slide" axis="1 0 0" limited="true" range="-0.008 0.008" damping="0.04"/>
         <geom name="tender_hp_ram_vis" type="mesh" mesh="m_tender_handpump_ram" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <site name="s_hp_ram_pin" pos="0.000000 0.000000 0.000000"/>
       </body>
-      <body name="tender_drain_plug" pos="-0.044500 -0.009100 0.016500">
-        <inertial pos="-0.000000 0.000000 0.015743" mass="0.002448" fullinertia="4.739191962e-07 4.739191962e-07 5.165442431e-09 1.541470727e-25 -3.717800086e-24 5.321822174e-24"/>
+      <body name="tender_drain_plug" pos="-0.041000 -0.010300 0.015200">
+        <inertial pos="-0.000000 0.000000 0.016040" mass="0.002940" fullinertia="6.389153215e-07 6.389153215e-07 7.465439408e-09 -2.126273091e-25 7.711260785e-24 -6.436824521e-24"/>
         <joint name="j_tender_drain_plug" type="slide" axis="0 0 1" limited="true" range="0.0 0.0055" damping="0.05"/>
         <geom name="tender_drain_plug_vis" type="mesh" mesh="m_tender_drain_plug" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="tender_coal_cover" pos="-0.017500 0.000000 0.065800">
-        <inertial pos="-0.029048 -0.000000 0.000689" mass="0.039116" fullinertia="5.813832837e-06 1.814090453e-05 2.368804733e-05 4.491307161e-22 -7.118850813e-07 2.993215921e-23"/>
-        <joint name="j_tender_coal_cover" type="hinge" axis="0 1 0" limited="true" range="0.0 1.95" damping="0.006"/>
+      <body name="tender_coal_cover" pos="-0.045000 0.000000 0.062600">
+        <inertial pos="-0.001234 0.000000 0.002334" mass="0.036793" fullinertia="9.203725725e-06 9.180572301e-06 1.730221035e-05 -3.992947785e-23 1.960977189e-07 8.010112066e-23"/>
+        <joint name="j_tender_coal_cover" type="slide" axis="0 0 1" limited="true" range="0.0 0.032" damping="0.05"/>
         <geom name="tender_coal_cover_vis" type="mesh" mesh="m_tender_coal_cover" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="tender_water_lid" pos="-0.087200 0.000000 0.065600">
-        <inertial pos="-0.005765 0.000000 0.000122" mass="0.002132" fullinertia="2.093962737e-08 2.404329135e-08 4.344502215e-08 -8.153419038e-25 5.474705681e-10 1.140061125e-25"/>
+      <body name="tender_water_lid" pos="-0.085000 0.000000 0.062000">
+        <inertial pos="0.000042 0.000000 0.001182" mass="0.002292" fullinertia="1.961880675e-08 2.242285775e-08 3.972501461e-08 -4.584153667e-25 1.753461088e-11 2.959258569e-25"/>
         <joint name="j_tender_water_lid" type="hinge" axis="0 1 0" limited="true" range="0.0 1.65" damping="0.003"/>
         <geom name="tender_water_lid_vis" type="mesh" mesh="m_tender_water_lid" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="tender_fuel_valve" pos="0.022800 -0.007900 0.069500">
-        <inertial pos="-0.000000 -0.000000 -0.000063" mass="0.000493" fullinertia="3.208993020e-09 1.166749362e-09 2.537055695e-09 -4.184273643e-21 2.125851332e-17 5.159916127e-21"/>
+      <body name="tender_fuel_valve" pos="0.023000 -0.006800 0.066600">
+        <inertial pos="-0.000000 -0.000000 -0.016431" mass="0.001844" fullinertia="3.518432823e-07 3.495214970e-07 3.709444563e-09 -7.111103304e-21 1.582029661e-15 5.217808775e-19"/>
         <joint name="j_tender_fuel_valve" type="hinge" axis="0 0 1" limited="true" range="-1.57 1.57" damping="0.002"/>
         <geom name="tender_fuel_valve_vis" type="mesh" mesh="m_tender_fuel_valve" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="tender_fuel_cap" pos="0.034700 0.006000 0.068600">
-        <inertial pos="-0.000000 -0.000000 0.000376" mass="0.001968" fullinertia="1.235666931e-08 1.235666931e-08 1.864808636e-08 6.463894104e-25 1.560808110e-25 -4.408371623e-26"/>
+      <body name="tender_fuel_cap" pos="0.034800 0.005600 0.065800">
+        <inertial pos="-0.000000 -0.000000 0.000283" mass="0.002394" fullinertia="1.703471857e-08 1.703471857e-08 2.432188108e-08 8.499619958e-25 -4.009385467e-25 6.957400043e-26"/>
         <joint name="j_tender_fuel_cap" type="slide" axis="0 0 1" limited="true" range="0.0 0.006" damping="0.05"/>
         <geom name="tender_fuel_cap_vis" type="mesh" mesh="m_tender_fuel_cap" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
       <body name="tender_bogie_1" pos="0.056250 0 -0.004400">
-        <inertial pos="0.000000 -0.000000 0.001525" mass="0.056247" fullinertia="2.512002062e-05 1.447715830e-05 3.917258682e-05 8.422830433e-22 9.931509884e-22 -7.268091845e-21"/>
+        <inertial pos="-0.000000 -0.000000 0.001569" mass="0.058229" fullinertia="2.523632492e-05 1.452944435e-05 3.929147608e-05 2.037606350e-21 -1.027659650e-22 -7.450111903e-21"/>
         <geom name="tbogie_vis_1" type="mesh" mesh="m_tender_bogie_frame" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
         <body name="tender_axlebox_1" pos="0.024200 0 0">
           <inertial pos="-0.000000 0.000000 0.001226" mass="0.004159" fullinertia="2.222984619e-06 3.507354904e-08 2.213767553e-06 -1.504076863e-23 4.072821364e-25 -2.841034075e-23"/>
@@ -600,7 +624,7 @@
         </body>
       </body>
       <body name="tender_bogie_2" pos="-0.056250 0 -0.004400">
-        <inertial pos="0.000000 -0.000000 0.001525" mass="0.056247" fullinertia="2.512002062e-05 1.447715830e-05 3.917258682e-05 8.422830433e-22 9.931509884e-22 -7.268091845e-21"/>
+        <inertial pos="-0.000000 -0.000000 0.001569" mass="0.058229" fullinertia="2.523632492e-05 1.452944435e-05 3.929147608e-05 2.037606350e-21 -1.027659650e-22 -7.450111903e-21"/>
         <geom name="tbogie_vis_2" type="mesh" mesh="m_tender_bogie_frame" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
         <body name="tender_axlebox_3" pos="0.024200 0 0">
           <inertial pos="-0.000000 0.000000 0.001226" mass="0.004159" fullinertia="2.222984619e-06 3.507354904e-08 2.213767553e-06 -1.504076863e-23 4.072821364e-25 -2.841034075e-23"/>
@@ -626,8 +650,9 @@
   <equality>
     <connect name="loop_axle_pump" site1="s_pump_rod_end" site2="s_pump_pin"/>
     <joint name="couple_reach_rod" joint1="j_reach_rod" joint2="j_reverser" polycoef="0 0.007 0 -0.001167 0"/>
-    <joint name="couple_drain_rod" joint1="j_drain_pull" joint2="j_drain_cock" polycoef="0 0.0032 0 0 0"/>
-    <joint name="couple_reverser_wheel" joint1="j_reverser_wheel" joint2="j_reverser" polycoef="0 0.70 0 0 0"/>
+    <joint name="couple_drain_rod" joint1="j_drain_pull" joint2="j_drain_cock" polycoef="0 -0.0114 0 0.001900 0"/>
+    <joint name="couple_reverser_wheel" joint1="j_reverser_wheel" joint2="j_reverser" polycoef="0 10.0 0 0 0"/>
+    <joint name="couple_reverser_nut" joint1="j_reverser_nut" joint2="j_reverser" polycoef="0 0.007 0 -0.001167 0"/>
     <connect name="loop_coup_2_L" site1="s_coup_hole_2_L" site2="s_crank_pin_2_L"/>
     <connect name="loop_coup_1_L" site1="s_coup_hole_1_L" site2="s_crank_pin_1_L"/>
     <connect name="loop_coup_4_L" site1="s_coup_hole_4_L" site2="s_crank_pin_4_L"/>
@@ -644,7 +669,7 @@
     <connect name="loop_eccentric_R" site1="s_ecc_front_R" site2="s_exp_tail_R"/>
     <connect name="loop_radius_R" site1="s_rad_front_R" site2="s_comb_radius_R"/>
     <connect name="loop_reverser_R" site1="s_lift_bot_R" site2="s_rad_lift_R"/>
-    <joint name="couple_tender_hp_ram" joint1="j_tender_hp_ram" joint2="j_tender_handpump" polycoef="0 0.008 0 0 0"/>
+    <connect name="loop_tender_handpump" site1="s_hp_lever_bot" site2="s_hp_ram_pin" solref="0.0015 1.0" solimp="0.995 0.9995 0.00005"/>
   </equality>
   <tendon>
     <fixed name="tendon_eq_front" stiffness="2100" damping="28" springlength="0">

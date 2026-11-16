@@ -1,14 +1,14 @@
 {
   "meta": {
     "model": "Aster Hobby JNR D51 Standard / Heavy-Equipped (1/32, Gauge 1)",
-    "stage": "P3-PRECISION-CAB-TENDER (Gate 18 Photogrammetric + BOM Calibrated)",
+    "stage": "P4-TRUE-PIPING-LINKAGE-STEAM-BOILOFF (Gate 19 100% Factory Blueprint Verified)",
     "units": "mm, ml, cm^2, bar/kgf_cm2",
-    "pipe_bend_rule": "Smooth swept circular bends (R=4~8mm) + cylindrical Banjo eyes (4-15 / 13-5 / 13-12); zero 90-deg Box elbows; zero fake backhead scaffolding",
-    "jnr_drive_side": "Left-Hand Drive (左運転台 +Y: 8-12/16/18 Lever Reverser, 11-1/2/3 Whistle & 11-16/17 Blowdown on +Y; PG-20 Inboard & 11-4~7 Sight Glass Outboard on -Y)",
+    "pipe_bend_rule": "Smooth swept circular bends (R=2~7mm) + cylindrical Banjo eyes (4-15 / 13-5 / 13-12) + hex union nuts; zero 90-deg Box elbows; zero fake external roof/cleading pipes",
+    "jnr_drive_side": "Left-Hand Drive (左運転台 +Y: 8-12~20 Screw Reverser, 11-1~3 Whistle & Under-Floor 11-16/17 Blowdown on +Y; PG-20 Inboard, 13-2/13-7 Backhead Clack & 11-4~7 Sight Glass Outboard on -Y)",
     "photo_calibration": {
       "cab_rear_p45_px_per_mm": 8.616,
       "loco_side_p43_px_per_mm": 7.914,
-      "tender_top_bottom_p47_px_per_mm": 4.822
+      "tender_top_bottom_p47_px_per_mm": 9.698
     },
     "template_calibration": {
       "templates_found": true,
@@ -49,8 +49,8 @@
     },
     "16-2": {
       "part_no": "16-2",
-      "jp_name": "ダミー泥溜栓",
-      "en_name": "Dummy Firebox Mud/Blowdown Plug",
+      "jp_name": "ダミー排水弁",
+      "en_name": "Dummy Firebox Side Blowdown Plug (Functional Blowdown is 11-16/17 Under Left Cab Floor)",
       "is_dummy": true,
       "connected_pipes": [],
       "mount_xyz_mm": [
@@ -61,8 +61,8 @@
     },
     "30-2": {
       "part_no": "30-2",
-      "jp_name": "ダミー汽笛",
-      "en_name": "Dummy Roof-Top Whistle (Functional Whistle is 11-8 Under Frame)",
+      "jp_name": "汽笛(ダミー)",
+      "en_name": "Dummy Roof-Top Whistle (Functional Whistle is 11-8 Along Left Firebox Cheek)",
       "is_dummy": true,
       "connected_pipes": [],
       "mount_xyz_mm": [
@@ -97,7 +97,7 @@
     }
   },
   "boiler_pressure_vessel": {
-    "material": "Oxygen-Free Copper C1100 (Silver-Brazed)",
+    "material": "Oxygen-Free Copper C1100 (Silver-Brazed, Dry Firebox Wrapper 12-4)",
     "density_kg_m3": 8940.0,
     "thermal_conductivity_w_mk": 385.0,
     "centerline_z_mm": 44.0,
@@ -117,8 +117,8 @@
       "floor_z_mm": 20.5,
       "crown_sheet_z_mm": 47.5,
       "wall_thickness_mm": 1.2,
-      "normal_50pct_water_z_mm": 59.0,
-      "normal_crown_submergence_mm": 11.5
+      "normal_50pct_water_z_mm": 55.5,
+      "normal_crown_submergence_mm": 8.0
     },
     "five_flue_tubes": {
       "total_count": 5,
@@ -171,6 +171,10 @@
       "water_gauge_0pct_ml": 140.0,
       "water_gauge_50pct_ml": 210.0,
       "water_gauge_100pct_ml": 280.0,
+      "empty_bottom_z_mm": 18.4,
+      "water_gauge_0pct_z_mm": 47.0,
+      "water_gauge_50pct_z_mm": 55.5,
+      "water_gauge_100pct_z_mm": 62.5,
       "firebox_crown_area_cm2": 21.78,
       "firebox_wall_area_cm2": 42.39,
       "flues_gas_side_area_cm2": 175.11,
@@ -179,83 +183,84 @@
     }
   },
   "superheater_and_steam_piping": {
-    "material": "Stainless Steel SUS304",
+    "material": "Stainless Steel SUS304 & Brass C3604",
     "density_kg_m3": 7930.0,
     "cab_regulator_11_10": {
       "part_nos": [
+        "13-4",
+        "11-15",
         "11-10",
         "11-11",
         "11-12",
-        "11-15"
+        "13-9"
       ],
-      "jp_name": "加減弁 & 蒸気ドーム分配タレット",
-      "location": "Cab Backhead Top-Center (11-11 Horizontal +Y Closed -> Sweeps Upward +66 deg)",
+      "jp_name": "蒸気分配器 (11-15) & 加減弁 (11-10~12) & 主蒸気供給管 (13-4) & 加減管 (13-9)",
+      "location": "Cab Backhead Top-Center (11-10 2-Ear Gland Collar; 11-11 Flat Lever Horizontal +Y Closed -> Sweeps Up +72 deg)",
       "xyz_mm": [
-        -115.0,
+        -115.8,
         0.0,
-        63.2
+        66.5
       ],
-      "external_spipe_part": "13-9 加減管 (4-15 -> 13-5 Crown Bush @ X=-105.5)",
-      "internal_pipe_part": "13-9 / Dry Pipe -> 17-6 Hollow Bolt",
-      "internal_pipe_z_mm": 60.5,
+      "main_supply_jumper_part": "13-4 主蒸気供給管 (4-15x2 M5 Banjo Jumper: Boiler Rear-Top Boss (-98.5, 0, +73.2) -> 11-15 Top (-115.8, 0, +69.5))",
+      "backhead_jumper_part": "13-9 加減管 (4-15 Banjo (-115.8, -3.2, +63.2) -> Backhead Dry-Pipe Stud (-113.5, -3.2, +49.5))",
+      "internal_pipe_part": "13-9 Internal Dry Pipe (100% Inside Copper Barrel Z=+59.5mm -> Front Tubeplate (+92.0, 0, +59.5) -> 17-7/17-8)",
+      "internal_pipe_z_mm": 59.5,
       "internal_pipe_od_mm": 4.0,
       "internal_pipe_id_mm": 2.8
     },
     "superheater_4pass": {
       "element_part": "17-5",
-      "jp_name": "スーパーヒータ",
-      "hollow_bolt_part": "17-6 中空ボルト",
-      "front_union_part": "17-4",
-      "main_supply_pipe_part": "13-4 主蒸気供給管",
-      "topology": "Twin-U 4-Pass (2 Passes per Upper ø11.5mm Superheater Flue)",
+      "jp_name": "スーパーヒータ (上下丸型クロスヘッダ + 双U四程管 + 一体中央垂直ドロップ管)",
+      "adapter_parts": [
+        "17-7 ジャムナット",
+        "17-8 アダプタ (16.0mm Projection per 図17.1)"
+      ],
+      "hollow_bolt_part": "17-6 スーパーヒーターボルト",
+      "front_union_part": "17-4 蒸気吸入口 (中空ボルト締結 -> 7-9 給気管)",
+      "topology": "Twin-U 4-Pass (2 Passes per Upper ø11.5mm Superheater Flue) + Integral Central Drop Leg to (+119.5, 0, +21.5)",
       "passes": 4,
       "tube_od_mm": 3.0,
       "tube_id_mm": 2.0,
       "x_turn_in_flue_mm": -24.0,
-      "x_smokebox_header_mm": 102.0,
-      "total_heated_length_mm": 504.0,
-      "outer_heat_transfer_area_cm2": 47.5
+      "x_smokebox_header_mm": 109.5,
+      "total_heated_length_mm": 534.0,
+      "outer_heat_transfer_area_cm2": 50.33
     },
     "branch_steam_pipes": {
       "part_nos": [
-        "13-4",
         "7-9",
-        "1-20"
+        "1-20",
+        "PS4-1.9"
       ],
+      "manifold_spec": "7-9 給気管: Single Straight Horizontal Y-Axis Brass Cross-Manifold (X=+123.5, Y∈[-20.5,+20.5], Z=+18.5mm, OD=7.2mm) into Inner Cylinder Walls (Zero Outside Chest Loops!)",
       "lubricator_tee_xyz_mm": [
-        122.0,
+        125.0,
         0.0,
-        18.5
+        15.5
       ],
-      "x_chest_entry_mm": 126.0,
+      "x_chest_entry_mm": 123.5,
       "y_chest_centers_mm": [
-        -32.5,
-        32.5
+        -20.5,
+        20.5
       ],
       "z_chest_entry_mm": 18.5,
-      "tube_od_mm": 3.4,
-      "tube_id_mm": 2.3
+      "tube_od_mm": 7.2,
+      "tube_id_mm": 4.2
     },
     "smokebox_draft_ejector": {
-      "exhaust_pipe_part": "7-8 排気管 (中央机械加工矩形分流座 + 左右圆管)",
+      "exhaust_pipe_part": "7-8 排気管 (X=+130.0, Z=+12.5mm: 中央 8.5x9.0x8.5mm 切削角ブロック + 左右内壁スピゴット管 Y∈[-20.5,+20.5])",
       "chimney_axis_x_mm": 130.0,
       "blast_nozzle_part": "20-7",
-      "blast_nozzle_tip_z_mm": 26.0,
+      "blast_nozzle_tip_z_mm": 35.0,
       "blast_nozzle_orifice_dia_mm": 4.2,
       "blast_nozzle_area_mm2": 13.854,
-      "silencer_bleed_parts": [
-        "28-7",
-        "28-8",
-        "28-9",
-        "28-10"
-      ],
-      "blower_valve_part": "11-12~14 通風弁",
-      "blower_pipe_part": "13-8 通風管",
-      "blower_nozzle_part": "17-3 通風ノズル",
+      "blower_valve_part": "11-13/11-14 通風弁",
+      "blower_pipe_part": "13-8 通風管 (バックヘッド短L管 + 銅ボイラ内部中空ステー管 100%内蔵)",
+      "blower_nozzle_part": "17-3 通風ノズル (煙室内J字180°Uベンドノズル -> (+130.0, +4.6, +35.5))",
       "blower_ring_eff_area_mm2": 0.16,
-      "petticoat_part": "18-28 ペチコート",
+      "petticoat_part": "18-28 ペチコート (煙室頂部 18-27/18-26 直結吊下げ・支持ステー無し)",
       "chimney_part": "18-25 煙突",
-      "petticoat_entry_z_mm": 56.0,
+      "petticoat_entry_z_mm": 55.0,
       "petticoat_throat_dia_mm": 13.6,
       "petticoat_flare_dia_mm": 23.2
     },
@@ -264,73 +269,82 @@
         "valve_parts": [
           "11-1",
           "11-2",
-          "11-3"
+          "11-3",
+          "1-1",
+          "1-2",
+          "1-3"
         ],
         "valve_xyz_mm": [
-          -115.6,
-          13.8,
-          54.5
+          -115.8,
+          14.5,
+          66.5
         ],
-        "pipe_part": "13-3 汽笛管 (13-12 M3 Banjo -> Left Firebox Corner -> Under Front Barrel)",
-        "whistle_part": "11-8 汽笛 (ø7.2x42mm Long Stepped Resonant Tube)",
-        "location": "Horizontally Under Front Boiler Barrel Ahead of Firebox (|Y| <= 11mm)",
+        "pipe_part": "13-3 汽笛管 (13-12x2 M3 Banjo 直立降下管 Y=+18.5, Z=+65.0->+25.5)",
+        "whistle_part": "11-8 汽笛 (ø6.4x42.0mm Stepped Brass Resonator + LN6-8A)",
+        "location": "Horizontally Forward Along Left (+Y=+20.4mm) Lower Firebox Cheek Inside Cleading (イラスト 11, 12, 13, 14)",
         "whistle_xyz_mm": [
-          2.0,
-          -5.6,
-          15.0
+          -91.0,
+          20.4,
+          25.5
         ],
         "whistle_x_range_mm": [
-          -19.0,
-          23.0
+          -112.0,
+          -70.0
         ],
         "roof_whistle_30_2_is_dummy": true
       },
       "backhead_blowdown": {
         "valve_parts": [
           "11-16",
-          "11-17"
+          "11-17",
+          "13-11"
         ],
-        "jp_name": "排水弁 (左後ボイラブッシュ直結マイナス溝ニードル弁, イラスト 11 & p45)",
+        "jp_name": "排水弁 (11-9 左下床下ブラケット 11-16/17 + 13-11 ボイラ底前進配水管, イラスト 11, 13, 14)",
         "xyz_mm": [
-          -115.6,
-          9.5,
-          41.5
+          -115.0,
+          18.5,
+          14.5
+        ],
+        "barrel_bottom_banjo_xyz_mm": [
+          -42.5,
+          0.0,
+          17.0
         ],
         "side_plug_16_2_is_dummy": true
       },
-      "external_blower_line": {
+      "internal_blower_line": {
         "valve_parts": [
           "11-13",
           "11-14"
         ],
-        "knob_spec": "ø6.6mm 3-Spoke Circular Brass Handwheel on Straight -X Stem (イラスト 11 & p45)",
+        "knob_spec": "ø7.3mm 3-Spoke Circular Brass Handwheel on Straight -X Stem off 11-15 (イラスト 11 & p45)",
         "knob_xyz_mm": [
-          -120.2,
-          4.2,
-          61.2
+          -120.5,
+          4.5,
+          67.2
         ],
-        "pipe_part": "13-8 通風管 (External Upper-Left Cleading Space Y=+6.2, Z=+67.6 -> Smokebox 17-3)"
+        "pipe_part": "13-8 通風管 (Cab L-Jumper (-116.5,+4.5,+63.8)->(-113.5,+4.5,+49.5) -> Internal Boiler Hollow Stay -> 17-3)"
       }
     }
   },
   "feedwater_piping_topology": {
-    "routing_corridor": "100% Inside Main Frames (|Y| <= 11.0 mm), Routed REARWARD",
+    "routing_corridor": "100% Inside Main Frames (|Y| <= 11.0 mm), Routed REARWARD to Under-Floor 4-17 & Vertical 6-8 Riser into Backhead 13-2 Clack",
     "max_abs_y_mm": 11.0,
     "wheel_side_pipes_count": 0,
     "dummy_clack_15_3_connected": false,
     "cross_vehicle_umbilical_hoses": {
       "total_count": 3,
-      "reference": "イラスト 34 & 取扱説明書 p.39 & p47",
+      "reference": "イラスト 34, 37 & 取扱説明書 p.39 & p45/p47",
       "hoses": [
         {
           "id": "umb_hose_fuel",
-          "spec": "ST-ø7 Translucent White Silicone (ID 5.0 / OD 7.0 mm)",
+          "spec": "ST-ø7 Translucent White Silicone (ID 5.0 / OD 7.0 mm, L=130mm)",
           "elevation": "above_drawbar_8_8",
-          "tender_port_part": "34-2 サンプ中央前嘴 (経 32-3 ガイドリング)",
+          "tender_port_part": "34-2 同軸角型サンプ前嘴 -> 32-11 ボルスタトンネル -> 32-3 ガイドリング",
           "tender_xyz_mm": [
-            105.5,
+            106.0,
             0.0,
-            7.7
+            7.0
           ],
           "loco_port_part": "23-1 バーナー中央供醇尾管",
           "loco_xyz_mm": [
@@ -341,16 +355,16 @@
         },
         {
           "id": "umb_hose_feed",
-          "spec": "BT-ø5 Matte Black Viton Rubber (ID 2.5 / OD 5.0 mm) + 34-8 Knurled Brass Union + HC-1 x2",
+          "spec": "BT-ø5 Matte Black Viton Rubber (ID 2.5 / OD 5.0 mm, L=50mm) + Loco-End 34-7/34-8 Knurled Brass Union + HC-1 x2",
           "elevation": "below_drawbar_8_8_diagonal",
           "shared_function": "31-5 Hand-Pump Delivery AND 6-5 Axle-Pump Suction",
-          "tender_port_part": "34-6 右下出水嘴 (<- 31-13 <- 31-5, 台枠床下 Y=-17.8mm 外側走線)",
+          "tender_port_part": "34-6 右側床下直管 (Y=-21.3mm, LN5-7A 前端梁貫通バーブ)",
           "tender_xyz_mm": [
-            105.5,
-            -7.2,
+            108.5,
+            -21.3,
             -5.1
           ],
-          "loco_port_part": "6-11 左下吸水/手摇汇流嘴 (-> 6-10 -> 6-5 & 13-2)",
+          "loco_port_part": "6-11 左後ねじ口金 (34-8 ローレットユニオンナット直結 -> 6-10 -> 6-5)",
           "loco_xyz_mm": [
             -150.0,
             7.2,
@@ -359,15 +373,15 @@
         },
         {
           "id": "umb_hose_return",
-          "spec": "BT-ø5 Matte Black Viton Rubber (ID 2.5 / OD 5.0 mm, Unpressurized Return)",
+          "spec": "BT-ø5 Matte Black Viton Rubber (ID 2.5 / OD 5.0 mm, L=50mm, Unpressurized Return)",
           "elevation": "below_drawbar_8_8_diagonal",
-          "tender_port_part": "34-6 左下回水嘴 (-> 台枠床下 Y=+17.8mm -> 31-14 高位弯头回水立管)",
+          "tender_port_part": "34-6 左側床下直管 (Y=+21.3mm, LN5-7A 前端梁貫通 -> 31-12 -> 31-14 戻り立ち管)",
           "tender_xyz_mm": [
-            105.5,
-            7.2,
+            108.5,
+            21.3,
             -5.1
           ],
-          "loco_port_part": "4-16 右下旁通回水尾管 (<- 4-17)",
+          "loco_port_part": "4-16 右後バイパス戻り尾管 (<- 4-17)",
           "loco_xyz_mm": [
             -150.0,
             -7.2,
@@ -377,71 +391,67 @@
       ]
     },
     "axle_and_shared_hand_pump_loop": {
-      "tender_outlet_part": "31-13 -> 31-12 -> 34-6 (-Y=-17.8mm) -> 34-8 Union -> 6-11 (+Y)",
+      "tender_outlet_part": "31-13 -> 31-12 (-16.4, -21.3) -> Straight 34-6 (Y=-21.3mm) -> BT-ø5 -> Loco-End 34-8 Union -> 6-11 (+Y)",
       "suction_pipe_part": "6-10 軸動ポンプ管 (吸込)",
       "suction_y_mm": 7.2,
-      "suction_z_mm": 9.2,
+      "suction_z_mm": 8.5,
       "pump_body_part": "6-5 軸動ポンプ",
       "pump_x_mm": -22.0,
       "check_balls_spec": "Twin SB-ø3 Stainless Check Balls",
-      "delivery_pipe_part": "6-6 軸動ポンプ管 (吐出・後方走線)",
+      "delivery_pipe_part": "6-6 軸動ポンプ管 (吐出・後方走線 -> 床下 4-17)",
       "delivery_direction": "rearward",
-      "delivery_y_mm": -6.2,
-      "delivery_z_mm": 10.2,
+      "delivery_y_mm": -8.8,
+      "delivery_z_mm": 13.5,
       "rear_tee_xyz_mm": [
-        -113.6,
-        -6.2,
-        10.2
+        -127.0,
+        -8.8,
+        14.8
       ],
-      "boiler_riser_part": "6-8 -> 13-2/13-7 Clack in 4-8 Stand -> 13-11 Forward Under-Firebox Feed Pipe",
-      "boiler_check_valve_part": "13-2 逆止弁本体 + SB-ø3 + 13-7 逆止弁蓋 (4-8 右後床下支座内)",
+      "boiler_riser_part": "6-8 ボイラ給水管 (4-17 横口より 8-11 床スリットを垂直上昇 -> バックヘッド 13-2 下口直結!)",
+      "boiler_check_valve_part": "13-2 逆止弁本体 + SB-ø3 + 13-7 六角キャップ (ボイラ後部右内側ブッシュ水平螺合)",
       "boiler_check_xyz_mm": [
-        -113.6,
-        -6.2,
-        15.8
-      ],
-      "boiler_bottom_entry_xyz_mm": [
-        -42.5,
-        0.0,
-        17.2
+        -115.5,
+        -9.0,
+        54.0
       ],
       "bypass_branch_part": "4-16 戻り管",
-      "bypass_valve_part": "4-17 バイパスバルブ (8-11 右後床下 X=-134.5, Y=-9.2, 6-9 同軸貫通立軸 + 8-7 水平レバー)",
+      "bypass_valve_part": "4-17 バイパスバルブ (8-11 右後床下 X=-134.5, Y=-8.8, 6-9 同軸貫通立軸 + 8-7 水平レバー)",
       "bypass_valve_xyz_mm": [
         -134.5,
-        -9.2,
+        -8.8,
         14.8
       ],
       "bypass_lever_xyz_mm": [
         -134.5,
-        -9.2,
+        -8.8,
         23.8
       ],
-      "tender_return_standpipe_part": "31-14 戻り立ち管 (+Y 高位グースネック, 水槽上板 35-1 下に完全収納)",
+      "tender_return_standpipe_part": "31-14 戻り立ち管 (31-12 (-16.4,+21.3) より垂直上昇し給水口内 (-26.0,+11.0,+53.7) へグースネック吐出)",
       "bypass_diverts_handpump_when_open": true
     }
   },
   "tender_system_bom": {
     "underframe_and_body": {
-      "underframe_part": "32-10 平板台枠 (X∈[-105.5,+105.5], Y∈[-40.75,+40.75], 無車輪切欠き + 32-1 前端梁 + 32-3 燃料ホースガイド + 32-2/8 ピン X=+102.0)",
-      "body_shell_part": "33-10 段付炭水車本体 (200.7x81.5mm, 前部炭庫 Z=+78.2mm -> 後部デッキ Z=+65.2mm, 33-4/35-4 炭門 + 35-2/3 V字シュート)",
-      "top_deck_part": "35-1 水槽上板 (Z=+65.0mm: 前部 36-4 露出座面 X∈[-2.5,+60.5] + 中後部常時開放給水口 X∈[-84.0,-18.5], Y∈[-16.8,+16.8] + 35-5x2 コーミング)",
+      "underframe_part": "32-10 平坦チャンネルスカート台枠 + 32-11x2 ガルウィング落込ボルスタ + 32-12x2 段付ピボットボス + 36-3x2 ø15.6座金 (台車ゼロ隙間結合!) + 32-1/32-14 端梁 + (28-2) 後部カプラー + 34-1/32-15/17 四隅ステップ",
+      "body_shell_part": "33-10 段付炭水車ボディ (200.7x81.5x65.0mm: 炭庫フルハイト側壁 X∈[-53.0,+91.4] Z_tdr=+75.55mm -> S字ステップ X∈[-74.2,-53.0] -> 後部デッキ Z_tdr=+62.0mm, 35-2/3 V字炭門 + 33-4)",
+      "top_deck_part": "35-1 水槽上板 (Z_tdr=+62.0mm: 前部 36-4 角穴 [-1.0,+60.5]x[-30.8,+30.8] + 12.5mm 隔壁ブリッジ + 中後部給水開口 [-76.5,-13.5]x[-15.8,+15.8] + 35-5x2 コーミング + 35-6 固定マンホール X=-85.0)",
       "open_water_bay_x_mm": [
-        -84.0,
-        -18.5
+        -76.5,
+        -13.5
       ],
       "open_water_bay_y_mm": [
-        -16.8,
-        16.8
+        -15.8,
+        15.8
       ],
       "removable_coal_cover_parts": [
-        "36-1 給水口カバー ([-85.0,-17.5])",
-        "36-2 横仕切板 (X=-54.6)"
+        "36-1 着脱式給水口カバー ([-77.3,-12.7]x[-16.4,+16.4])",
+        "36-2 石炭後仕切板 (X=-48.5, W=78.0mm)"
       ],
       "bogie_parts": [
         "31-26 側枠",
         "31-27 三長円孔端梁",
         "31-29 枕梁",
+        "32-11/32-12/36-3 ゼロ隙間心皿",
         "31-22/23 軸箱",
         "31-25 板バネ",
         "31-28 コイルバネ"
@@ -449,102 +459,102 @@
     },
     "water_tank_31_10": {
       "part_no": "31-10",
-      "jp_name": "後部独立真鍮水槽 (X∈[-88.2,-4.8], Y∈[-37.4,+37.4], Z∈[+15.0,+64.5], 前部 36-4 燃料槽と完全分離)",
+      "jp_name": "後部独立真鍮水槽 (X∈[-89.0,-4.5], Y∈[-38.2,+38.2], Z_tdr∈[+14.0,+61.4], 前部 36-4 と 4.3mm 完全空気隔離)",
       "interior_bounds_mm": [
         [
-          -88.2,
-          -37.4,
-          15.0
+          -88.0,
+          -37.2,
+          14.8
         ],
         [
-          -4.8,
-          37.4,
-          64.5
+          -5.5,
+          37.2,
+          61.2
         ]
       ],
       "max_brim_capacity_ml": 340.0,
       "nominal_80pct_fill_ml": 272.0,
       "open_bay_coaming_part": "35-5 x2 側防波コーミング",
-      "rear_inspection_lid_part": "35-7 後部デッキ小ハッチ (X=-94.8)",
+      "rear_manhole_casting_part": "35-6 水口蓋 (X=-85.0, Y=0.0 固定ダミー丸鋳物・下穴無し)",
       "bottom_drain_parts": [
-        "31-9 排水ブッシュ",
-        "31-11 水槽栓 (槽内収容垂直引抜ロッド Z_max=+56.0mm < 35-1 上板 + PS6-1.9)"
+        "31-9 水槽排水口 (-41.0, -10.3)",
+        "31-11 水槽栓 (PS6-1.9 垂直引抜ロッド Z_tdr_max=+57.2mm < +62.0mm 上板)"
       ],
       "drain_plug_xyz_mm": [
-        -44.5,
-        -9.1,
-        15.0
+        -41.0,
+        -10.3,
+        14.8
       ],
-      "return_standpipe_part": "31-14 (槽内収容 +Y 高位グースネック戻り立ち管 Z_max=+56.5mm < 35-1 上板, 開口部より戻り水柱目視)",
+      "return_standpipe_part": "31-14 (左前 31-12 (-16.4,+21.3) 垂直上昇 -> (-26.0,+11.0,+53.7) グースネック吐出, Z_tdr_max=+56.8mm < +62.0mm 上板)",
       "return_nozzle_xyz_mm": [
-        -30.5,
-        9.0,
-        53.5
+        -26.0,
+        11.0,
+        53.7
       ],
-      "underfloor_pipes_part": "34-6 x2 床下対称外側水配管 (Y=±17.8mm, Z=+9.2mm, 34-2 サンプ外側クリアランス 4.3mm) + 31-12 x2 + 4-15 x2"
+      "underfloor_pipes_part": "34-6 x2 床下完全直線銅管 (Y=±21.3mm, Z_tdr=+11.1mm -> 32-1 前端梁 LN5-7A x2 貫通) + 31-12 x2 (-16.4, ±21.3) + 4-15 x2"
     },
     "hand_pump_31_5": {
       "part_no": "31-5",
-      "jp_name": "水槽底浸漬横型プランジャハンドポンプ",
-      "plunger_part": "31-2 横型プランジャ (ø7.0mm, PN7-1.9, X軸水平往復)",
+      "jp_name": "水槽底浸漬横型プランジャ 1自由度4節揺動支点ハンドポンプ (31-5 + 31-2 + 31-3 + 31-7x2)",
+      "plunger_part": "31-2 横型プランジャ (ø7.0x26.0mm, PN7-1.9, X軸水平スライド + 前端割り溝ピン 31-1)",
       "check_tower_parts": [
-        "31-6 吸込弁座",
+        "31-6 吸入弁座",
         "SB-ø4 x2",
-        "31-4 M6頂栓"
+        "31-4 M6プラグ"
       ],
       "check_balls_part": "SB-ø4",
       "check_balls_count": 2,
       "check_balls_dia_mm": 4.0,
       "lever_parts": [
-        "31-3 短ソケットレバー (槽内収容 Z_max=+58.5mm < 35-1 上板)",
-        "31-7 x2 リンク",
-        "37-12 着脱操作棒"
+        "31-7 x2 平行揺動支点リンク (L=20.0mm, ピン 31-8x2: (-47.0,+4.0,+31.7) <-> (-27.0,+4.0,+31.7))",
+        "31-3 浮動ソケットレバー (下端 31-1 ピン (-27.0,+4.0,+21.7), 上端 Z_tdr=+58.2mm < +62.0mm 上板)",
+        "37-12 着脱延長ハンドル (95mm)"
       ],
-      "delivery_pipe_part": "31-13 内部吐出銅管 -> 右(-Y=-17.8mm) 31-12 -> 34-6",
+      "delivery_pipe_part": "31-13 内部吐出銅管 ((-69.5,+0.5,+35.7)->(-69.5,-21.3,+35.7)->(-16.4,-21.3,+20.7) 右 31-12)",
       "pump_xyz_mm": [
-        -55.5,
+        -56.0,
         4.0,
-        20.5
+        21.7
       ],
       "ram_bore_mm": 7.0,
-      "stroke_mm": 16.0,
-      "disp_ml_per_stroke": 0.616,
+      "stroke_mm": 15.0,
+      "disp_ml_per_stroke": 0.577,
       "manual_rule": "Must close cab bypass valve 4-17 while pumping 31-5, otherwise 5-check-ball network routes flow out 31-14"
     },
     "mariotte_alcohol_system_36_4": {
-      "tank_part": "36-4 前部露出フランジ落込式真鍮アルコールタンク (炭門後方 X∈[-2.5,+60.5], Y∈[-32.5,+32.5], Z∈[+29.8,+66.2], 45°斜め保護リブ付)",
+      "tank_part": "36-4 上フランジ吊下げ式角型真鍮アルコールタンク (脚無し! 上フランジ 68x68mm @ 35-1 上面, 槽体 60x60x37.5mm X∈[-0.2,+59.8], Y∈[-30.0,+30.0], Z_tdr∈[+24.5,+62.0], 斜め補強リブ付)",
       "interior_bounds_mm": [
         [
-          -1.2,
-          -31.2,
-          29.8
+          0.8,
+          -29.0,
+          25.3
         ],
         [
-          59.2,
-          31.2,
-          64.3
+          58.8,
+          29.0,
+          61.2
         ]
       ],
       "capacity_ml": 130.0,
-      "airtight_cap_part": "36-5 燃料タンク気密ローレットキャップ (PN6-1.9 O-ring, p47 実測 (+34.7, +6.0, +68.6)mm)",
+      "airtight_cap_part": "36-5 燃料口気密ローレットキャップ (PN6-1.9, p47 実測 (+34.8, +5.6, +65.8)mm)",
       "cap_xyz_mm": [
-        34.7,
-        6.0,
-        68.6
+        34.8,
+        5.6,
+        65.8
       ],
-      "needle_cock_part": "36-6 燃料コック (PF3-1.9, T字ハンドル反時計90°開, p47 実測 (+22.8, -7.9, +69.5)mm)",
+      "needle_cock_part": "36-6 燃料弁ニードル (PF3-1.9, T字ハンドル + 槽内全長垂直ニードル軸 -> 底面ノズル直結, (+23.0, -6.8, +66.6)mm)",
       "cock_xyz_mm": [
-        22.8,
-        -7.9,
-        69.5
+        23.0,
+        -6.8,
+        66.6
       ],
-      "sump_part": "34-2 サンプ (36-4 直下同軸 X∈[+13.6,+41.6], Y∈[-13.5,+13.5], Z∈[+2.2,+12.6], 前台車上 +2.6mm クリア)",
-      "hose_guide_part": "32-3 前端梁下ガイドリング (+104.0, 0.0, +7.7) -> ST-ø7 (130mm)",
+      "sump_part": "34-2 同軸角型サンプ (36-4 真下 X∈[+13.3,+43.5], Y∈[-14.0,+14.0], Z_tdr∈[+1.5,+12.7], 34-3x2 スペーサ吊下げ, S字曲管ゼロの垂直降下管!)",
+      "hose_guide_part": "32-3 前端梁下ガイドリング (+104.0, 0.0, +7.0) -> ST-ø7 (130mm)",
       "cap_open_while_cock_open_hazard": "Resets Mariotte headspace pressure to p_atm -> hydrostatic head floods 34-2 sump & 23-1 burner"
     }
   },
   "cab_interior_mechanisms": {
-    "drive_layout": "JNR Left-Hand Drive (左運転台 +Y: 8-12/16/18 Notched Quadrant Lever Reverser, 11-1~3 Whistle & 11-16/17 Blowdown on +Y; PG-20 Inboard (-15.8) & 11-4~7 Sight Glass Outboard (-30.2) Side-by-Side on -Y)",
+    "drive_layout": "JNR Left-Hand Drive (左運転台 +Y: 8-12~20 Screw Reverser + Cranked 4-12 Belly Shaft, 11-1~3 Whistle & Under-Floor 11-16/17 Blowdown on +Y; PG-20 Inboard (-15.4), 13-2/7 Backhead Clack (-9.0) & 11-4~7 Sight Glass Outboard (-31.3) on -Y)",
     "structural_backhead_and_floor": {
       "backhead_plate_11_9": {
         "part": "11-9 ボイラバックプレート",
@@ -554,45 +564,50 @@
       "cab_floor_8_11": {
         "parts": [
           "8-11 運転室床",
-          "8-21 延長板",
+          "8-21 左前延長ストリップ",
           "4-6",
           "6-4",
-          "8-10 床下逆Lガイド",
-          "4-8"
+          "8-10 床下逆Lドレンガイド",
+          "4-8 床下バイパス支座"
         ],
         "z_top_mm": 20.0
       },
       "roof_hatch_21_15": {
         "parts": [
-          "21-15 ベンチレーター",
-          "21-28 前ヒンジ大開口天窓"
+          "21-15 クレアストリベンチレーター",
+          "21-28 運転室屋根中央開口"
         ],
-        "hinge_x_mm": -114.5,
-        "hinge_z_mm": 88.8
+        "hinge_x_mm": -119.5,
+        "hinge_z_mm": 83.2
       }
     },
     "controls": {
       "reverser_8_12_20": {
-        "side": "+Y (Left Floor Notched Quadrant Lever, NOT Screw Handwheel)",
+        "side": "+Y Left Floor JNR Screw Reverser (8-14 Leadscrew + 8-16 Spoked Handwheel + 8-17 Travelling Nut + 8-20x2 Drop Links -> 8-18 -> Cranked 4-12)",
         "parts": [
           "8-12",
           "8-13",
+          "8-14",
           "8-15",
           "8-16",
           "8-17",
+          "8-19",
           "8-20",
           "8-18",
+          "2-18",
+          "4-12",
           "25-7"
         ],
-        "pivot_xyz_mm": [
-          -126.0,
-          31.8,
-          23.5
+        "wheel_xyz_mm": [
+          -139.0,
+          32.5,
+          34.5
         ]
       },
       "regulator_11_10_11": {
-        "side": "Top-Center 11-15 Turret (Lever Horizontal +Y Closed -> Up +66 deg)",
+        "side": "Top-Center 11-15 Manifold (11-10 2-Ear Gland; 11-11 Horizontal +Y Closed -> Up +72 deg)",
         "parts": [
+          "13-4",
           "11-10",
           "11-11",
           "11-12",
@@ -600,13 +615,13 @@
           "13-9"
         ],
         "pivot_xyz_mm": [
-          -117.0,
+          -119.5,
           0.0,
-          64.5
+          68.2
         ]
       },
       "blower_11_13_14": {
-        "side": "+Y Upper-Left off 11-15 (Straight -X Stem + ø6.6mm 3-Spoke Circular Handwheel)",
+        "side": "+Y Upper-Left off 11-15 (Straight -X Stem + ø7.3mm 3-Spoke Handwheel -> 13-8 Internal Stay -> 17-3)",
         "parts": [
           "11-13",
           "11-14",
@@ -614,18 +629,19 @@
           "17-3"
         ],
         "wheel_xyz_mm": [
-          -120.2,
-          4.2,
-          61.2
+          -120.5,
+          4.5,
+          67.2
         ]
       },
       "water_gauge_11_4_7": {
-        "side": "-Y Outboard Right of PG-20 (Horizontal 13-6/13-10 Pipes + Coaxial Bottom 11-5 Hex Drain Plug)",
+        "side": "-Y Outboard Right of PG-20 (GN8-6Ax2 + 13-6 Upper Shoulder + 13-10 Forward Side Pipe + Coaxial 1-1~3 Slotted Poppet Drain)",
         "parts": [
           "11-4",
           "11-5",
           "11-6",
           "11-7",
+          "GN8-6A",
           "13-5",
           "13-6",
           "13-10",
@@ -635,93 +651,96 @@
         ],
         "tube_xyz_mm": [
           -118.5,
-          -30.2,
-          48.0
+          -31.3,
+          46.0
         ]
       },
       "pressure_gauge_pg20": {
-        "side": "-Y Inboard Upper-Right (ø20mm Tilted +22 deg Up + 13-1 Lower U-Loop Siphon)",
+        "side": "-Y Inboard Upper-Right (ø20mm Tilted +24 deg Up + 13-1 180-deg Vertical U-Loop Siphon)",
         "parts": [
           "PG-ø20",
           "13-1",
-          "4-15"
+          "13-12"
         ],
         "dial_xyz_mm": [
-          -122.0,
-          -15.8,
-          62.0
+          -121.8,
+          -15.4,
+          66.8
         ]
       },
       "whistle_11_1_3": {
-        "side": "+Y Upper-Left Backhead (4.4x4.4x8.4mm Brass Block 11-2 + S-Lever 11-3 -> 13-3 -> 11-8)",
+        "side": "+Y Left End of 11-15 (11-1 Block + 11-3 Curved Lever -> Straight Vertical 13-3 -> Left-Cheek 11-8)",
         "parts": [
           "11-1",
           "11-2",
           "11-3",
           "13-3",
+          "13-12",
           "11-8"
         ],
         "pivot_xyz_mm": [
-          -116.8,
-          13.8,
-          50.2
+          -116.2,
+          14.5,
+          62.0
         ]
       },
       "blowdown_11_16_17": {
-        "side": "+Y Lower-Left Backhead (Flush Seated Slotted Needle Screw 11-17)",
+        "side": "+Y Below Left Cab Floor on 11-9 Leg (11-16/17 Slotted Needle + Forward 13-11 to Barrel Bottom)",
         "parts": [
           "11-16",
-          "11-17"
+          "11-17",
+          "13-11",
+          "4-15"
         ],
         "screw_xyz_mm": [
-          -117.8,
-          9.5,
-          41.5
+          -118.0,
+          18.5,
+          14.5
         ]
       },
       "boiler_clack_13_2_7": {
-        "side": "-Y Under-Floor 4-8 Stand -> Forward 13-11",
+        "side": "-Y Right-Inboard Backhead Bush Below PG-20 (Fed by Straight Vertical 6-8 Floor Riser)",
         "parts": [
           "13-2",
           "SB-ø3",
           "13-7",
-          "13-11",
-          "4-8"
+          "6-8"
         ],
         "xyz_mm": [
-          -113.6,
-          -6.2,
-          15.8
+          -115.5,
+          -9.0,
+          54.0
         ]
       },
       "firebox_door_12_1_2": {
-        "side": "Low-Center Z=+28.8mm (Hinged on Right -Y=-6.5mm Swinging Outward -X)",
+        "side": "Low-Center Z=+28.8mm (Bottom Horizontal Y-Axis Hinge Pin 12-3 at Z=+22.0mm Swinging Down/Rearward)",
         "parts": [
           "12-1",
           "12-2",
           "12-3"
         ],
         "hinge_xyz_mm": [
-          -115.0,
-          -6.5,
-          28.8
+          -115.4,
+          0.0,
+          22.0
         ]
       },
       "bypass_lever_8_7": {
-        "side": "-Y Open Rear Cab Floor (Coaxial 6-9 Stem Through 8-11 Floor -> 4-17)",
+        "side": "-Y Open Rear Cab Floor (Coaxial 6-9 Stem Through 8-11 Floor -> Under-Floor 4-17)",
         "parts": [
           "4-17",
           "6-9",
-          "8-7"
+          "8-7",
+          "4-8"
         ],
         "lever_xyz_mm": [
           -134.5,
-          -9.2,
+          -8.8,
           23.8
         ]
       },
       "drain_cock_pull_8_6": {
-        "side": "-Y Under Cab Floor (Horizontal 8-5 Through 8-10 Inverted-L Guide -> Knurled 8-6 Knob)",
+        "side": "-Y Under Cab Floor (100% Straight Horizontal 8-5 Rod @ Y=-18.0, Z=+15.0 -> Upward 7-1~3 Horn -> Half-Lapped 1-19x4)",
         "parts": [
           "8-6",
           "8-10",
@@ -732,9 +751,9 @@
           "1-16"
         ],
         "knob_xyz_mm": [
-          -127.5,
-          -18.6,
-          14.8
+          -132.0,
+          -18.0,
+          15.0
         ]
       }
     }
@@ -761,12 +780,11 @@
       14.0
     ],
     "oil_delivery_tee_xyz_mm": [
-      122.0,
+      125.0,
       0.0,
-      18.5
+      15.5
     ],
     "feeds_into_parts": [
-      "13-4",
       "7-9"
     ],
     "has_bottom_drain": false,
@@ -814,11 +832,11 @@
       "check_balls_dia_mm": 3.0,
       "suction_cracking_dp_kpa": 6.0,
       "delivery_cracking_dp_kpa": 14.0,
-      "boiler_clack_part": "13-2 + SB-ø3 + 13-7 (-> 13-11 Forward Feed Pipe)",
+      "boiler_clack_part": "13-2 + SB-ø3 + 13-7 (Screwed into Right-Inboard Backhead Bush, Fed by 6-8 Vertical Riser)",
       "boiler_clack_xyz_mm": [
-        -113.6,
-        -6.2,
-        15.8
+        -115.5,
+        -9.0,
+        54.0
       ]
     },
     "bypass_needle_valve_4_17": {
@@ -830,10 +848,10 @@
     "tender_hand_pump_31_5": {
       "part_no": "31-5",
       "ram_seal": "PN7-1.9",
-      "orientation": "submerged_horizontal_x",
+      "orientation": "submerged_horizontal_x_4bar_swinging_fulcrum",
       "ram_bore_mm": 7.0,
-      "stroke_mm": 16.0,
-      "disp_ml_per_stroke": 0.616,
+      "stroke_mm": 15.0,
+      "disp_ml_per_stroke": 0.577,
       "strokes_for_half_boiler": 30,
       "check_balls_part": "SB-ø4",
       "check_balls_count": 2,
@@ -842,11 +860,14 @@
     },
     "regulator_throttle_valve_11_10": {
       "part_nos": [
+        "13-4",
         "11-10",
         "11-11",
-        "11-12"
+        "11-12",
+        "11-15",
+        "13-9"
       ],
-      "location": "Cab Backhead 11-15 Turret -> 13-9 External S-Pipe -> Internal Dry Pipe -> 17-6 Hollow Bolt",
+      "location": "Boiler Rear Top -> 13-4 Jumper -> 11-15 Manifold -> 13-9 Cab L-Jumper -> Internal Dry Pipe -> 17-7/8/6",
       "max_orifice_dia_mm": 2.6,
       "max_area_mm2": 5.309,
       "discharge_coeff_cd": 0.72
@@ -854,11 +875,12 @@
     "twin_safety_valves_28_6": {
       "part_no": "28-6",
       "count": 2,
-      "x_mm": -36.0,
-      "y_centers_mm": [
-        -3.8,
-        3.8
+      "arrangement": "tandem_centerline_zero_pipes",
+      "x_centers_mm": [
+        -46.0,
+        -33.0
       ],
+      "y_center_mm": 0.0,
       "pop_pressure_kgf_cm2": 4.0,
       "reseat_pressure_kgf_cm2": 3.55,
       "seat_dia_mm": 2.2,
@@ -868,7 +890,7 @@
       "part_no": "11-13/11-14",
       "nozzle_part": "17-3",
       "seat_dia_mm": 1.2,
-      "handwheel_od_mm": 6.6,
+      "handwheel_od_mm": 7.3,
       "discharge_coeff_cd": 0.65
     },
     "water_gauge_11_7": {
@@ -877,6 +899,7 @@
         "11-5",
         "11-6",
         "11-7",
+        "GN8-6A",
         "13-5",
         "13-6",
         "13-10",
@@ -885,22 +908,22 @@
         "1-3"
       ],
       "side": "-Y Outboard Right of PG-20 (イラスト 11, 13 & p45)",
-      "glass_od_mm": 3.9,
-      "glass_id_mm": 2.24,
-      "visible_span_mm": 16.4,
-      "z_center_mm": 48.0,
+      "glass_od_mm": 4.0,
+      "glass_id_mm": 2.3,
+      "visible_span_mm": 17.0,
+      "z_center_mm": 46.0,
       "x_cab_backhead_mm": -118.5,
-      "y_mm": -30.2
+      "y_mm": -31.3
     },
     "pressure_gauge_13_1": {
-      "siphon_part": "13-1 (180-deg Lower U-Loop Condensate Siphon)",
-      "gauge_spec": "PG-ø20 (ø20.0mm Brass Bezel, White Dial 0~6 kgf/cm², Tilted +22-deg Upward)",
+      "siphon_part": "13-1 (180-deg Vertical Circular U-Loop Condensate Siphon)",
+      "gauge_spec": "PG-ø20 (ø20.0mm Brass Bezel, White Dial 0~6 kgf/cm², Tilted +24-deg Upward)",
       "side": "-Y Inboard Upper-Right (イラスト 13 & p45)",
       "outer_dia_mm": 20.0,
-      "tilt_up_deg": 22.0,
+      "tilt_up_deg": 24.0,
       "x_cab_backhead_mm": -121.5,
-      "y_mm": -15.8,
-      "z_mm": 61.8
+      "y_mm": -15.4,
+      "z_mm": 66.8
     },
     "cylinder_drain_cocks_1_16": {
       "part_nos": [
@@ -934,7 +957,18 @@
         ],
         "z_min_mm": 30.0,
         "axis_z_mm": 44.8,
-        "max_radius_mm": 27.3
+        "max_radius_mm": 26.8
+      },
+      {
+        "id": "internal_blower_stay_inside_boiler",
+        "mesh": "blower_nozzle_17_3",
+        "x_window_mm": [
+          -102.0,
+          88.0
+        ],
+        "z_min_mm": 30.0,
+        "axis_z_mm": 44.8,
+        "max_radius_mm": 26.8
       }
     ],
     "cross_body_port_mating_contracts": {
@@ -951,14 +985,14 @@
           "geom_b": "cyl_housing_L",
           "roi_a_local_mm": [
             [
-              118.0,
-              22.0,
-              18.0
+              119.0,
+              17.5,
+              14.5
             ],
             [
-              134.0,
-              36.0,
-              30.0
+              128.0,
+              22.5,
+              22.5
             ]
           ]
         },
@@ -969,63 +1003,63 @@
           "geom_b": "cyl_housing_R",
           "roi_a_local_mm": [
             [
-              118.0,
-              -36.0,
-              18.0
+              119.0,
+              -22.5,
+              14.5
             ],
             [
-              134.0,
-              -22.0,
-              30.0
+              128.0,
+              -17.5,
+              22.5
             ]
           ]
         },
         {
           "id": "steam_exhaust_7_8_L",
           "fluid_loop": "exhaust_steam",
-          "geom_a": "superheater_piping_vis",
+          "geom_a": "exhaust_blast_pipe_vis",
           "geom_b": "cyl_housing_L",
           "roi_a_local_mm": [
             [
               126.0,
-              18.0,
-              10.0
+              17.5,
+              9.0
             ],
             [
               134.0,
-              23.0,
-              15.5
+              22.5,
+              16.0
             ]
           ]
         },
         {
           "id": "steam_exhaust_7_8_R",
           "fluid_loop": "exhaust_steam",
-          "geom_a": "superheater_piping_vis",
+          "geom_a": "exhaust_blast_pipe_vis",
           "geom_b": "cyl_housing_R",
           "roi_a_local_mm": [
             [
               126.0,
-              -23.0,
-              10.0
+              -22.5,
+              9.0
             ],
             [
               134.0,
-              -18.0,
-              15.5
+              -17.5,
+              16.0
             ]
           ]
         },
         {
           "id": "chimney_petticoat_18_28_to_smokebox_stack",
           "fluid_loop": "flue_gas_ejector",
-          "geom_a": "superheater_piping_vis",
+          "geom_a": "smokebox_petticoat_vis",
           "geom_b": "boiler_Super_vis",
           "roi_a_local_mm": [
             [
               120.0,
               -14.0,
-              70.0
+              72.0
             ],
             [
               140.0,
@@ -1035,38 +1069,56 @@
           ]
         },
         {
-          "id": "regulator_13_9_to_boiler_crown_13_5",
+          "id": "main_supply_13_4_to_boiler_rear_boss",
           "fluid_loop": "main_steam",
-          "geom_a": "superheater_piping_vis",
+          "geom_a": "boiler_aux_valves_vis",
           "geom_b": "boiler_copper_core_vis",
           "roi_a_local_mm": [
             [
-              -109.0,
-              -4.0,
-              66.0
+              -103.0,
+              -4.5,
+              69.5
             ],
             [
-              -102.0,
-              4.0,
-              72.0
+              -94.0,
+              4.5,
+              76.5
             ]
           ]
         },
         {
-          "id": "external_blower_13_8_to_smokebox_drop_17_3",
-          "fluid_loop": "blower_steam",
+          "id": "regulator_13_9_jumper_to_internal_dry_pipe",
+          "fluid_loop": "main_steam",
           "geom_a": "boiler_aux_valves_vis",
           "geom_b": "superheater_piping_vis",
           "roi_a_local_mm": [
             [
-              90.0,
-              2.0,
-              54.0
+              -116.0,
+              -6.5,
+              46.5
             ],
             [
-              98.0,
-              11.0,
-              62.0
+              -111.5,
+              0.0,
+              53.0
+            ]
+          ]
+        },
+        {
+          "id": "cab_blower_13_8_jumper_to_internal_stay_17_3",
+          "fluid_loop": "blower_steam",
+          "geom_a": "boiler_aux_valves_vis",
+          "geom_b": "blower_nozzle_17_3_vis",
+          "roi_a_local_mm": [
+            [
+              -116.0,
+              1.5,
+              46.5
+            ],
+            [
+              -111.5,
+              7.5,
+              53.0
             ]
           ]
         },
@@ -1085,27 +1137,45 @@
           "roi_a_local_mm": null
         },
         {
-          "id": "lubricator_4_2_capillary_to_steam_tee",
+          "id": "lubricator_4_2_capillary_to_7_9_boss",
           "fluid_loop": "displacement_oil",
           "geom_a": "displacement_lubricator_vis",
           "geom_b": "superheater_piping_vis",
           "roi_a_local_mm": [
             [
-              116.0,
-              -5.0,
-              14.0
+              121.0,
+              -4.5,
+              13.0
             ],
             [
-              134.0,
-              5.0,
-              28.0
+              129.0,
+              4.5,
+              20.5
             ]
           ]
         },
         {
-          "id": "feedwater_13_11_to_boiler_clack_13_2_13_7",
+          "id": "feedwater_6_8_riser_to_backhead_clack_13_2",
           "fluid_loop": "shared_boiler_feedwater",
           "geom_a": "feedwater_piping_vis",
+          "geom_b": "boiler_aux_valves_vis",
+          "roi_a_local_mm": [
+            [
+              -119.0,
+              -12.5,
+              45.5
+            ],
+            [
+              -113.0,
+              -5.5,
+              52.5
+            ]
+          ]
+        },
+        {
+          "id": "blowdown_13_11_to_boiler_bottom_bush",
+          "fluid_loop": "boiler_blowdown",
+          "geom_a": "boiler_aux_valves_vis",
           "geom_b": "boiler_copper_core_vis",
           "roi_a_local_mm": [
             [
@@ -1146,14 +1216,14 @@
           "roi_a_local_mm": null,
           "roi_b_local_mm": [
             [
-              101.5,
+              102.0,
               -4.0,
-              4.0
+              3.5
             ],
             [
-              109.0,
+              109.5,
               4.0,
-              11.5
+              10.5
             ]
           ]
         },
@@ -1183,19 +1253,19 @@
           "roi_a_local_mm": null,
           "roi_b_local_mm": [
             [
-              101.5,
-              -10.5,
+              104.0,
+              -25.0,
               -8.5
             ],
             [
-              109.0,
-              -4.0,
+              111.5,
+              -17.5,
               -1.5
             ]
           ]
         },
         {
-          "id": "umbilical_feed_union_34_8_collar",
+          "id": "umbilical_feed_union_34_8_loco_end",
           "fluid_loop": "shared_feedwater",
           "geom_a": "umb_union_34_8_vis",
           "geom_b": "umb_hose_feed",
@@ -1227,13 +1297,13 @@
           "roi_a_local_mm": null,
           "roi_b_local_mm": [
             [
-              101.5,
-              4.0,
+              104.0,
+              17.5,
               -8.5
             ],
             [
-              109.0,
-              10.5,
+              111.5,
+              25.0,
               -1.5
             ]
           ]
@@ -1267,20 +1337,20 @@
           "roi_a_local_mm": null
         },
         {
-          "id": "safety_valves_28_6_to_boiler_shell",
+          "id": "safety_valves_28_6_tandem_to_boiler_shell",
           "fluid_loop": "safety_relief",
-          "geom_a": "boiler_aux_valves_vis",
+          "geom_a": "tandem_safety_valves_vis",
           "geom_b": "boiler_copper_core_vis",
           "roi_a_local_mm": [
             [
-              -44.0,
-              -10.0,
-              66.0
+              -50.0,
+              -5.0,
+              68.0
             ],
             [
-              -28.0,
-              10.0,
-              78.0
+              -29.0,
+              5.0,
+              74.5
             ]
           ]
         },
@@ -1293,12 +1363,12 @@
             [
               -10.0,
               24.0,
-              -1.0
+              -15.0
             ],
             [
               10.0,
               36.0,
-              4.0
+              -7.0
             ]
           ]
         },
@@ -1311,12 +1381,12 @@
             [
               -10.0,
               -36.0,
-              -1.0
+              -15.0
             ],
             [
               10.0,
               -24.0,
-              4.0
+              -7.0
             ]
           ]
         },
@@ -1327,14 +1397,14 @@
           "geom_b": "drain_cock_vis",
           "roi_a_local_mm": [
             [
-              118.0,
-              -24.0,
-              -16.0
+              120.0,
+              -21.0,
+              5.0
             ],
             [
-              134.0,
-              -14.0,
-              -2.0
+              128.0,
+              -13.5,
+              11.0
             ]
           ]
         },
@@ -1346,21 +1416,57 @@
           "roi_a_local_mm": null
         },
         {
-          "id": "drawbar_8_20_rear_pin_to_tender_clevis_31_2",
+          "id": "drawbar_8_20_rear_pin_to_tender_clevis_32_8",
           "fluid_loop": "mechanical_drawbar",
           "geom_a": "drawbar_eye_r_vis",
           "geom_b": "tender_internals_vis",
           "roi_a_local_mm": null,
           "roi_b_local_mm": [
             [
-              94.0,
+              96.0,
               -8.0,
-              -6.0
+              -5.5
             ],
             [
-              108.0,
+              107.0,
               8.0,
               3.0
+            ]
+          ]
+        },
+        {
+          "id": "tender_bolster_32_12_front_to_bogie_1",
+          "fluid_loop": "mechanical_bogie_bolster",
+          "geom_a": "tender_body_vis",
+          "geom_b": "tbogie_vis_1",
+          "roi_a_local_mm": [
+            [
+              49.0,
+              -10.0,
+              -1.5
+            ],
+            [
+              63.5,
+              10.0,
+              3.5
+            ]
+          ]
+        },
+        {
+          "id": "tender_bolster_32_12_rear_to_bogie_2",
+          "fluid_loop": "mechanical_bogie_bolster",
+          "geom_a": "tender_body_vis",
+          "geom_b": "tbogie_vis_2",
+          "roi_a_local_mm": [
+            [
+              -63.5,
+              -10.0,
+              -1.5
+            ],
+            [
+              -49.0,
+              10.0,
+              3.5
             ]
           ]
         }

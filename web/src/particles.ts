@@ -15,7 +15,7 @@ interface Puff {
 }
 
 export class LiveSteamParticles {
-  private readonly maxCount = 1200;
+  private readonly maxCount = 1800;
   private puffs: Puff[] = [];
   private cursor = 0;
   private geom: THREE.BufferGeometry;
@@ -83,9 +83,9 @@ export class LiveSteamParticles {
           vDryness = aDryness;
           vSeed = aSeed;
           vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
-          float grow = 0.55 + 2.35 * pow(clamp(aNormAge, 0.0, 1.0), 0.72);
-          float px = aSize * grow * uPixelRatio * (520.0 / max(0.12, -mvPos.z));
-          gl_PointSize = aNormAge >= 1.0 ? 0.0 : clamp(px, 1.0, 145.0);
+          float grow = 0.65 + 2.65 * pow(clamp(aNormAge, 0.0, 1.0), 0.68);
+          float px = aSize * grow * uPixelRatio * (560.0 / max(0.12, -mvPos.z));
+          gl_PointSize = aNormAge >= 1.0 ? 0.0 : clamp(px, 1.5, 175.0);
           gl_Position = projectionMatrix * mvPos;
         }
       `,
@@ -121,20 +121,20 @@ export class LiveSteamParticles {
           vec2 q = rot * uv * 2.2 + vec2(vSeed * 11.3, uTime * 0.65);
           float fbm = 0.62 * noise2(q) + 0.38 * noise2(q * 2.3 + 4.1);
 
-          float mask = smoothstep(1.0, 0.18, r + 0.26 * (fbm - 0.5));
-          // 过热高干度乏汽在喷口处呈半透明热气，随膨胀冷却迅速凝结成浓白雾团；湿蒸汽出口即浓白
-          float condDelay = clamp((vDryness - 0.85) * 1.15, 0.0, 0.18);
-          float condenseIn = smoothstep(0.0, 0.05 + condDelay, vNormAge);
-          float fadeOut = pow(1.0 - clamp(vNormAge, 0.0, 1.0), 1.35);
-          float wetBoost = mix(1.25, 0.72, clamp((vDryness - 0.82) / 0.16, 0.0, 1.0));
+          float mask = smoothstep(1.0, 0.14, r + 0.28 * (fbm - 0.5));
+          // 过热高干度乏汽在喷口处呈半透明热气核，离开喷口与环境冷空气掺混绝热膨胀冷却后迅速凝结成翻滚浓白雾团
+          float condDelay = clamp((vDryness - 0.86) * 0.85, 0.0, 0.11);
+          float condenseIn = smoothstep(0.0, 0.03 + condDelay, vNormAge);
+          float fadeOut = pow(1.0 - clamp(vNormAge, 0.0, 1.0), 1.22);
+          float wetBoost = mix(1.38, 0.88, clamp((vDryness - 0.82) / 0.16, 0.0, 1.0));
 
-          float alpha = mask * condenseIn * fadeOut * 0.44 * wetBoost;
+          float alpha = mask * condenseIn * fadeOut * 0.58 * wetBoost;
           if (alpha < 0.008) discard;
 
-          vec3 lightTop = vec3(0.96, 0.98, 1.00);
-          vec3 shadowBot = vec3(0.74, 0.79, 0.86);
-          vec3 col = mix(shadowBot, lightTop, clamp(0.5 - 0.45 * uv.y + 0.35 * fbm, 0.0, 1.0));
-          gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.78));
+          vec3 lightTop = vec3(0.97, 0.99, 1.00);
+          vec3 shadowBot = vec3(0.76, 0.82, 0.90);
+          vec3 col = mix(shadowBot, lightTop, clamp(0.52 - 0.45 * uv.y + 0.38 * fbm, 0.0, 1.0));
+          gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.86));
         }
       `,
     });
@@ -183,78 +183,78 @@ export class LiveSteamParticles {
     const chuffPulse = Math.max(0.0, exhaustIntensity - this.avgExhaust * 0.86);
     this.avgExhaust += Math.min(1.0, dt * 8.0) * (exhaustIntensity - this.avgExhaust);
 
-    // 1. 18-25 烟囱口主排汽白烟羽流 (X=0.130, Y=0.0, Z=0.095)
-    if (exhaustIntensity > 0.025) {
-      const burstCount = chuffPulse > 0.07 ? 4 : Math.random() < exhaustIntensity * 0.92 ? 2 : 0;
+    // 1. 18-25 烟囱口主排汽四拍翻滚白烟羽流 (X=0.130, Y=0.0, Z=0.093)
+    if (exhaustIntensity > 0.015) {
+      const burstCount = chuffPulse > 0.05 ? 6 : Math.random() < Math.min(1.0, 0.28 + exhaustIntensity * 1.15) ? 3 : 1;
       for (let b = 0; b < burstCount; b++) {
         tmpPos
-          .set(0.130 + (Math.random() - 0.5) * 0.005, (Math.random() - 0.5) * 0.005, 0.095)
+          .set(0.130 + (Math.random() - 0.5) * 0.006, (Math.random() - 0.5) * 0.006, 0.093)
           .applyMatrix4(locoMatrix);
-        const wJet = 0.52 + 0.78 * exhaustIntensity + 0.62 * chuffPulse;
+        const wJet = 0.56 + 0.92 * exhaustIntensity + 0.78 * chuffPulse;
         tmpVel
-          .set(-0.09 + (Math.random() - 0.5) * 0.14, (Math.random() - 0.5) * 0.14, wJet)
+          .set(-0.11 + (Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.15, wJet)
           .applyMatrix4(rotOnly);
-        this.spawn(tmpPos, tmpVel, 1.05 + Math.random() * 0.60, exhaustDryness, 0.022 + 0.010 * chuffPulse);
+        this.spawn(tmpPos, tmpVel, 1.15 + Math.random() * 0.65, exhaustDryness, 0.025 + 0.013 * chuffPulse);
       }
     }
 
-    // 2. 28-6 锅筒顶部双安全阀超压泄放白雾柱 (X=-0.036, Y=±0.0038, Z=0.082)
+    // 2. 28-6 x2 锅筒顶中线纵列双安全阀超压泄放白雾柱 (イラスト 12/28: X=-0.046 / -0.033, Y=0.0, Z=0.0805)
     if (safetyIntensity > 0.1) {
-      for (const sgn of [-1, 1]) {
-        tmpPos.set(-0.036, sgn * 0.0038, 0.082).applyMatrix4(locoMatrix);
+      for (const sx of [-0.046, -0.033]) {
+        tmpPos.set(sx + (Math.random() - 0.5) * 0.002, (Math.random() - 0.5) * 0.002, 0.0805).applyMatrix4(locoMatrix);
         tmpVel
-          .set((Math.random() - 0.5) * 0.07, sgn * 0.045, 0.92 + Math.random() * 0.28)
+          .set(-0.04 + (Math.random() - 0.5) * 0.07, (Math.random() - 0.5) * 0.06, 0.96 + Math.random() * 0.32)
           .applyMatrix4(rotOnly);
-        this.spawn(tmpPos, tmpVel, 0.52, 0.90, 0.017);
+        this.spawn(tmpPos, tmpVel, 0.62, 0.89, 0.019);
       }
     }
 
-    // 3. 1-16 左右气缸前后排液旋塞浓白湿汽喷流 (X=0.114/0.138, Y=±0.0325, Z=-0.012)
-    if (drainIntensity > 0.035 && Math.random() < Math.min(1.0, drainIntensity * 0.98)) {
-      const xNoz = Math.random() < 0.5 ? 0.114 : 0.138;
+    // 3. 1-16 x4 左右气缸前后排液嘴浓白湿汽水平喷流 (イラスト 1: X=0.121/0.131, Y=±0.0308, Z=-0.0135)
+    if (drainIntensity > 0.025 && Math.random() < Math.min(1.0, 0.25 + drainIntensity * 1.10)) {
+      const xNoz = Math.random() < 0.5 ? 0.121 : 0.131;
       for (const sgn of [-1, 1]) {
-        tmpPos.set(xNoz, sgn * 0.033, -0.012).applyMatrix4(locoMatrix);
+        tmpPos.set(xNoz, sgn * 0.0308, -0.0135).applyMatrix4(locoMatrix);
         tmpVel
-          .set(0.12 + (Math.random() - 0.5) * 0.08, sgn * (0.38 + Math.random() * 0.16), -0.03 + Math.random() * 0.07)
+          .set(0.10 + (Math.random() - 0.5) * 0.09, sgn * (0.40 + Math.random() * 0.18), -0.04 + Math.random() * 0.07)
           .applyMatrix4(rotOnly);
-        this.spawn(tmpPos, tmpVel, 0.46, 0.82, 0.016);
+        this.spawn(tmpPos, tmpVel, 0.54, 0.80, 0.018);
       }
     }
 
-    // 4. 11-8 锅筒下方右侧真实黄铜谐振汽笛喷流 (イラスト 11: 11-2 -> 13-3 -> 11-8 X∈[-0.019, +0.023], Y=-0.0056, Z=+0.0150)
+    // 4. 11-8 左火室颊下前伸真实黄铜谐振汽笛喷流 (イラスト 11/12/13: X=-0.102, Y=+0.0204, Z=+0.0232)
     if (whistleIntensity > 0.04) {
       for (let w = 0; w < 2; w++) {
         tmpPos
-          .set(-0.012 + (Math.random() - 0.5) * 0.006, -0.0056 + (Math.random() - 0.5) * 0.003, 0.0145)
+          .set(-0.102 + (Math.random() - 0.5) * 0.004, +0.0204 + (Math.random() - 0.5) * 0.003, 0.0232)
           .applyMatrix4(locoMatrix);
         tmpVel
-          .set(-0.22 - Math.random() * 0.14, -0.24 - Math.random() * 0.12, -0.14 + Math.random() * 0.07)
+          .set(0.16 + Math.random() * 0.12, +0.28 + Math.random() * 0.14, -0.10 + Math.random() * 0.08)
           .applyMatrix4(rotOnly);
-        this.spawn(tmpPos, tmpVel, 0.44, 0.88, 0.018);
+        this.spawn(tmpPos, tmpVel, 0.50, 0.86, 0.019);
       }
     }
 
-    // 5. 11-5 驾驶室右侧外缘 (-Y) 11-7 水面计底部六角排污螺塞白汽喷流 (X=-0.1185, Y=-0.0302, Z=+0.0345)
+    // 5. 1-1/1-2 驾驶室右侧外缘 (-Y=-31.3mm) 11-7 水面计底塞冲洗白汽喷流 (X=-0.1185, Y=-0.0313, Z=+0.0260)
     if (sightPurgeIntensity > 0.03) {
       tmpPos
-        .set(-0.1185 + (Math.random() - 0.5) * 0.003, -0.0302 + (Math.random() - 0.5) * 0.003, 0.0345)
+        .set(-0.1185 + (Math.random() - 0.5) * 0.003, -0.0313 + (Math.random() - 0.5) * 0.003, 0.0260)
         .applyMatrix4(locoMatrix);
       tmpVel
-        .set(-0.08 + (Math.random() - 0.5) * 0.08, -0.06 - Math.random() * 0.06, -0.34 - Math.random() * 0.14)
+        .set(-0.06 + (Math.random() - 0.5) * 0.08, -0.08 - Math.random() * 0.06, -0.36 - Math.random() * 0.14)
         .applyMatrix4(rotOnly);
-      this.spawn(tmpPos, tmpVel, 0.38, 0.80, 0.014);
+      this.spawn(tmpPos, tmpVel, 0.44, 0.78, 0.016);
     }
 
-    // 6. 11-16 驾驶室左中下排污阀经下排管高温饱和闪蒸排污水雾 (X=-0.1165, Y=+0.0095, Z=+0.0205)
+    // 6. 11-16 驾驶室左床下 (+Y=+18.5mm) 锅炉排水阀高温饱和闪蒸排污水雾 (X=-0.1152, Y=+0.0185, Z=+0.0105)
     if (blowdownIntensity > 0.03) {
       for (let b = 0; b < 2; b++) {
         tmpPos
-          .set(-0.1165 + (Math.random() - 0.5) * 0.004, +0.0095 + (Math.random() - 0.5) * 0.004, 0.0205)
+          .set(-0.1152 + (Math.random() - 0.5) * 0.004, +0.0185 + (Math.random() - 0.5) * 0.004, 0.0105)
           .applyMatrix4(locoMatrix);
         tmpVel
-          .set(-0.18 - Math.random() * 0.12, +0.20 + Math.random() * 0.12, -0.28 - Math.random() * 0.12)
+          .set(-0.14 - Math.random() * 0.10, +0.20 + Math.random() * 0.12, -0.30 - Math.random() * 0.12)
           .applyMatrix4(rotOnly);
-        this.spawn(tmpPos, tmpVel, 0.48, 0.76, 0.019);
+        this.spawn(tmpPos, tmpVel, 0.54, 0.74, 0.020);
       }
     }
 
@@ -262,9 +262,11 @@ export class LiveSteamParticles {
       const p = this.puffs[i];
       if (p.age < p.life) {
         p.age += dt;
+        const swirl = 0.06 * Math.sin(this.elapsed * 4.5 + p.seed * 12.5);
         p.pos.addScaledVector(p.vel, dt);
-        p.vel.multiplyScalar(0.958);
-        p.vel.z += 0.15 * dt;
+        p.pos.y += swirl * dt;
+        p.vel.multiplyScalar(0.962);
+        p.vel.z += 0.20 * dt;
         this.positions[3 * i] = p.pos.x;
         this.positions[3 * i + 1] = p.pos.y;
         this.positions[3 * i + 2] = p.pos.z;

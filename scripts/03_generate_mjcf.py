@@ -388,6 +388,10 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     mp_boil = parts_mp["boiler_superstructure"]
     mp_cu_core = parts_mp["boiler_firebox_flues"]
     mp_sh_pipe = parts_mp["superheater_piping"]
+    mp_exh_pipe = parts_mp["exhaust_blast_pipe"]
+    mp_blw_17_3 = parts_mp["blower_nozzle_17_3"]
+    mp_pet = parts_mp["smokebox_petticoat"]
+    mp_tsv = parts_mp["tandem_safety_valves"]
     mp_fw_pipe = parts_mp["feedwater_piping"]
     mp_lub = parts_mp["displacement_lubricator"]
     mp_burner = parts_mp["alcohol_burner"]
@@ -407,9 +411,9 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     cyl_pos_R = np.array([rc_cfg["cylinder_center_x"] * s, -rc_cfg["cylinder_center_y"] * s, rc_cfg["cylinder_center_z"] * s])
     mb_pos_L = np.array([tx_m, +y_vg_abs, tz_m])
     mb_pos_R = np.array([tx_m, -y_vg_abs, tz_m])
-    rev_stand_pos = np.array([-0.126000, +0.031800, 0.023500])
-    sg_tube_pos = np.array([-0.118500, -0.030200, 0.048000])
-    pg_dial_pos = np.array([-0.122050, -0.015800, 0.062020])
+    rev_stand_pos = np.array([-0.127500, +0.032500, 0.020000])
+    sg_tube_pos = np.array([-0.118500, -0.031300, 0.046000])
+    pg_dial_pos = np.array([-0.122050, -0.015400, 0.067040])
 
     m_side_plate = (0.330 * 0.0035 * 0.016) * rho_iron
     I_side_plate = (m_side_plate / 12.0) * np.diag([0.0035**2 + 0.016**2, 0.330**2 + 0.016**2, 0.330**2 + 0.0035**2])
@@ -428,6 +432,10 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             (mp_boil["mass_kg"], np.array(mp_boil["com_m"]), full_to_mat3(mp_boil["fullinertia"])),
             (mp_cu_core["mass_kg"], np.array(mp_cu_core["com_m"]), full_to_mat3(mp_cu_core["fullinertia"])),
             (mp_sh_pipe["mass_kg"], np.array(mp_sh_pipe["com_m"]), full_to_mat3(mp_sh_pipe["fullinertia"])),
+            (mp_exh_pipe["mass_kg"], np.array(mp_exh_pipe["com_m"]), full_to_mat3(mp_exh_pipe["fullinertia"])),
+            (mp_blw_17_3["mass_kg"], np.array(mp_blw_17_3["com_m"]), full_to_mat3(mp_blw_17_3["fullinertia"])),
+            (mp_pet["mass_kg"], np.array(mp_pet["com_m"]), full_to_mat3(mp_pet["fullinertia"])),
+            (mp_tsv["mass_kg"], np.array(mp_tsv["com_m"]), full_to_mat3(mp_tsv["fullinertia"])),
             (mp_fw_pipe["mass_kg"], np.array(mp_fw_pipe["com_m"]), full_to_mat3(mp_fw_pipe["fullinertia"])),
             (mp_lub["mass_kg"], np.array(mp_lub["com_m"]), full_to_mat3(mp_lub["fullinertia"])),
             (mp_burner["mass_kg"], np.array(mp_burner["com_m"]), full_to_mat3(mp_burner["fullinertia"])),
@@ -481,7 +489,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_chassis_equalizer_brakes", material="mat_black_iron",
         pos="0 0 0", mass="0", contype="0", conaffinity="0"
     )
-    # P0-D 真实四回路锅炉内脏与车架内双水路/置换注油器参数化 CAD (挂载于 loco_frame，X-Ray 模式下 100% 常驻不透明)
+    # P0-D + Stage 14 真实四回路锅炉内脏、烟室独立分件与车架内双水路/置换注油器参数化 CAD
     ET.SubElement(
         frame, "geom", name="boiler_copper_core_vis", type="mesh",
         mesh="m_boiler_firebox_flues", material="mat_copper",
@@ -490,6 +498,26 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     ET.SubElement(
         frame, "geom", name="superheater_piping_vis", type="mesh",
         mesh="m_superheater_piping", material="mat_machined_steel",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
+        frame, "geom", name="exhaust_blast_pipe_vis", type="mesh",
+        mesh="m_exhaust_blast_pipe", material="mat_brass",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
+        frame, "geom", name="blower_nozzle_17_3_vis", type="mesh",
+        mesh="m_blower_nozzle_17_3", material="mat_brass",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
+        frame, "geom", name="smokebox_petticoat_vis", type="mesh",
+        mesh="m_smokebox_petticoat", material="mat_machined_steel",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
+        frame, "geom", name="tandem_safety_valves_vis", type="mesh",
+        mesh="m_tandem_safety_valves", material="mat_brass",
         pos="0 0 0", mass="0", contype="0", conaffinity="0"
     )
     ET.SubElement(
@@ -525,17 +553,17 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     ET.SubElement(
         frame, "geom", name="cab_sight_glass_tube_vis", type="mesh",
         mesh="m_cab_sight_glass_tube", material="mat_pyrex_glass",
-        pos="-0.118500 -0.030200 0.048000", mass="0", contype="0", conaffinity="0"
+        pos="-0.118500 -0.031300 0.046000", mass="0", contype="0", conaffinity="0"
     )
     ET.SubElement(
         frame, "geom", name="cab_pg_dial_vis", type="mesh",
         mesh="m_cab_pg_dial", material="mat_gauge_dial",
-        pos="-0.122050 -0.015800 0.062020", mass="0", contype="0", conaffinity="0"
+        pos="-0.122050 -0.015400 0.067040", mass="0", contype="0", conaffinity="0"
     )
     ET.SubElement(
         frame, "geom", name="cab_reverser_stand_vis", type="mesh",
         mesh="m_cab_reverser_stand", material="mat_black_iron",
-        pos="-0.126000 0.031800 0.023500", mass="0", contype="0", conaffinity="0"
+        pos="-0.127500 0.032500 0.020000", mass="0", contype="0", conaffinity="0"
     )
     ET.SubElement(
         frame, "geom", name="boiler_Super_vis", type="mesh",
@@ -791,12 +819,12 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         joint1="j_reach_rod", joint2="j_reverser", polycoef="0 0.007 0 -0.001167 0"
     )
 
-    # Tier 3: 8-6 -> 8-5 -> 7-1~3 -> 7-5 -> 1-19 -> 1-18 -> 1-16 八级气缸排液阀完整联动机构
-    dc_body = ET.SubElement(frame, "body", name="drain_cock_linkage", pos="0.129000 0.000000 -0.014200")
+    # Tier 3: 8-6 -> 8-5 -> 7-1~3 -> 7-5 -> 1-19 -> 1-18 -> 1-16 八级气缸排液阀完整联动机构 (イラスト 1, 7, 8 & 図 1.3/8.1: 100% 全直拉杆 8-5 + 向上摇臂 7-1)
+    dc_body = ET.SubElement(frame, "body", name="drain_cock_linkage", pos="0.124200 0.000000 -0.003800")
     attach_part_inertial(dc_body, parts_mp["drain_cock_linkage"])
     ET.SubElement(
-        dc_body, "joint", name="j_drain_cock", type="hinge", axis="0 1 0",
-        limited="true", range="-0.35 0.35", stiffness="0.08", damping="0.008"
+        dc_body, "joint", name="j_drain_cock", type="hinge", axis="0 -1 0",
+        limited="true", range="-0.32 0.32", stiffness="0.08", damping="0.008"
     )
     ET.SubElement(
         dc_body, "geom", name="drain_cock_vis", type="mesh",
@@ -807,7 +835,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     attach_part_inertial(dp_body, parts_mp["drain_pull_rod"])
     ET.SubElement(
         dp_body, "joint", name="j_drain_pull", type="slide", axis="1 0 0",
-        limited="true", range="-0.004 0.004", damping="0.02"
+        limited="true", range="-0.005 0.005", damping="0.02"
     )
     ET.SubElement(
         dp_body, "geom", name="drain_pull_rod_vis", type="mesh",
@@ -815,24 +843,39 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     )
     ET.SubElement(
         equality, "joint", name="couple_drain_rod",
-        joint1="j_drain_pull", joint2="j_drain_cock", polycoef="0 0.0032 0 0 0"
+        joint1="j_drain_pull", joint2="j_drain_cock", polycoef="0 -0.0114 0 0.001900 0"
     )
 
-    # P3-CAB: 驾驶室 1:1 像素标定可动操纵阀件与天窗刚体链 (均具精确 O2 材料密度惯量, イラスト 4/6/8/11/12/21, d51_manual.pdf & ill_p45.jpg)
-    rev_wheel = ET.SubElement(frame, "body", name="cab_reverser_wheel", pos="-0.126000 0.031800 0.023500")
+    # P3-CAB: 驾驶室原厂全真值可动操纵阀件、螺旋逆转机滑块与天窗刚体链 (イラスト 8, 11, 12, 13, 17, 21 & p45)
+    rev_wheel = ET.SubElement(frame, "body", name="cab_reverser_wheel", pos="-0.127500 0.032500 0.034500")
     attach_part_inertial(rev_wheel, parts_mp["cab_reverser_wheel"])
-    ET.SubElement(rev_wheel, "joint", name="j_reverser_wheel", type="hinge", axis="0 1 0", damping="0.002")
+    ET.SubElement(rev_wheel, "joint", name="j_reverser_wheel", type="hinge", axis="1 0 0", damping="0.002")
     ET.SubElement(
         rev_wheel, "geom", name="cab_reverser_wheel_vis", type="mesh",
         mesh="m_cab_reverser_wheel", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
     )
     ET.SubElement(
         equality, "joint", name="couple_reverser_wheel",
-        joint1="j_reverser_wheel", joint2="j_reverser", polycoef="0 0.70 0 0 0"
+        joint1="j_reverser_wheel", joint2="j_reverser", polycoef="0 10.0 0 0 0"
     )
 
-    # 11-11 顶中 (Y=0.0, Z=+64.5mm) 加减阀长柄: q=0 水平指向左驾 (+Y) 为全闭，向上扫掠 (0 -> +1.15 rad) 开启主蒸汽
-    reg_lev = ET.SubElement(frame, "body", name="cab_regulator_lever", pos="-0.117000 0.000000 0.064500")
+    rev_nut = ET.SubElement(frame, "body", name="cab_reverser_nut", pos="-0.127500 0.032500 0.034500")
+    attach_part_inertial(rev_nut, parts_mp["cab_reverser_nut"])
+    ET.SubElement(
+        rev_nut, "joint", name="j_reverser_nut", type="slide", axis="1 0 0",
+        limited="true", range="-0.005 0.005", damping="0.02"
+    )
+    ET.SubElement(
+        rev_nut, "geom", name="cab_reverser_nut_vis", type="mesh",
+        mesh="m_cab_reverser_nut", material="mat_brass", contype="0", conaffinity="0", mass="0"
+    )
+    ET.SubElement(
+        equality, "joint", name="couple_reverser_nut",
+        joint1="j_reverser_nut", joint2="j_reverser", polycoef="0 0.007 0 -0.001167 0"
+    )
+
+    # 11-11 顶中 (-119.5, 0.0, +68.2mm) 加减阀长柄: q=0 水平指向左驾 (+Y) 为全闭，向上扫掠 (0 -> +1.15 rad) 开启主蒸汽
+    reg_lev = ET.SubElement(frame, "body", name="cab_regulator_lever", pos="-0.119500 0.000000 0.068200")
     attach_part_inertial(reg_lev, parts_mp["cab_regulator_lever"])
     ET.SubElement(
         reg_lev, "joint", name="j_cab_regulator", type="hinge", axis="1 0 0",
@@ -843,10 +886,10 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_regulator_lever", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
 
-    # 11-13 左上内 (+Y=+4.2, Z=+61.2mm) 直向后 (-X, 0° 偏航) ø6.6mm 三辐圆形黄铜通风手轮
+    # 11-13 左上内 (+Y=+5.6, Z=+61.4mm, X=-120.2mm) 11-14 通风阀直向后三辐圆形黄铜手轮
     blw_whl = ET.SubElement(
         frame, "body", name="cab_blower_wheel",
-        pos="-0.120200 0.004200 0.061200"
+        pos="-0.120200 0.005600 0.061400"
     )
     attach_part_inertial(blw_whl, parts_mp["cab_blower_wheel"])
     ET.SubElement(
@@ -858,8 +901,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_blower_wheel", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
 
-    # 11-3 左上外 (+Y=+13.8, Z=+50.2mm) S 型下垂弹簧复位汽笛拨柄
-    whi_lev = ET.SubElement(frame, "body", name="cab_whistle_lever", pos="-0.116800 0.013800 0.050200")
+    # 11-3 左上外 (+Y=+14.5, Z=+62.0mm) 11-1 汽笛阀底部上翘触发拨柄
+    whi_lev = ET.SubElement(frame, "body", name="cab_whistle_lever", pos="-0.116200 0.014500 0.062000")
     attach_part_inertial(whi_lev, parts_mp["cab_whistle_lever"])
     ET.SubElement(
         whi_lev, "joint", name="j_cab_whistle", type="hinge", axis="1 0 0",
@@ -870,8 +913,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_whistle_lever", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
 
-    # 11-5 右侧外缘 (-Y=-30.2mm) 水面计下座同轴六角排污螺塞 (沿 -Z 旋下排汽冲洗)
-    sg_drn = ET.SubElement(frame, "body", name="cab_sight_drain", pos="-0.118500 -0.030200 0.036800")
+    # 1-1/1-2/1-3 右侧外缘 (-Y=-31.3mm) 水面计下座同轴一字槽排污螺塞
+    sg_drn = ET.SubElement(frame, "body", name="cab_sight_drain", pos="-0.118500 -0.031300 0.027800")
     attach_part_inertial(sg_drn, parts_mp["cab_sight_drain"])
     ET.SubElement(
         sg_drn, "joint", name="j_cab_sight_drain", type="slide", axis="0 0 -1",
@@ -882,11 +925,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_sight_drain", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
 
-    # PG-ø20 右上内 (-Y=-15.8mm, Z=+62.3mm) 上仰 22° 压力表指针 (顺时针随表压增大正偏转)
-    pg_ndl = ET.SubElement(frame, "body", name="cab_pressure_needle", pos="-0.122660 -0.015800 0.062270")
+    # PG-ø20 右上内 (-Y=-15.4mm, Z=+67.15mm) 上仰 24° 压力表指针 (顺时针随表压增大正偏转)
+    pg_ndl = ET.SubElement(frame, "body", name="cab_pressure_needle", pos="-0.122580 -0.015400 0.067150")
     attach_part_inertial(pg_ndl, parts_mp["cab_pressure_needle"])
     ET.SubElement(
-        pg_ndl, "joint", name="j_cab_pg_needle", type="hinge", axis="0.927184 0.000000 -0.374607",
+        pg_ndl, "joint", name="j_cab_pg_needle", type="hinge", axis="0.913545 0.000000 -0.406737",
         limited="true", range="-2.5 2.5", damping="0.0005"
     )
     ET.SubElement(
@@ -894,8 +937,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_pressure_needle", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
     )
 
-    # 11-17 左中下 (+Y=+9.5mm, Z=+41.5mm) 贴背板一字槽锅炉排污针阀旋柄
-    bd_scr = ET.SubElement(frame, "body", name="cab_blowdown_screw", pos="-0.117800 0.009500 0.041500")
+    # 11-17 左床下 (+Y=+18.5mm, Z=+14.5mm) 11-16 锅炉排水阀一字槽针阀螺杆 (イラスト 11, 13)
+    bd_scr = ET.SubElement(frame, "body", name="cab_blowdown_screw", pos="-0.118000 0.018500 0.014500")
     attach_part_inertial(bd_scr, parts_mp["cab_blowdown_screw"])
     ET.SubElement(
         bd_scr, "joint", name="j_cab_blowdown", type="hinge", axis="1 0 0",
@@ -906,20 +949,20 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_blowdown_screw", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
 
-    # 12-1 低位中下 (Z=+28.8mm) 矩形铸造火室门: 绕右侧 (-Y=-6.5mm) 12-3 立销向右后方开启 (q ∈ [0, +1.85]), 露出 12-2 双观火圆孔
-    fb_door = ET.SubElement(frame, "body", name="cab_firebox_door", pos="-0.115000 -0.006500 0.028800")
+    # 12-1 低位中下底铰蝴蝶式铸造火室门: 绕底部水平 Y 轴销 12-3 (-115.4, 0.0, +22.0mm) 向后下方翻开 (q ∈ [0, +1.45])
+    fb_door = ET.SubElement(frame, "body", name="cab_firebox_door", pos="-0.115400 0.000000 0.022000")
     attach_part_inertial(fb_door, parts_mp["cab_firebox_door"])
     ET.SubElement(
-        fb_door, "joint", name="j_cab_fire_door", type="hinge", axis="0 0 1",
-        limited="true", range="0.0 1.85", damping="0.003"
+        fb_door, "joint", name="j_cab_fire_door", type="hinge", axis="0 -1 0",
+        limited="true", range="0.0 1.45", damping="0.003"
     )
     ET.SubElement(
         fb_door, "geom", name="cab_fire_door_vis", type="mesh",
         mesh="m_cab_firebox_door", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
     )
 
-    # 6-9 / 8-7 驾驶室右后地板 (-134.5, -9.2, Z=+23.8mm) 同轴旁通回水阀立杆手柄 (向下直插床下 4-17)
-    byp_lev = ET.SubElement(frame, "body", name="cab_bypass_lever", pos="-0.134500 -0.009200 0.023800")
+    # 6-9 / 8-7 驾驶室右后地板 (-134.5, -8.8, Z=+23.8mm) 同轴旁通回水阀立杆手柄 (向下直插床下 4-17)
+    byp_lev = ET.SubElement(frame, "body", name="cab_bypass_lever", pos="-0.134500 -0.008800 0.023800")
     attach_part_inertial(byp_lev, parts_mp["cab_bypass_lever"])
     ET.SubElement(
         byp_lev, "joint", name="j_cab_bypass", type="hinge", axis="0 0 1",
@@ -930,8 +973,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_bypass_lever", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
 
-    # 21-15 / 21-28 驾驶室顶棚前缘铰接可掀天窗 (适配校准后 38.5mm 驾驶室顶棚)
-    rf_htc = ET.SubElement(frame, "body", name="cab_roof_hatch", pos="-0.114500 0.000000 0.088800")
+    # 21-15 驾驶室顶棚中央天窗通风盖 (前铰于 (-119.5, 0.0, +82.2mm))
+    rf_htc = ET.SubElement(frame, "body", name="cab_roof_hatch", pos="-0.119500 0.000000 0.082200")
     attach_part_inertial(rf_htc, parts_mp["cab_roof_hatch"])
     ET.SubElement(
         rf_htc, "joint", name="j_cab_roof_hatch", type="hinge", axis="0 1 0",
@@ -1322,6 +1365,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             ET.SubElement(tender, "freejoint", name="tender_free")
         mp_tb = parts_mp["tender_body"]
         mp_ti = parts_mp["tender_internals"]
+        mp_tr_lad = parts_mp["tender_rear_ladder"]
         m_tdr_fluid = 0.375  # 272 ml 标准 80% 补水 + 130 ml 燃料酒精
         I_tdr_fluid = (m_tdr_fluid / 12.0) * np.diag([0.070**2 + 0.036**2, 0.200**2 + 0.036**2, 0.200**2 + 0.070**2])
         attach_composite_inertial(
@@ -1329,6 +1373,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             [
                 (mp_tb["mass_kg"], np.array(mp_tb["com_m"]), full_to_mat3(mp_tb["fullinertia"])),
                 (mp_ti["mass_kg"], np.array(mp_ti["com_m"]), full_to_mat3(mp_ti["fullinertia"])),
+                (mp_tr_lad["mass_kg"], np.array(mp_tr_lad["com_m"]), full_to_mat3(mp_tr_lad["fullinertia"])),
                 (m_tdr_fluid, np.array([-0.015, 0.0, 0.022]), I_tdr_fluid),
             ],
         )
@@ -1342,35 +1387,53 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             tender, "geom", name="tender_body_vis", type="mesh",
             mesh="m_tender_body", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
         )
+        ET.SubElement(
+            tender, "geom", name="tender_rear_ladder_vis", type="mesh",
+            mesh="m_tender_rear_ladder", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
+        )
 
-        # P3-TENDER: 煤水车 1:1 像素标定可动功能部件 (イラスト 31-37 & d51_manual.pdf: 全部水箱内件 Z_max < +63.7mm 零穿顶!)
-        hp_lev = ET.SubElement(tender, "body", name="tender_handpump_lever", pos="-0.035500 0.004000 0.018000")
+        # P3-TENDER: 煤水车原厂真 1-DOF 四连杆手摇给水泵 (31-5 + 31-7x2 + 31-3 + 31-2) 与可动功能件 (イラスト 31-37, Z_max < +62.0mm 零穿顶!)
+        hp_lnk = ET.SubElement(tender, "body", name="tender_hp_links", pos="-0.047000 0.004000 0.031700")
+        attach_part_inertial(hp_lnk, parts_mp["tender_hp_links"])
+        ET.SubElement(
+            hp_lnk, "joint", name="j_tender_hp_link", type="hinge", axis="0 1 0",
+            limited="true", range="-0.35 0.35", damping="0.004"
+        )
+        ET.SubElement(
+            hp_lnk, "geom", name="tender_hp_links_vis", type="mesh",
+            mesh="m_tender_hp_links", material="mat_brass", contype="0", conaffinity="0", mass="0"
+        )
+
+        hp_lev = ET.SubElement(hp_lnk, "body", name="tender_handpump_lever", pos="0.020000 0.000000 0.000000")
         attach_part_inertial(hp_lev, parts_mp["tender_handpump_lever"])
         ET.SubElement(
             hp_lev, "joint", name="j_tender_handpump", type="hinge", axis="0 1 0",
-            limited="true", range="-0.38 0.38", damping="0.008"
+            limited="true", range="-0.45 0.45", damping="0.008"
         )
         ET.SubElement(
             hp_lev, "geom", name="tender_handpump_vis", type="mesh",
             mesh="m_tender_handpump_lever", material="mat_brass", contype="0", conaffinity="0", mass="0"
         )
+        ET.SubElement(hp_lev, "site", name="s_hp_lever_bot", pos="0.000000 0.000000 -0.010000")
 
-        hp_ram = ET.SubElement(tender, "body", name="tender_handpump_ram", pos="-0.046500 0.004000 0.021500")
+        hp_ram = ET.SubElement(tender, "body", name="tender_handpump_ram", pos="-0.027000 0.004000 0.021700")
         attach_part_inertial(hp_ram, parts_mp["tender_handpump_ram"])
         ET.SubElement(
             hp_ram, "joint", name="j_tender_hp_ram", type="slide", axis="1 0 0",
-            limited="true", range="-0.006 0.006", damping="0.04"
+            limited="true", range="-0.008 0.008", damping="0.04"
         )
         ET.SubElement(
             hp_ram, "geom", name="tender_hp_ram_vis", type="mesh",
             mesh="m_tender_handpump_ram", material="mat_brass", contype="0", conaffinity="0", mass="0"
         )
+        ET.SubElement(hp_ram, "site", name="s_hp_ram_pin", pos="0.000000 0.000000 0.000000")
         ET.SubElement(
-            equality, "joint", name="couple_tender_hp_ram",
-            joint1="j_tender_hp_ram", joint2="j_tender_handpump", polycoef="0 0.008 0 0 0"
+            equality, "connect", name="loop_tender_handpump",
+            site1="s_hp_lever_bot", site2="s_hp_ram_pin",
+            solref="0.0015 1.0", solimp="0.995 0.9995 0.00005"
         )
 
-        drn_plg = ET.SubElement(tender, "body", name="tender_drain_plug", pos="-0.044500 -0.009100 0.016500")
+        drn_plg = ET.SubElement(tender, "body", name="tender_drain_plug", pos="-0.041000 -0.010300 0.015200")
         attach_part_inertial(drn_plg, parts_mp["tender_drain_plug"])
         ET.SubElement(
             drn_plg, "joint", name="j_tender_drain_plug", type="slide", axis="0 0 1",
@@ -1381,18 +1444,18 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             mesh="m_tender_drain_plug", material="mat_brass", contype="0", conaffinity="0", mass="0"
         )
 
-        coal_cov = ET.SubElement(tender, "body", name="tender_coal_cover", pos="-0.017500 0.000000 0.065800")
+        coal_cov = ET.SubElement(tender, "body", name="tender_coal_cover", pos="-0.045000 0.000000 0.062600")
         attach_part_inertial(coal_cov, parts_mp["tender_coal_cover"])
         ET.SubElement(
-            coal_cov, "joint", name="j_tender_coal_cover", type="hinge", axis="0 1 0",
-            limited="true", range="0.0 1.95", damping="0.006"
+            coal_cov, "joint", name="j_tender_coal_cover", type="slide", axis="0 0 1",
+            limited="true", range="0.0 0.032", damping="0.05"
         )
         ET.SubElement(
             coal_cov, "geom", name="tender_coal_cover_vis", type="mesh",
             mesh="m_tender_coal_cover", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
         )
 
-        wt_lid = ET.SubElement(tender, "body", name="tender_water_lid", pos="-0.087200 0.000000 0.065600")
+        wt_lid = ET.SubElement(tender, "body", name="tender_water_lid", pos="-0.085000 0.000000 0.062000")
         attach_part_inertial(wt_lid, parts_mp["tender_water_lid"])
         ET.SubElement(
             wt_lid, "joint", name="j_tender_water_lid", type="hinge", axis="0 1 0",
@@ -1403,7 +1466,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             mesh="m_tender_water_lid", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
         )
 
-        fv_tee = ET.SubElement(tender, "body", name="tender_fuel_valve", pos="0.022800 -0.007900 0.069500")
+        fv_tee = ET.SubElement(tender, "body", name="tender_fuel_valve", pos="0.023000 -0.006800 0.066600")
         attach_part_inertial(fv_tee, parts_mp["tender_fuel_valve"])
         ET.SubElement(
             fv_tee, "joint", name="j_tender_fuel_valve", type="hinge", axis="0 0 1",
@@ -1414,7 +1477,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             mesh="m_tender_fuel_valve", material="mat_brass", contype="0", conaffinity="0", mass="0"
         )
 
-        fc_cap = ET.SubElement(tender, "body", name="tender_fuel_cap", pos="0.034700 0.006000 0.068600")
+        fc_cap = ET.SubElement(tender, "body", name="tender_fuel_cap", pos="0.034800 0.005600 0.065800")
         attach_part_inertial(fc_cap, parts_mp["tender_fuel_cap"])
         ET.SubElement(
             fc_cap, "joint", name="j_tender_fuel_cap", type="slide", axis="0 0 1",
