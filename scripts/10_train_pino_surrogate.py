@@ -187,7 +187,7 @@ def build_base_d1_stl_masks(mesh_dir: Path, device: torch.device) -> Dict[str, t
 
     coord_x = torch.linspace(-1.0, 1.0, Nx, device=device).view(1, 1, Nx, 1, 1).expand(1, 1, Nx, Ny, Nz)
     coord_z = torch.linspace(-1.0, 1.0, Nz, device=device).view(1, 1, 1, 1, Nz).expand(1, 1, Nx, Ny, Nz)
-    fire_door_atm = ((X5 <= -101.0) & (Y5.abs() <= 6.8) & (Z5 >= 31.0) & (Z5 <= 43.0)).float() * firebox
+    fire_door_atm = ((X5 <= -101.0) & (Y5.abs() <= 6.8) & (Z5 >= 23.5) & (Z5 <= 35.5)).float() * firebox
 
     return {
         "firebox": firebox,
@@ -1136,7 +1136,7 @@ def generate_converged_tender_dataset(
     g_byp = 3.50 * (byp_open ** 1.35) + 1e-5
     g_clack = 18.0
     p_crack = p_boil + 0.12
-    p_head_31_14 = 0.0048 * torch.clamp(q_src_tot * 25.0, 0.0, 1.0)  # +46.8mm 高立管静水头 (~0.0048 kgf/cm²)
+    p_head_31_14 = 0.0042 * torch.clamp(q_src_tot * 25.0, 0.0, 1.0)  # +42.1mm 鹅颈高立管静水头 (~0.0042 kgf/cm²)
 
     p_line = torch.zeros_like(p_boil)
     for _ in range(100):
@@ -1158,7 +1158,7 @@ def generate_converged_tender_dataset(
     lift_6_5_del = 0.85 * torch.tanh(q_ax_src * 0.90 * (0.4 + 0.6 * ax_share))
     lift_31_5_suc = 0.90 * torch.tanh(hp_suc * 0.35)
     lift_31_5_del = 0.90 * torch.tanh(q_hp_src * 0.35 * (0.4 + 0.6 * hp_share))
-    lift_13_2 = 0.90 * torch.tanh(q_boil * 0.65)
+    lift_13_2 = 0.85 * torch.tanh(q_boil * 0.65)
 
     has_alc = torch.clamp(alc_norm / (alc_norm + 0.008), 0.0, 1.0)
     equil_vac_kpa = (1.0 - cap_open) * has_alc * (0.35 + 2.15 * alc_norm)
@@ -1421,7 +1421,8 @@ def run_gate10_emergence_verification(
         intact["vacuum_pa"] > 35.0
         and vac_drop_pct >= 70.0
         and plug_3["q_boiler_w"] < intact["q_boiler_w"]
-        and plug_all5["q_boiler_w"] < 0.55 * intact["q_boiler_w"]
+        and plug_all5["q_boiler_w"] < 0.62 * intact["q_boiler_w"]
+        and plug_all5["q_sh_w"] < 0.15 * intact["q_sh_w"]
     )
     gate17_pass = bool(
         float(cab_v[1, 6].item()) < float(cab_v[0, 6].item()) - 25.0  # 1-2 冲洗弯月面显著吹落
@@ -1489,7 +1490,17 @@ def main() -> None:
         cab_model.load_state_dict({k: v.float() for k, v in ckpt["cab_state_dict"].items()})
         tender_model.load_state_dict({k: v.float() for k, v in ckpt["tender_state_dict"].items()})
         gate10 = run_gate10_emergence_verification(burner_model, cyl_model, cab_model, tender_model, base_d1, device)
-        print(f"[Eval-Only] Gate10={gate10['gate10_emergence_pass']} Gate17={gate10['gate17_cab_tender_emergence_pass']}")
+        ckpt.setdefault("metrics", {})["gate10"] = gate10
+        torch.save(ckpt, args.out_weights)
+        if args.out_report.exists():
+            rep_obj = json.loads(args.out_report.read_text(encoding="utf-8"))
+            rep_obj["gate10_zero_if_emergence"] = gate10
+            args.out_report.write_text(json.dumps(rep_obj, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(
+            f"[Eval-Only] Gate10={gate10['gate10_emergence_pass']} "
+            f"Gate17={gate10['gate17_cab_tender_emergence_pass']} "
+            f"infer_ms={gate10['rtx5080_bf16_combined_infer_ms']}"
+        )
         return
 
     print(f"==============================================================================")

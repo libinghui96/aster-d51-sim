@@ -234,25 +234,25 @@ export class LiveSteamParticles {
       }
     }
 
-    // 5. 1-2 驾驶室左侧 (+Y) 11-7 水面计下部吹拔旋塞排污白汽喷流 (X=-0.1170, Y=+0.0105, Z=+0.0295)
+    // 5. 11-5 驾驶室右侧外缘 (-Y) 11-7 水面计底部六角排污螺塞白汽喷流 (X=-0.1185, Y=-0.0302, Z=+0.0345)
     if (sightPurgeIntensity > 0.03) {
       tmpPos
-        .set(-0.117 + (Math.random() - 0.5) * 0.003, 0.0105 + (Math.random() - 0.5) * 0.003, 0.0295)
+        .set(-0.1185 + (Math.random() - 0.5) * 0.003, -0.0302 + (Math.random() - 0.5) * 0.003, 0.0345)
         .applyMatrix4(locoMatrix);
       tmpVel
-        .set(-0.08 + (Math.random() - 0.5) * 0.08, 0.08 + Math.random() * 0.08, -0.34 - Math.random() * 0.14)
+        .set(-0.08 + (Math.random() - 0.5) * 0.08, -0.06 - Math.random() * 0.06, -0.34 - Math.random() * 0.14)
         .applyMatrix4(rotOnly);
       this.spawn(tmpPos, tmpVel, 0.38, 0.80, 0.014);
     }
 
-    // 6. 11-16 驾驶室右下角排污阀高温饱和闪蒸排污水雾 (X=-0.1155, Y=-0.0148, Z=+0.0195)
+    // 6. 11-16 驾驶室左中下排污阀经下排管高温饱和闪蒸排污水雾 (X=-0.1165, Y=+0.0095, Z=+0.0205)
     if (blowdownIntensity > 0.03) {
       for (let b = 0; b < 2; b++) {
         tmpPos
-          .set(-0.1155 + (Math.random() - 0.5) * 0.004, -0.0148 + (Math.random() - 0.5) * 0.004, 0.0195)
+          .set(-0.1165 + (Math.random() - 0.5) * 0.004, +0.0095 + (Math.random() - 0.5) * 0.004, 0.0205)
           .applyMatrix4(locoMatrix);
         tmpVel
-          .set(-0.18 - Math.random() * 0.12, -0.26 - Math.random() * 0.14, -0.28 - Math.random() * 0.12)
+          .set(-0.18 - Math.random() * 0.12, +0.20 + Math.random() * 0.12, -0.28 - Math.random() * 0.12)
           .applyMatrix4(rotOnly);
         this.spawn(tmpPos, tmpVel, 0.48, 0.76, 0.019);
       }

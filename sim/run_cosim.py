@@ -290,26 +290,32 @@ class CoSimRunner:
         elif self._handpump_vis_timer > 0.0:
             self._handpump_vis_timer = max(0.0, self._handpump_vis_timer - dt)
             self._handpump_vis_phase += dt * 2.0 * math.pi * 2.0
-            hp_tgt = 0.42 * math.sin(self._handpump_vis_phase)
+            hp_tgt = 0.34 * math.sin(self._handpump_vis_phase)
         else:
             self._handpump_vis_phase = 0.0
             hp_tgt = 0.0
 
         pg_val = float(getattr(tel, "pg_bourdon_kgf", tel.boiler_pressure_kgf))
         p_norm = max(0.0, min(1.05, pg_val / 6.0))
+        open_water_bay = (
+            bool(getattr(self.ctrl, "coal_cover_open", False))
+            or float(getattr(self.ctrl, "water_fill_valve", 0.0)) > 0.02
+            or bool(getattr(self.ctrl, "tender_drain_open", False))
+            or abs(hp_tgt) > 0.01
+        )
         targets = {
-            "j_cab_regulator": 1.18 * self.ctrl.regulator,
+            "j_cab_regulator": 1.12 * self.ctrl.regulator,
             "j_cab_blower": 3.14 * self.ctrl.blower_valve,
             "j_cab_whistle": -0.38 * self.ctrl.whistle_valve,
-            "j_cab_sight_drain": 0.0015 if bool(getattr(self.ctrl, "sight_drain_valve", False)) else 0.0,
+            "j_cab_sight_drain": 0.0016 if bool(getattr(self.ctrl, "sight_drain_valve", False)) else 0.0,
             "j_cab_pg_needle": -2.10 + p_norm * 4.20,
             "j_cab_blowdown": 3.14 * float(getattr(self.ctrl, "blowdown_valve", 0.0)),
-            "j_cab_fire_door": -1.65 * self.ctrl.firebox_door,
+            "j_cab_fire_door": +1.65 * self.ctrl.firebox_door,
             "j_cab_bypass": -1.35 * self.ctrl.bypass_valve,
             "j_cab_roof_hatch": 2.10 if bool(getattr(self.ctrl, "cab_roof_open", False)) else 0.0,
             "j_tender_handpump": hp_tgt,
-            "j_tender_drain_plug": 0.0085 if bool(getattr(self.ctrl, "tender_drain_open", False)) else 0.0,
-            "j_tender_coal_cover": 1.65 if bool(getattr(self.ctrl, "coal_cover_open", False)) else 0.0,
+            "j_tender_drain_plug": 0.0050 if bool(getattr(self.ctrl, "tender_drain_open", False)) else 0.0,
+            "j_tender_coal_cover": 1.75 if open_water_bay else 0.0,
             "j_tender_water_lid": 1.45 if self.ctrl.water_lid_open else 0.0,
             "j_tender_fuel_valve": 1.50 * self.ctrl.fuel_valve,
             "j_tender_fuel_cap": 0.0045 if self.ctrl.fuel_cap_open else 0.0,
@@ -325,9 +331,9 @@ class CoSimRunner:
                 self.data.qpos[qadr] = nxt
                 self.data.qvel[dadr] = dq_dt if jname == "j_tender_handpump" else 0.0
                 if jname == "j_tender_handpump":
-                    self._last_v_hand_ram = 0.017 * dq_dt
+                    self._last_v_hand_ram = 0.008 * dq_dt
                     if self.qpos_hp_ram >= 0:
-                        self.data.qpos[self.qpos_hp_ram] = 0.017 * nxt
+                        self.data.qpos[self.qpos_hp_ram] = 0.008 * nxt
                     if self.qvel_hp_ram >= 0:
                         self.data.qvel[self.qvel_hp_ram] = self._last_v_hand_ram
 

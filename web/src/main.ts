@@ -37,21 +37,21 @@ interface InteractivePartEntry {
 
 const INTERACTIVE_PART_META: Record<string, { label: string; kind: InteractivePartEntry["kind"] }> = {
   cab_regulator_vis: { label: "11-11 加減弁ハンドル (上下ドラッグで蒸気開度 11-10 扇形案内)", kind: "drag" },
-  cab_reverser_wheel_vis: { label: "8-16 左運転台・螺旋逆転機手輪 (ドラッグで前後進カットオフ)", kind: "drag" },
-  cab_blower_vis: { label: "11-13 右斜上35°通風弁ノブ → 13-8 外側通風管 (ドラッグで強制ドラフト)", kind: "drag" },
-  cab_whistle_vis: { label: "11-2 汽笛レバー → 13-3 → 11-8 缶胴下真鍮汽笛 (押下ホールドで吹鳴)", kind: "momentary" },
-  cab_sight_drain_vis: { label: "1-2 左側(+Y) 11-7 水面計下部吹抜コック (クリックでフラッシュ洗浄)", kind: "toggle" },
-  cab_blowdown_vis: { label: "11-16/11-17 右下部ブロー弁 (ドラッグ/クリックで缶底排泥ブロー)", kind: "drag" },
-  cab_fire_door_vis: { label: "12-1 二ツ目覗き穴付き左ヒンジ火室扉 (ドラッグで開閉・二次空気流入)", kind: "drag" },
-  cab_bypass_vis: { label: "4-17 給水バイパス弁コック (ドラッグで 31-14 戻水量調整)", kind: "drag" },
-  cab_roof_hatch_vis: { label: "21-28/21-15 運転室屋根天窓ハッチ (クリックで前ヒンジ開閉)", kind: "toggle" },
-  drain_pull_rod_vis: { label: "8-6/8-5 右側ドレン弁引き棒 (クリックで8段排液リンク開閉)", kind: "toggle" },
-  tender_handpump_vis: { label: "37-12/31-5 炭水車 35-1 水槽内水平プランジャ手動ポンプ柄 (クリックで圧送)", kind: "pump" },
-  tender_drain_plug_vis: { label: "31-11/31-9 上引き排水スタンドパイプ栓 (クリックで炭水車底から放水)", kind: "toggle" },
-  tender_coal_cover_vis: { label: "36-1/36-2 前部炭庫上蓋 (クリックで開閉・36-5/36-6 燃料操作部露出)", kind: "toggle" },
-  tender_water_lid_vis: { label: "35-6 後部補助水槽点検蓋 (クリックで開閉)", kind: "toggle" },
-  tender_fuel_valve_vis: { label: "36-6 T字燃料ニードル弁 (ドラッグで 34-2 中央サンプ供油開度)", kind: "drag" },
-  tender_fuel_cap_vis: { label: "36-5 マリオット気密燃料蓋 (クリックで開閉・開弁時ヘッドスペース負圧喪失)", kind: "toggle" },
+  cab_reverser_wheel_vis: { label: "8-16 左運転台・扇形ノッチ式逆転機レバー (ドラッグで前後進カットオフ)", kind: "drag" },
+  cab_blower_vis: { label: "11-13 左上3本スポーク通風弁手輪 → 13-8 外側通風管 (ドラッグで強制ドラフト)", kind: "drag" },
+  cab_whistle_vis: { label: "11-3 左上外 S字汽笛レバー → 13-3 → 11-8 缶胴下真鍮汽笛 (押下ホールドで吹鳴)", kind: "momentary" },
+  cab_sight_drain_vis: { label: "11-5 右側外縁(-Y) 11-7 水面計下部六角ドレン栓 (クリックでフラッシュ洗浄)", kind: "toggle" },
+  cab_blowdown_vis: { label: "11-16/11-17 左中下マイナス溝ブロー弁 (ドラッグ/クリックで缶底排泥ブロー)", kind: "drag" },
+  cab_fire_door_vis: { label: "12-1 低位中央・右ヒンジ火室扉 (ドラッグで開閉・二次空気流入)", kind: "drag" },
+  cab_bypass_vis: { label: "6-9/8-7 右後床面・同軸給水バイパス弁コック (ドラッグで 31-14 戻水量調整)", kind: "drag" },
+  cab_roof_hatch_vis: { label: "21-15/21-28 運転室屋根ベンチレーター天窓 (クリックで前ヒンジ開閉)", kind: "toggle" },
+  drain_pull_rod_vis: { label: "8-6/8-5 右床下ドレン弁水平引き棒 (クリックで8段排液リンク開閉)", kind: "toggle" },
+  tender_handpump_vis: { label: "31-3/31-5 炭水車後部水槽内・横型プランジャ手動ポンプ揺腕 (クリックで圧送)", kind: "pump" },
+  tender_drain_plug_vis: { label: "31-11/31-9 水槽内・上引き排水スタンドパイプ栓 (クリックで炭水車底から放水)", kind: "toggle" },
+  tender_coal_cover_vis: { label: "36-1/36-2 後部給水ハッチ折り蓋 (クリックで開閉・給水口/31-3/31-14 露出)", kind: "toggle" },
+  tender_water_lid_vis: { label: "35-6 後端点検マンホール丸蓋 (クリックで開閉)", kind: "toggle" },
+  tender_fuel_valve_vis: { label: "36-6 前部アルコール槽・左前ニードル弁 (ドラッグで 34-2 サンプ供油開度)", kind: "drag" },
+  tender_fuel_cap_vis: { label: "36-5 前部アルコール槽・右気密燃料蓋 (クリックで開閉・開弁時マリオット負圧喪失)", kind: "toggle" },
 };
 
 function createPg20DialTexture(): THREE.CanvasTexture {
@@ -564,14 +564,14 @@ async function main() {
             const posAttr = rawGeom.getAttribute("position");
             aligned.setAttribute("aCadPos", posAttr.clone());
             if (meshKey === "cab_pg_dial") {
-              // 将 256×256 PG-ø20 白底刻度盘平面投影至 +38° 倾斜表盘面 (法向 [-cos38°, 0, +sin38°])
+              // 将 256×256 PG-ø20 白底刻度盘平面投影至 +22° 倾斜表盘面 (法向 [-cos22°, 0, +sin22°])
               const uvArr = new Float32Array(posAttr.count * 2);
               for (let vi = 0; vi < posAttr.count; vi++) {
                 const px = posAttr.getX(vi);
                 const py = posAttr.getY(vi);
                 const pz = posAttr.getZ(vi);
                 const u = 0.5 - py / 0.0168;
-                const v = 0.5 + (0.615661 * px + 0.788011 * pz) / 0.0168;
+                const v = 0.5 + (0.374607 * px + 0.927184 * pz) / 0.0168;
                 uvArr[2 * vi] = Math.max(0.02, Math.min(0.98, u));
                 uvArr[2 * vi + 1] = Math.max(0.02, Math.min(0.98, v));
               }
@@ -1134,30 +1134,32 @@ async function main() {
   function syncWasmVisualJoints(dtStep: number, pGaugeKgf: number) {
     let hpTgt = 0.0;
     if (aiMode === "human" && Math.abs(humanAgent.handpumpAnimRad) > 1e-4) {
-      hpTgt = humanAgent.handpumpAnimRad;
+      hpTgt = Math.max(-0.36, Math.min(0.36, humanAgent.handpumpAnimRad));
     } else if (handpumpVisTimer > 0.0) {
       handpumpVisTimer = Math.max(0.0, handpumpVisTimer - dtStep);
       handpumpVisPhase += dtStep * 2.0 * Math.PI * 2.1;
-      hpTgt = 0.42 * Math.sin(handpumpVisPhase);
+      hpTgt = 0.34 * Math.sin(handpumpVisPhase);
     } else {
       handpumpVisPhase = 0.0;
     }
 
     const pNorm = Math.max(0.0, Math.min(1.05, pGaugeKgf / 6.0));
+    const openWaterBay =
+      ctrl.coalCoverOpen || ctrl.waterFillValve > 0.02 || ctrl.tenderDrainOpen || Math.abs(hpTgt) > 0.01;
     const targets: Record<string, number> = {
-      j_cab_regulator: 1.18 * ctrl.regulator,
+      j_cab_regulator: 1.12 * ctrl.regulator,
       j_cab_blower: 3.14 * ctrl.blowerValve,
       j_cab_whistle: -0.38 * ctrl.whistleValve,
-      j_cab_sight_drain: ctrl.sightDrainValve ? 0.0015 : 0.0,
+      j_cab_sight_drain: ctrl.sightDrainValve ? 0.0016 : 0.0,
       j_cab_pg_needle: -2.10 + pNorm * 4.20,
       j_cab_blowdown: 3.14 * ctrl.blowdownValve,
-      j_cab_fire_door: -1.65 * ctrl.fireboxDoor,
+      j_cab_fire_door: +1.65 * ctrl.fireboxDoor,
       j_cab_bypass: -1.35 * ctrl.bypassValve,
       j_cab_roof_hatch: ctrl.cabRoofOpen ? 2.10 : 0.0,
       j_tender_handpump: hpTgt,
-      j_tender_hp_ram: 0.017 * hpTgt,
-      j_tender_drain_plug: ctrl.tenderDrainOpen ? 0.0085 : 0.0,
-      j_tender_coal_cover: ctrl.coalCoverOpen ? 1.65 : 0.0,
+      j_tender_hp_ram: 0.008 * hpTgt,
+      j_tender_drain_plug: ctrl.tenderDrainOpen ? 0.0050 : 0.0,
+      j_tender_coal_cover: openWaterBay ? 1.75 : 0.0,
       j_tender_water_lid: ctrl.waterLidOpen ? 1.45 : 0.0,
       j_tender_fuel_valve: 1.50 * ctrl.fuelValve,
       j_tender_fuel_cap: ctrl.fuelCapOpen ? 0.0045 : 0.0,

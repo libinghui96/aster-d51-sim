@@ -485,9 +485,9 @@ class AsterD51Thermo3DGPU:
         ).float()
         self.d5_fw_solid = s5_fw
 
-        # === Domain 6: 31-10/35-1 煤水车敞口水槽守恒浅水波自由液面 + 热混合网格 (48×20) ===
+        # === Domain 6: 31-10/35-1 煤水车独立后置水槽守恒浅水波自由液面 + 热混合网格 (48×20) ===
         nx6, ny6 = self.D6_SHAPE
-        self.d6_xr, self.d6_yr = (-95.0, 22.0), (-36.0, 36.0)
+        self.d6_xr, self.d6_yr = (-88.2, -4.8), (-37.4, 37.4)
         xs6 = torch.linspace(self.d6_xr[0], self.d6_xr[1], nx6, device=dev)
         ys6 = torch.linspace(self.d6_yr[0], self.d6_yr[1], ny6, device=dev)
         X6, Y6 = torch.meshgrid(xs6, ys6, indexing="ij")
@@ -496,22 +496,22 @@ class AsterD51Thermo3DGPU:
         self.d6_dx_m = (self.d6_xr[1] - self.d6_xr[0]) / (nx6 - 1) * 1e-3
         self.d6_dy_m = (self.d6_yr[1] - self.d6_yr[0]) / (ny6 - 1) * 1e-3
 
-        # 从真实煤水车外壳/手摇泵 STL 校验敞口槽 35-1 几何边界 [-58, -10] × [-17.5, +17.5] mm
+        # 从真实煤水车外壳 STL (Z∈[63.2, 65.6]mm 35-1 甲板) 校验后置敞口槽 [-84.0, -18.5] × [-16.8, +16.8] mm
         tris_tdr_shell = load_stl_triangles_mm(mesh_dir / "tender_body.stl")
-        s6_shell_top = voxelize_stl_cuda(tris_tdr_shell, self.d6_xr, self.d6_yr, (41.0, 44.5), (nx6, ny6, 4), dev).amax(dim=-1)
-        self.d6_tank_mask = ((X6 >= -94.0) & (X6 <= 21.0) & (Y6.abs() <= 35.0)).float().unsqueeze(0).unsqueeze(0).contiguous()
+        s6_shell_top = voxelize_stl_cuda(tris_tdr_shell, self.d6_xr, self.d6_yr, (63.2, 65.6), (nx6, ny6, 4), dev).amax(dim=-1)
+        self.d6_tank_mask = ((X6 >= -87.0) & (X6 <= -6.0) & (Y6.abs() <= 36.2)).float().unsqueeze(0).unsqueeze(0).contiguous()
         self.d6_open_bay = (
-            ((X6 >= -58.0) & (X6 <= -10.0) & (Y6.abs() <= 17.5) & (s6_shell_top < 0.5))
+            ((X6 >= -84.0) & (X6 <= -18.5) & (Y6.abs() <= 16.8) & (s6_shell_top < 0.5))
             .float()
             .unsqueeze(0)
             .unsqueeze(0)
             .contiguous()
         )
-        # 35-1 敞口槽中央注水区 (-34, 0)、31-14 左前鹅颈回水落点 (-21.5, +5.5)、31-11/31-9 底部排水口 (-38, -8)、31-5 吸水滤网 (-20, -4)
-        fill_g = torch.exp(-(((X6 + 34.0) / 7.5) ** 2 + (Y6 / 7.5) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
-        ret_g = torch.exp(-(((X6 + 21.5) / 5.2) ** 2 + ((Y6 - 5.5) / 5.2) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
-        drn_g = torch.exp(-(((X6 + 38.0) / 5.5) ** 2 + ((Y6 + 8.0) / 5.5) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
-        hp_g = torch.exp(-(((X6 + 20.0) / 6.0) ** 2 + ((Y6 + 4.0) / 6.0) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
+        # 35-1 敞口槽中央注水区 (-51.2, 0.0)、31-14 左前鹅颈回水落点 (-30.5, +9.0)、31-11/31-9 底部排水口 (-44.5, -9.1)、31-5 吸水阀塔 (-68.5, +4.0)
+        fill_g = torch.exp(-(((X6 + 51.2) / 8.0) ** 2 + (Y6 / 7.5) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
+        ret_g = torch.exp(-(((X6 + 30.5) / 5.2) ** 2 + ((Y6 - 9.0) / 5.2) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
+        drn_g = torch.exp(-(((X6 + 44.5) / 5.5) ** 2 + ((Y6 + 9.1) / 5.5) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
+        hp_g = torch.exp(-(((X6 + 68.5) / 6.0) ** 2 + ((Y6 - 4.0) / 6.0) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
         self.d6_fill_src = (fill_g / torch.clamp(fill_g.sum(), min=1e-5)).contiguous()
         self.d6_ret_src = (ret_g / torch.clamp(ret_g.sum(), min=1e-5)).contiguous()
         self.d6_drain_sink = (drn_g / torch.clamp(drn_g.sum(), min=1e-5)).contiguous()
@@ -678,7 +678,7 @@ class AsterD51Thermo3DGPU:
                 1.0,
             )
         wick_c = wick_c * fb_c * (0.4 + 0.6 * brn_c) * fluid_c
-        fire_door_atm_c = ((X5c <= -101.0) & (Y5c.abs() <= 6.8) & (Z5c >= 31.0) & (Z5c <= 43.0)).float() * fb_c * fluid_c
+        fire_door_atm_c = ((X5c <= -101.0) & (Y5c.abs() <= 6.8) & (Z5c >= 23.5) & (Z5c <= 35.5)).float() * fb_c * fluid_c
         blast_c = ((rc_chim <= 7.6) & (Z5c >= 46.0) & (Z5c <= 85.0)).float() * torch.clamp(sb_c + st_c, 0.0, 1.0) * fluid_c
 
         crown_slices_c = []
@@ -1420,9 +1420,9 @@ class AsterD51Thermo3DGPU:
         z_interface = (0.4 + 11.6 * water_frac) - (self.X5L - 154.0) * math.tan(theta_eff)
         self.d5_field[1, 0] = torch.sigmoid((z_interface - self.Z5L) / 0.55) * self.d5_lub_cavity
 
-        # === [Domain 6] 煤水车 31-10 / 35-1 敞口水槽二维浅水波自由液面 + 加水/回水/放水热混合 PDE ===
+        # === [Domain 6] 煤水车 31-10 / 35-1 独立后置水槽二维浅水波自由液面 + 加水/回水/放水热混合 PDE ===
         w_frac6 = max(0.0, min(1.0, self.core1d.tender_water_ml / max(1.0, self.core1d.tender_water_cap_ml)))
-        h0_m = max(0.0025, 0.039 * w_frac6)
+        h0_m = max(0.0025, 0.045 * w_frac6)
         c2_wave = 9.81 * h0_m  # m²/s² 浅水重力波速平方
         q_fill_mls = 18.0 * max(0.0, min(1.0, float(getattr(ctrl, "water_fill_valve", 0.0))))
         q_ret_mls = float(self.core1d.ext_pino_tender[1]) if self.core1d.ext_pino_tender is not None else 0.0
@@ -1597,8 +1597,8 @@ class AsterD51Thermo3DGPU:
         small_2d = F.interpolate(slab_max, size=(64, 24), mode="bilinear", align_corners=False)[0, 0]
         u8_slice = torch.clamp((small_2d - 295.0) / 880.0 * 255.0, 0.0, 255.0).to(torch.uint8).reshape(-1).tolist()
 
-        # 截取 35-1 敞口注水槽区域 X∈[-58, -10], Y∈[-17.5, +17.5] 导出 24×10 自由液面波高场 (128 == 0.0mm, ±2.5mm -> 0..255)
-        eta_bay = self.d6_state[:, 0:1, 14:35, 5:15]
+        # 截取 35-1 后部敞口注水槽区域 X∈[-84.0, -18.5], Y∈[-16.8, +16.8] 导出 24×10 自由液面波高场 (128 == 0.0mm, ±2.5mm -> 0..255)
+        eta_bay = self.d6_state[:, 0:1, 2:40, 5:15]
         wave_2d = F.interpolate(eta_bay, size=(24, 10), mode="bilinear", align_corners=False)[0, 0]
         u8_wave = torch.clamp(128.0 + (wave_2d / 2.5) * 127.0, 0.0, 255.0).to(torch.uint8).reshape(-1).tolist()
         bay_temp_c = round(

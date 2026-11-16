@@ -137,13 +137,13 @@ def default_d51_kinematics() -> Dict[str, Any]:
         "tender_and_track": {
             "drawbar_loco_pin_x": -146.0,
             "drawbar_length": 34.0,
-            "drawbar_tender_pin_local_x": 116.0,
-            "tender_body_length": 226.0,
-            "tender_body_width": 74.0,
-            "tender_body_height": 52.0,
+            "drawbar_tender_pin_local_x": 102.0,  # p46/p47 300DPI 正交照片标定 (4.822 px/mm): 32-2/32-8 前端牵引销 X=+102.0mm
+            "tender_body_length": 200.7,          # p46/p47 33-10 炭水車本体总长 200.7mm (32-10 底架总长 211.0mm)
+            "tender_body_width": 81.5,            # p47 45mm 轨距标尺标定: 炭水車全宽 81.5mm (与机车驾驶室 81.2mm 齐宽)
+            "tender_body_height": 65.0,           # p46 煤斗顶缘 Z=+78.2mm / 后甲板 35-1 Z=+65.0mm
             "tender_deck_z": 18.0,
-            "bogie_center_span": 116.0,
-            "bogie_wheelbase": 48.0,
+            "bogie_center_span": 112.5,           # p46/p47 前后转向架中心距 112.5mm
+            "bogie_wheelbase": 48.4,              # p46/p47 转向架轴距 48.4mm
             "tender_wheel_diameter": 26.8,
             "empty_mass_kg": 1.15,
             "curve_radius_mm": 2000.0,

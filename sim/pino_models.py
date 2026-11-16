@@ -656,9 +656,9 @@ class TenderHydraulicPINO(nn.Module):
         q_pump_tot = q_axle_disp + q_hand_disp
 
         # 共用给水总管压力 p_line_shared_kgf 与 13-2 逆止阀开启压差精确互补平衡:
-        # 31-14 鹅颈立管静水头 ~0.0048 kgf/cm², 13-2 逆止阀开启压差 p_boil + 0.12 kgf/cm²
+        # 31-14 鹅颈立管静水头 ~0.0042 kgf/cm² (+42.1mm), 13-2 逆止阀 (SB-ø3) 开启压差 p_boil + 0.12 kgf/cm²
         p_crack = p_boil + 0.12
-        p_head = 0.0048 * torch.clamp(q_pump_tot * 25.0, 0.0, 1.0)
+        p_head = 0.0042 * torch.clamp(q_pump_tot * 25.0, 0.0, 1.0)
         g_byp = (byp_open ** 1.35) * (2.6 + 1.8 * torch.sigmoid(raw_v[:, 2:3])) + 1e-5
         g_clack = 14.0 + 8.0 * torch.sigmoid(raw_v[:, 3:4])
         p_sub = p_head + q_pump_tot / g_byp
@@ -673,7 +673,7 @@ class TenderHydraulicPINO(nn.Module):
         # 31-11 提拉排水栓 -> 31-9 底部重力放水 (Torricelli 定律 q_drain ∝ drn_open * sqrt(h_water))
         q_drain = drn_open * torch.sqrt(w_norm + 1e-6) * (3.2 + 1.6 * torch.sigmoid(raw_v[:, 4:5])) * has_water
 
-        # 5 颗不锈钢止回球真实升程 (mm): 由各自前后压差/冲程流量连续涌现!
+        # 5 颗不锈钢止回球真实升程 (mm): 6-5 (SB-ø3x2), 31-5 (SB-ø4x2), 13-2 (SB-ø3x1)
         axle_suc_flow = 8.0425 * torch.clamp(v_axle, min=0.0) * has_water
         hand_suc_flow = 38.4845 * torch.clamp(v_hand, min=0.0) * has_water
         # 当手摇泵 31-5 高压压水且轴动泵未压水时，共用管高压自动压死 6-5 出口球 (lift_6_5_del -> 0)!
@@ -683,7 +683,7 @@ class TenderHydraulicPINO(nn.Module):
         lift_6_5_del = 0.85 * torch.tanh(q_axle_disp * 0.9 * (0.4 + 0.6 * axle_share) * (0.8 + 0.4 * torch.sigmoid(raw_v[:, 6:7])))
         lift_31_5_suc = 0.90 * torch.tanh(hand_suc_flow * 0.35 * (0.8 + 0.4 * torch.sigmoid(raw_v[:, 7:8])))
         lift_31_5_del = 0.90 * torch.tanh(q_hand_disp * 0.35 * (0.4 + 0.6 * hand_share) * (0.8 + 0.4 * torch.sigmoid(raw_v[:, 8:9])))
-        lift_13_2 = 0.90 * torch.tanh(q_boil * 0.65)
+        lift_13_2 = 0.85 * torch.tanh(q_boil * 0.65)
 
         # 36-4 马氏瓶顶空真空度 (kPa) 与 34-2 恒液位サンプ重力补醇流量 (ml/s):
         # 旋紧 36-5 (cap_open=0) 时顶空维持 ρ_alc * g * h_col 静水平衡负压，仅当 sump_norm < 1.0 (3.5 ml) 时冒泡补液；
