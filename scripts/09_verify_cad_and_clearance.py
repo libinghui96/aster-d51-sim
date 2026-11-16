@@ -2547,7 +2547,11 @@ def verify_gate_19(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         )
 
     # 19.2 核验真实蒸汽排汽质量流量 & 干烧持续沸腾直至锅水彻底蒸干 (<1.0ml, Z_free<=18.8mm, Domain 2 液相体积分数归零!)
-    runner = CoSimRunner(PROJECT_ROOT / "models" / "d51_full.xml", preset="hot", use_gpu_3d=True)
+    import torch
+    from sim.thermo_3d_gpu import AsterD51Thermo3DGPU
+
+    has_cuda = torch.cuda.is_available()
+    runner = CoSimRunner(PROJECT_ROOT / "models" / "d51_full.xml", preset="hot", use_gpu_3d=has_cuda)
     runner.ctrl.reverser = 0.75
     runner.ctrl.regulator = 0.65
     runner.ctrl.blower_valve = 0.35
@@ -2562,23 +2566,33 @@ def verify_gate_19(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         tel_run = runner.step_once()
         max_exh_gs = max(max_exh_gs, float(tel_run.exhaust_g_s))
 
-    d2_init_vox = float(runner.thermo.d2_alpha_w.sum().item())
+    core_th = runner.thermo.core1d if has_cuda else runner.thermo
+    gpu3d_probe = runner.thermo if has_cuda else AsterD51Thermo3DGPU(runner.calib)
+    if not has_cuda:
+        gpu3d_probe.reset_hot_ready()
+    d2_init_vox = float(gpu3d_probe.d2_alpha_w.sum().item())
+
     # 从 145 ml (火室顶板临界点) 持续干烧沸腾排汽直至 < 1.0 ml 彻底蒸干!
-    runner.thermo.core1d.M_water_kg = 0.145
+    core_th.M_water_kg = 0.145
     runner.ctrl.regulator = 0.45
     runner.ctrl.blower_valve = 0.65
     runner.ctrl.thermal_warp = 150.0
     z_mid_70 = 999.0
     for _ in range(16000):
-        if runner.thermo.core1d.alcohol_ml < 25.0:
-            runner.thermo.core1d.alcohol_ml = 130.0
+        if core_th.alcohol_ml < 25.0:
+            core_th.alcohol_ml = 130.0
         tel_dry = runner.step_once()
         if 62.0 <= tel_dry.boiler_water_ml <= 78.0:
             z_mid_70 = min(z_mid_70, float(tel_dry.water_free_z_mm))
         if tel_dry.boiler_water_ml <= 0.05 and tel_dry.crown_temp_c >= 435.0:
             break
 
-    d2_final_vox = float(runner.thermo.d2_alpha_w.sum().item())
+    if not has_cuda:
+        gpu3d_probe.core1d.M_water_kg = core_th.M_water_kg
+        gpu3d_probe.core1d.T_crown_c = core_th.T_crown_c
+        gpu3d_probe._step_counter = gpu3d_probe.cfd_subdiv - 1
+        gpu3d_probe.step(0.0005, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, runner.ctrl)
+    d2_final_vox = float(gpu3d_probe.d2_alpha_w.sum().item())
     if not (
         max_exh_gs >= 0.025
         and 34.0 <= z_mid_70 <= 38.5

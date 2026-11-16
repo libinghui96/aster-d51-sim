@@ -117,8 +117,18 @@ async function main() {
   mujoco.FS.mkdir("/working/meshes");
 
   const modelBase = `${import.meta.env.BASE_URL}models`;
-  const manifestResp = await fetch(`${modelBase}/manifest.json`);
-  const manifest: { xmls: string[]; meshes: string[]; configs?: string[] } = await manifestResp.json();
+  const manifestResp = await fetch(`${modelBase}/manifest.json?t=${Date.now()}`, { cache: "no-cache" });
+  const manifest: {
+    xmls: string[];
+    meshes: string[];
+    configs?: string[];
+    hashes?: Record<string, string>;
+    build_hash?: string;
+  } = await manifestResp.json();
+  const assetUrl = (relPath: string): string => {
+    const h = manifest.hashes?.[relPath] || manifest.build_hash || "";
+    return h ? `${modelBase}/${relPath}?v=${h}` : `${modelBase}/${relPath}`;
+  };
   const stlLoader = new STLLoader();
   const stlGeomMap = new Map<string, THREE.BufferGeometry>();
 
@@ -126,7 +136,7 @@ async function main() {
   const cfgList = manifest.configs || [];
   if (cfgList.includes("smokebox_lut.json")) {
     try {
-      smokeboxLut = await (await fetch(`${modelBase}/smokebox_lut.json`)).json();
+      smokeboxLut = await (await fetch(assetUrl("smokebox_lut.json"))).json();
     } catch {
       smokeboxLut = null;
     }
@@ -135,18 +145,29 @@ async function main() {
   const oracleAgent = new IdealOracleTS();
   const whistleAudio = new BrassWhistleAudio();
 
-  for (const xmlName of manifest.xmls) {
-    const txt = await (await fetch(`${modelBase}/${xmlName}`)).text();
-    mujoco.FS.writeFile(`/working/${xmlName}`, txt);
-  }
-  for (const stlName of manifest.meshes) {
-    loadingText.textContent = `正在挂载 CAD 零件网格: ${stlName} ...`;
-    const buf = await (await fetch(`${modelBase}/meshes/${stlName}`)).arrayBuffer();
-    mujoco.FS.writeFile(`/working/meshes/${stlName}`, new Uint8Array(buf));
-    const geom = stlLoader.parse(buf);
-    geom.scale(0.001, 0.001, 0.001);
-    geom.computeVertexNormals();
-    stlGeomMap.set(stlName.replace(".stl", ""), geom);
+  await Promise.all(
+    manifest.xmls.map(async (xmlName) => {
+      const txt = await (await fetch(assetUrl(xmlName))).text();
+      mujoco.FS.writeFile(`/working/${xmlName}`, txt);
+    })
+  );
+
+  const batchSize = 16;
+  let loadedCount = 0;
+  for (let i = 0; i < manifest.meshes.length; i += batchSize) {
+    const chunk = manifest.meshes.slice(i, i + batchSize);
+    await Promise.all(
+      chunk.map(async (stlName) => {
+        const buf = await (await fetch(assetUrl(`meshes/${stlName}`))).arrayBuffer();
+        mujoco.FS.writeFile(`/working/meshes/${stlName}`, new Uint8Array(buf));
+        const geom = stlLoader.parse(buf);
+        geom.scale(0.001, 0.001, 0.001);
+        geom.computeVertexNormals();
+        stlGeomMap.set(stlName.replace(".stl", ""), geom);
+        loadedCount++;
+        loadingText.textContent = `正在挂载 CAD 零件网格 (${loadedCount}/${manifest.meshes.length}): ${stlName} ...`;
+      })
+    );
   }
 
   const container = document.getElementById("canvas-container")!;
@@ -248,11 +269,14 @@ async function main() {
   const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const hostName = window.location.hostname || "127.0.0.1";
   const sameOriginWs = `${wsProto}//${window.location.host}/ws`;
+  const isStaticPagesHost = hostName.endsWith(".github.io");
   const wsCandidates: string[] = explicitWs
     ? [explicitWs]
-    : window.location.protocol === "https:"
-      ? [sameOriginWs]
-      : Array.from(new Set([sameOriginWs, `ws://${hostName}:8765/ws`, "ws://127.0.0.1:8765/ws"]));
+    : isStaticPagesHost
+      ? []
+      : window.location.protocol === "https:"
+        ? [sameOriginWs]
+        : Array.from(new Set([sameOriginWs, `ws://${hostName}:8765/ws`, "ws://127.0.0.1:8765/ws"]));
   let wsCandidateIdx = 0;
 
   const sendWsMessage = (payload: Record<string, any>) => {
@@ -429,6 +453,7 @@ async function main() {
     };
 
     for (const jn of [
+      "j_reverser_wheel",
       "j_cab_regulator",
       "j_cab_blower",
       "j_cab_whistle",
@@ -1202,6 +1227,7 @@ async function main() {
     const openWaterBay =
       ctrl.coalCoverOpen || ctrl.waterFillValve > 0.02 || ctrl.tenderDrainOpen || Math.abs(hpTgt) > 0.01;
     const targets: Record<string, number> = {
+      j_reverser_wheel: 12.56 * ctrl.reverser,
       j_cab_regulator: 1.12 * ctrl.regulator,
       j_cab_blower: 3.14 * ctrl.blowerValve,
       j_cab_whistle: -0.38 * ctrl.whistleValve,

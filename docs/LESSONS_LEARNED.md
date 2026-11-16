@@ -270,6 +270,18 @@
 
 ---
 
+### 失误 25：GitHub Actions 纯 CPU Runner 漏装 `torch` 阻断 Pages 自动发布，以及静态 `.stl / .xml` 缺失内容指纹（SHA-256）导致线上 CDN/浏览器命中旧网格缓存
+- **错误现象**：本地代码与 96 件 `.stl` 推送至 `main` 后，线上页面 `https://libinghui96.github.io/aster-d51-sim/` 的机车三维结构与功能仍停留在数天前的旧版模型。
+- **根因剖析**：
+  1. **CI 部署链在门禁步骤因纯 CPU 环境差异中断**：`.github/workflows/simulate.yml` 运行在无 GPU 的 `ubuntu-latest` 上，先前仅安装 `mujoco numpy matplotlib pillow scipy` 而未安装 CPU 版 `torch`，导致新增 PINO/3D 门禁（`Gates 10, 13, 17, 19`）在导入 `torch` 时报错退出，后续 `deploy-pages` 任务被整体 `skipped`；此外长时蒸干门禁若在纯 CPU 上逐步跑满 16,000 步 5.71M 体素 3D PDE 会严重拖慢 CI；
+  2. **`web/public/models/` 静态资产无文件名哈希**：Vite 仅对打包后的 `assets/index-XXXX.js` 生成内容哈希，而通过 `fetch()` 动态拉取的 `manifest.json`、`d51_full.xml` 及 96 个 `meshes/*.stl` 原先均使用裸路径，容易命中 GitHub Pages Fastly CDN 或浏览器磁盘旧缓存（甚至出现新 `.xml` 配旧 `.stl` 的惯量对齐错位）；
+  3. **纯静态 Pages 域名无效探测 `/ws` 与离线 WASM 漏绑新增视觉关节**：`*.github.io` 纯静态托管无后端 WebSocket，若前端默认轮询同源 `wss://*.github.io/ws` 会持续产生 404 重连噪声；新增的丝杠逆转手轮关节 `j_reverser_wheel` 也须同步注册进离线 WASM `visJointMap`。
+- **强制规范**：
+  1. CI 工作流必须显式安装轻量级 CPU 版 PyTorch（`pip install torch --index-url https://download.pytorch.org/whl/cpu`），`voxelize_stl_cuda` 对静态网格做内容寻址缓存（`blake2b`），长时积分门禁自动识别 `torch.cuda.is_available()`（有 GPU 时跑全步 3D PDE，纯 CPU CI 时跑 1D 积分 + 3D 体素场初末态同步断言），每次修改门禁后必须用 `CUDA_VISIBLE_DEVICES=""` 本地预演；
+  2. `scripts/05_sync_web_assets.py` 必须为每个 `.xml / .stl / .json` 计算 SHA-256 指纹写入 `manifest.json`，前端以 `{ cache: "no-cache" }` 拉取 `manifest.json?t=...` 并为所有模型/网格 URL 附加 `?v=<sha256>`，同时按 `16` 并发批次并行加载 STL；在 `*.github.io` 域名下（未显式传 `?ws=` 时）自动跳过同源 `/ws` 探测。
+
+---
+
 ## 二、新蒸汽机车数字孪生标准立项流水线（SOP）
 
 未来新增任何一款蒸汽机车（如 C62 / D52 / Big Boy）时，严格按以下 6 步流水线推进，一步一门禁：

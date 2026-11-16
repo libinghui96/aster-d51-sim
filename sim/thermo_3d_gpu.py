@@ -74,6 +74,9 @@ def load_stl_triangles_mm(stl_path: Path) -> np.ndarray:
     return arr["v"].astype(np.float32, copy=True)
 
 
+_VOXEL_CACHE: Dict[Tuple[Any, ...], torch.Tensor] = {}
+
+
 @torch.no_grad()
 def voxelize_stl_cuda(
     tris_mm: np.ndarray,
@@ -85,6 +88,13 @@ def voxelize_stl_cuda(
     ray_batch: int = 4096,
 ) -> torch.Tensor:
     """在 GPU 上使用 +Z 射线奇偶交叉准则 (Jordan Curve Parity) 将闭合水密 STL 体素化为 (Nx, Ny, Nz) float32 固体掩码。"""
+    import hashlib
+    mesh_sig = hashlib.blake2b(np.ascontiguousarray(tris_mm, dtype=np.float32).view(np.uint8), digest_size=12).hexdigest()
+    cache_key = (mesh_sig, x_range_mm, y_range_mm, z_range_mm, shape, str(device))
+    cached = _VOXEL_CACHE.get(cache_key)
+    if cached is not None:
+        return cached.clone()
+
     nx, ny, nz = shape
     xs = torch.linspace(x_range_mm[0], x_range_mm[1], nx, device=device, dtype=torch.float32) + 1.37e-4
     ys = torch.linspace(y_range_mm[0], y_range_mm[1], ny, device=device, dtype=torch.float32) - 1.91e-4
@@ -161,7 +171,9 @@ def voxelize_stl_cuda(
             above = (zh[:, None] > zs[None, :]).to(torch.int32)
             counts_all[r0:r1].index_add_(0, hit_r, above)
 
-    return (counts_all & 1).to(torch.float32).reshape(nx, ny, nz)
+    out_vox = (counts_all & 1).to(torch.float32).reshape(nx, ny, nz)
+    _VOXEL_CACHE[cache_key] = out_vox
+    return out_vox.clone()
 
 
 @torch.no_grad()
