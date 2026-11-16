@@ -21,7 +21,11 @@ import argparse
 import asyncio
 import base64
 import json
+import math
 import mimetypes
+import os
+import signal
+import sys
 import time
 from pathlib import Path
 from dataclasses import asdict
@@ -29,6 +33,7 @@ from typing import Any, Dict, Optional, Set
 
 from aiohttp import WSMsgType, web
 import mujoco
+import numpy as np
 import torch
 
 from sim.bonsai_copilot import AsyncBonsaiCopilot, CopilotDiagnosis
@@ -40,6 +45,86 @@ from sim.thermo_1d import CabControls, ThermoTelemetry
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 WEB_DIST_DIR = (PROJECT_ROOT / "web" / "dist").resolve()
+SERVER_LOG_PATH = PROJECT_ROOT / "logs" / "gpu_server.log"
+
+
+class _SafeTeeStream:
+    """
+    保护后台常驻进程不因 SSH / IDE 伪终端关闭 (/dev/pts/N deleted -> OSError EIO/EPIPE) 而崩溃！
+    所有标准输出/错误同时落盘至 logs/gpu_server.log，并在原终端可用时同步回显。
+    """
+
+    def __init__(self, orig_stream: Any, log_path: Path):
+        self._orig = orig_stream
+        self._orig_dead = False
+        self._log_path = log_path
+        self._log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def write(self, data: str) -> int:
+        if not data:
+            return 0
+        if not self._orig_dead and self._orig is not None:
+            try:
+                self._orig.write(data)
+            except OSError:
+                self._orig_dead = True
+        try:
+            with self._log_path.open("a", encoding="utf-8") as f:
+                f.write(data)
+        except OSError:
+            pass
+        return len(data)
+
+    def flush(self) -> None:
+        if not self._orig_dead and self._orig is not None:
+            try:
+                self._orig.flush()
+            except OSError:
+                self._orig_dead = True
+
+    def isatty(self) -> bool:
+        return False
+
+
+def _sanitize_json_value(obj: Any) -> Any:
+    """递归过滤 NaN / Inf，确保 json.dumps(allow_nan=False) 100% 符合浏览器 JSON.parse 规范。"""
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else 0.0
+    if isinstance(obj, dict):
+        return {k: _sanitize_json_value(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_json_value(x) for x in obj]
+    return obj
+
+
+def _terminate_stale_gpu_servers(my_pid: int) -> None:
+    """启动前自动清理同用户残留的旧 sim.gpu_3d_server 进程，杜绝 Address already in use 与僵尸 PTY 进程占口。"""
+    uid = os.getuid()
+    proc_root = Path("/proc")
+    if not proc_root.exists():
+        return
+    killed_pids: list[int] = []
+    for p in proc_root.iterdir():
+        if not p.name.isdigit():
+            continue
+        pid = int(p.name)
+        if pid == my_pid:
+            continue
+        try:
+            if p.stat().st_uid != uid:
+                continue
+            cmdline = p.joinpath("cmdline").read_bytes().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
+            if "sim.gpu_3d_server" in cmdline or "sim/gpu_3d_server.py" in cmdline:
+                os.kill(pid, signal.SIGTERM)
+                killed_pids.append(pid)
+        except Exception:
+            continue
+    if killed_pids:
+        for _ in range(25):
+            alive = [pid for pid in killed_pids if Path(f"/proc/{pid}").exists()]
+            if not alive:
+                break
+            time.sleep(0.1)
 
 SCENE_XML_MAP = {
     "roller": PROJECT_ROOT / "models" / "d51_full.xml",
@@ -187,7 +272,10 @@ def pack_frame_payload(
         },
         "copilot": copilot_diag.to_dict() if copilot_diag is not None else None,
     }
-    return json.dumps(payload, separators=(",", ":"))
+    try:
+        return json.dumps(payload, separators=(",", ":"), allow_nan=False)
+    except ValueError:
+        return json.dumps(_sanitize_json_value(payload), separators=(",", ":"), allow_nan=False)
 
 
 class GPU3DRealtimeBridge:
@@ -310,12 +398,12 @@ class GPU3DRealtimeBridge:
             self.switch_scene(str(msg.get("scene", "roller")))
 
     async def ws_handler(self, request: web.Request) -> web.WebSocketResponse:
-        ws = web.WebSocketResponse(max_msg_size=2 * 1024 * 1024, heartbeat=25.0)
+        ws = web.WebSocketResponse(max_msg_size=2 * 1024 * 1024, heartbeat=55.0, autoping=True)
         await ws.prepare(request)
         self.clients.add(ws)
         peer = request.remote or "browser"
-        print(f"[WS-3D] 浏览器客户端已连接: {peer} (在线数={len(self.clients)})")
         try:
+            print(f"[WS-3D] 浏览器客户端已连接: {peer} (在线数={len(self.clients)})")
             await ws.send_str(
                 pack_frame_payload(
                     self.scene,
@@ -329,8 +417,12 @@ class GPU3DRealtimeBridge:
             async for msg in ws:
                 if msg.type == WSMsgType.TEXT:
                     self.handle_message(msg.data)
-                elif msg.type == WSMsgType.ERROR:
+                elif msg.type in (WSMsgType.ERROR, WSMsgType.CLOSE, WSMsgType.CLOSED):
                     break
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            print(f"[WS-3D] 客户端会话异常 ({peer}): {exc!r}")
         finally:
             self.clients.discard(ws)
             print(f"[WS-3D] 浏览器客户端断开: {peer} (在线数={len(self.clients)})")
@@ -390,53 +482,73 @@ class GPU3DRealtimeBridge:
                 continue
 
             t0 = time.perf_counter()
-            tel = self.last_tel
-            for _ in range(steps_per_frame):
-                tel = self.runner.step_once()
-            self.last_tel = tel
-            if self.ai_mode == "human":
-                self.human_agent.update(
-                    steps_per_frame * dt_mj, tel, self.runner.ctrl, hand_pump_cb=self.runner.trigger_hand_pump
-                )
-                self.runner.external_handpump_rad = (
-                    self.human_agent.handpump_anim_rad if abs(self.human_agent.handpump_anim_rad) > 1e-4 else None
-                )
-                self.ai_status = self.human_agent.status_summary
-            elif self.ai_mode == "oracle":
-                self.runner.external_handpump_rad = None
-                self.oracle_agent.update(
-                    steps_per_frame * dt_mj, tel, self.runner.ctrl, hand_pump_cb=self.runner.trigger_hand_pump
-                )
-                self.ai_status = self.oracle_agent.status_summary
-            else:
-                self.runner.external_handpump_rad = None
-                self.ai_status = ""
+            try:
+                tel = self.last_tel
+                for s_i in range(steps_per_frame):
+                    tel = self.runner.step_once()
+                    # 每 8 步主动让出一次 asyncio 事件循环 (<4ms 粒度)，防止重负载步进饿死 WS PING/PONG 与控制帧读取!
+                    if s_i % 8 == 7:
+                        await asyncio.sleep(0)
 
-            self.copilot.submit_telemetry_nonblocking(
-                asdict(tel), asdict(self.runner.ctrl), self.runner.thermo.spatial.to_dict()
-            )
-            frame_json = pack_frame_payload(
-                self.scene,
-                self.runner,
-                tel,
-                self.ai_mode,
-                self.ai_status,
-                self.copilot.get_latest_diagnosis(),
-            )
-            stale: list[web.WebSocketResponse] = []
-            for ws in list(self.clients):
-                if ws.closed:
-                    stale.append(ws)
-                    continue
-                try:
-                    await ws.send_str(frame_json)
-                except Exception:
-                    stale.append(ws)
-            for ws in stale:
-                self.clients.discard(ws)
+                if not np.all(np.isfinite(self.runner.data.qpos)):
+                    print("[WS-3D] 检测到 MuJoCo qpos 非有限值，已自动重置动力学状态保持在线!")
+                    mujoco.mj_resetData(self.runner.model, self.runner.data)
+                    mujoco.mj_forward(self.runner.model, self.runner.data)
+
+                self.last_tel = tel
+                if self.ai_mode == "human":
+                    self.human_agent.update(
+                        steps_per_frame * dt_mj, tel, self.runner.ctrl, hand_pump_cb=self.runner.trigger_hand_pump
+                    )
+                    self.runner.external_handpump_rad = (
+                        self.human_agent.handpump_anim_rad if abs(self.human_agent.handpump_anim_rad) > 1e-4 else None
+                    )
+                    self.ai_status = self.human_agent.status_summary
+                elif self.ai_mode == "oracle":
+                    self.runner.external_handpump_rad = None
+                    self.oracle_agent.update(
+                        steps_per_frame * dt_mj, tel, self.runner.ctrl, hand_pump_cb=self.runner.trigger_hand_pump
+                    )
+                    self.ai_status = self.oracle_agent.status_summary
+                else:
+                    self.runner.external_handpump_rad = None
+                    self.ai_status = ""
+
+                self.copilot.submit_telemetry_nonblocking(
+                    asdict(tel), asdict(self.runner.ctrl), self.runner.thermo.spatial.to_dict()
+                )
+                frame_json = pack_frame_payload(
+                    self.scene,
+                    self.runner,
+                    tel,
+                    self.ai_mode,
+                    self.ai_status,
+                    self.copilot.get_latest_diagnosis(),
+                )
+                stale: list[web.WebSocketResponse] = []
+                for ws in list(self.clients):
+                    if ws.closed:
+                        stale.append(ws)
+                        continue
+                    # SSH 隧道或后台标签页出现 TCP 发送缓冲积压 (>256KB) 时优雅跳帧，绝不挤爆缓冲区导致断连!
+                    req_obj = getattr(ws, "_req", None)
+                    transport = getattr(req_obj, "transport", None) if req_obj is not None else None
+                    if transport is not None and transport.get_write_buffer_size() > 256 * 1024:
+                        continue
+                    try:
+                        await ws.send_str(frame_json)
+                    except Exception:
+                        stale.append(ws)
+                for ws in stale:
+                    self.clients.discard(ws)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                print(f"[WS-3D] 广播步进捕获异常并已自愈: {exc!r}")
+                await asyncio.sleep(0.05)
 
             elapsed = time.perf_counter() - t0
-            await asyncio.sleep(max(0.001, frame_dt - elapsed))
+            await asyncio.sleep(max(0.004, frame_dt - elapsed))
 
 
 async def async_main(args: argparse.Namespace) -> None:
@@ -479,7 +591,17 @@ def main() -> None:
     parser.add_argument("--preset", choices=["cold", "hot"], default="hot")
     parser.add_argument("--fps", type=float, default=60.0)
     parser.add_argument("--no-copilot", action="store_true", help="禁用异步本地 Ollama bonsai-2:27b L3 诊断副驾")
+    parser.add_argument("--no-replace", action="store_true", help="不自动清理同端口已有的旧 gpu_3d_server 进程")
     args = parser.parse_args()
+
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    sys.stdout = _SafeTeeStream(sys.stdout, SERVER_LOG_PATH)  # type: ignore[assignment]
+    sys.stderr = _SafeTeeStream(sys.stderr, SERVER_LOG_PATH)  # type: ignore[assignment]
+
+    if not args.no_replace:
+        _terminate_stale_gpu_servers(os.getpid())
+
     try:
         asyncio.run(async_main(args))
     except KeyboardInterrupt:

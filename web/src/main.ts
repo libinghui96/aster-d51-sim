@@ -271,8 +271,21 @@ async function main() {
     sendWsMessage({ type: "action", name: "handpump", strokes });
   };
 
+  let lastWsFrameMs = 0.0;
+  let reconnectTimer: number | null = null;
+  const scheduleReconnect = (delayMs: number) => {
+    if (reconnectTimer !== null) return;
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null;
+      connectLocalGpuServer();
+    }, delayMs);
+  };
+
   const connectLocalGpuServer = () => {
     if (wsCandidates.length === 0) {
+      return;
+    }
+    if (wsBridge && (wsBridge.readyState === WebSocket.OPEN || wsBridge.readyState === WebSocket.CONNECTING)) {
       return;
     }
     const targetUrl = wsCandidates[wsCandidateIdx % wsCandidates.length];
@@ -281,38 +294,59 @@ async function main() {
       const sock = new WebSocket(targetUrl);
       wsBridge = sock;
       sock.onopen = () => {
+        if (wsBridge !== sock) return;
         openedOnce = true;
         wsConnected = true;
+        lastWsFrameMs = performance.now();
         sendWsMessage({ type: "scene", scene: isRollerMode ? "roller" : "curve" });
         pushControlsToWs();
       };
       sock.onmessage = (ev) => {
+        if (wsBridge !== sock) return;
         try {
           const msg = JSON.parse(ev.data);
           if (msg && msg.type === "frame") {
             latestWsFrame = msg;
+            lastWsFrameMs = performance.now();
           }
         } catch {
           // ignore malformed frame
         }
       };
       sock.onclose = () => {
-        wsConnected = false;
-        latestWsFrame = null;
+        if (wsBridge === sock) {
+          wsBridge = null;
+          wsConnected = false;
+          latestWsFrame = null;
+        }
         if (!openedOnce) {
           wsCandidateIdx = (wsCandidateIdx + 1) % wsCandidates.length;
-          window.setTimeout(connectLocalGpuServer, wsCandidateIdx === 0 ? 2500 : 120);
+          scheduleReconnect(wsCandidateIdx === 0 ? 1500 : 120);
         } else {
-          window.setTimeout(connectLocalGpuServer, 2200);
+          scheduleReconnect(900);
         }
       };
       sock.onerror = () => {
         sock.close();
       };
     } catch {
+      wsBridge = null;
       wsConnected = false;
+      scheduleReconnect(1500);
     }
   };
+
+  // 半开死连接自愈看门狗：若前台可见状态下超过 5 秒未收到新 GPU 帧，主动重连
+  window.setInterval(() => {
+    if (
+      wsConnected &&
+      wsBridge &&
+      document.visibilityState === "visible" &&
+      performance.now() - lastWsFrameMs > 5000
+    ) {
+      wsBridge.close();
+    }
+  }, 2000);
 
   function objId(objType: any, name: string): number {
     const t = typeof objType === "number" ? objType : objType.value;

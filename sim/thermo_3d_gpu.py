@@ -1696,11 +1696,11 @@ class AsterD51Thermo3DGPU:
         else:
             v_hand_eff = 0.0
 
-        # 高频运行轻量级 Cab & Tender PINO 算子 (每 4 步 = 500Hz，或大步长/手摇动作步立即刷新)
+        # 高频运行轻量级 Cab & Tender PINO 算子 (每 12 步 = 166.7Hz 对齐 cfd_subdiv，或大步长/手摇动作步立即刷新)
         if (
             self.pino_4op_loaded
             and (
-                self._step_counter % 4 == 0
+                self._step_counter % 12 == 0
                 or dt >= 0.002
                 or abs(v_hand_eff) > 1e-4
                 or bool(getattr(ctrl, "sight_drain_valve", False))
