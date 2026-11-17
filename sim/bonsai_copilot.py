@@ -153,7 +153,7 @@ class AsyncBonsaiCopilot:
             return None
 
     def _worker_loop(self) -> None:
-        from sim.hw_guard import HardwareThermalPowerGuard
+        from sim.hw_guard import HardwareThermalPowerGuard, has_unclamped_overclocked_cpus
         hw_guard = HardwareThermalPowerGuard(max_cpu_c=78.0, max_gpu_c=70.0, max_gpu_w=240.0)
         detected = self._detect_model()
         if detected:
@@ -187,7 +187,12 @@ class AsyncBonsaiCopilot:
                 )
                 if sig != self._last_query_sig or (now_m - self._last_query_mono) >= 45.0:
                     t0 = time.perf_counter()
-                    diag = self._query_ollama(snap, t0)
+                    # 若宿主机尚未执行 setup_host_power_guard.sh (仍存在 5.40GHz 超频核 CPU 8)，外部 ollama 服务未绑核，
+                    # 自动采用零功耗确定性物理规则引擎，防止 ollama 与实时 3D 推流并发冲顶触发 CPU 8 崩核硬重启!
+                    if has_unclamped_overclocked_cpus():
+                        diag = self._rule_fallback(snap)
+                    else:
+                        diag = self._query_ollama(snap, t0)
                     self._last_query_sig = sig
                     self._last_query_mono = time.monotonic()
                     with self._lock:

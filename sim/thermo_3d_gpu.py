@@ -1640,7 +1640,7 @@ class AsterD51Thermo3DGPU:
 
         sh_flat_T = (self.d3_Tsh * self.d3_lumen_mask).sum(dim=(2, 3)) / torch.clamp(self.d3_lumen_mask.sum(), min=1.0)
         sh_flat_T = sh_flat_T.reshape(-1)
-        sh_wall_mean_c = float(((self.d3_Tsh * self.d3_wall_shell_mask).sum() / torch.clamp(self.d3_wall_shell_mask.sum() * 640.0, min=1.0)).item() - 273.15)
+        sh_wall_mean_t = (self.d3_Tsh * self.d3_wall_shell_mask).sum() / torch.clamp(self.d3_wall_shell_mask.sum() * 640.0, min=1.0) - 273.15
         sh_flat_x = (self.d3_dryness * self.d3_lumen_mask).sum(dim=(2, 3)) / torch.clamp(self.d3_lumen_mask.sum(), min=1.0)
         sh_flat_x = sh_flat_x.reshape(-1)
         idx8 = torch.linspace(0, sh_flat_T.numel() - 1, 8, device=self.device).long()
@@ -1670,9 +1670,12 @@ class AsterD51Thermo3DGPU:
         fb_f = f1[:76, :, :]
         o2_fb_t = (YO2[:76, :, :] * fb_f).sum() / torch.clamp(fb_f.sum(), min=1.0)
         boil_int_t = torch.clamp(self.d2_alpha_b.amax() * 2.6, 0.0, 1.0)
-        probes.extend([x_dome_t, o2_fb_t, boil_int_t])
+        bay_temp_t = (self.d6_state[:, 3:4] * self.d6_open_bay).sum() / torch.clamp(self.d6_open_bay.sum(), min=1.0)
+        wave_rms_t = torch.sqrt(((self.d6_state[:, 0:1] ** 2) * self.d6_open_bay).sum() / torch.clamp(self.d6_open_bay.sum(), min=1.0))
+        alc_wick_ts = [(self.d7_alc[:, 0:1] * cm).sum() / torch.clamp(cm.sum(), min=1.0) for cm in self.d7_cup_rois]
+        probes.extend([x_dome_t, o2_fb_t, boil_int_t, sh_wall_mean_t, bay_temp_t, wave_rms_t, *alc_wick_ts])
 
-        # 合并所有标量 + 16 个过热节点，仅执行单次 GPU->CPU 传输！(动态按 nw = len(self.d1_wicks) 切片)
+        # 合并所有标量 + 16 个过热节点，仅执行单次 GPU->CPU 传输！(杜绝多次 .item() 阻塞 CUDA 流水线)
         all_scalars = torch.cat([torch.stack(probes), sh_T8_t, sh_x8_t]).tolist()
         nw = len(self.d1_wicks)
 
@@ -1689,8 +1692,14 @@ class AsterD51Thermo3DGPU:
         x_dome = float(all_scalars[i0 + 6])
         o2_fb = float(all_scalars[i0 + 7])
         boil_int = round(float(all_scalars[i0 + 8]), 3)
-        sh_T8 = [round(v, 1) for v in all_scalars[i0 + 9 : i0 + 17]]
-        sh_x8 = [round(v, 4) for v in all_scalars[i0 + 17 : i0 + 25]]
+        sh_wall_mean_c = float(all_scalars[i0 + 9])
+        bay_temp_c = round(float(all_scalars[i0 + 10]), 2)
+        wave_rms_mm = round(float(all_scalars[i0 + 11]), 3)
+        n_cups = len(self.d7_cup_rois)
+        alc_wick_fills = [round(float(all_scalars[i0 + 12 + k]), 3) for k in range(n_cups)]
+        j0 = i0 + 12 + n_cups
+        sh_T8 = [round(v, 1) for v in all_scalars[j0 : j0 + 8]]
+        sh_x8 = [round(v, 4) for v in all_scalars[j0 + 8 : j0 + 16]]
 
         self.d4_port_open = [open_L, open_R]
         for s_i, (f_3d, p_pair) in enumerate([(f_gas_3d_L, self.core1d.P_cyl_L), (f_gas_3d_R, self.core1d.P_cyl_R)]):
@@ -1712,20 +1721,17 @@ class AsterD51Thermo3DGPU:
         y_hi = min(ny1, int(round(((+13.5) - self.d1_yr[0]) / (self.d1_yr[1] - self.d1_yr[0]) * (ny1 - 1))) + 1)
         slab_max = (Tg[:, y_lo:y_hi, :] * f1[:, y_lo:y_hi, :]).amax(dim=1).unsqueeze(0).unsqueeze(0)
         small_2d = F.interpolate(slab_max, size=(64, 24), mode="bilinear", align_corners=False)[0, 0]
-        u8_slice = torch.clamp((small_2d - 295.0) / 880.0 * 255.0, 0.0, 255.0).to(torch.uint8).reshape(-1).tolist()
-
         # 截取 35-1 后部敞口注水槽区域 X∈[-84.0, -18.5], Y∈[-16.8, +16.8] 导出 24×10 自由液面波高场 (128 == 0.0mm, ±2.5mm -> 0..255)
         eta_bay = self.d6_state[:, 0:1, 2:40, 5:15]
         wave_2d = F.interpolate(eta_bay, size=(24, 10), mode="bilinear", align_corners=False)[0, 0]
-        u8_wave = torch.clamp(128.0 + (wave_2d / 2.5) * 127.0, 0.0, 255.0).to(torch.uint8).reshape(-1).tolist()
-        bay_temp_c = round(
-            float(((self.d6_state[:, 3:4] * self.d6_open_bay).sum() / torch.clamp(self.d6_open_bay.sum(), min=1.0)).item()),
-            2,
-        )
-        wave_rms_mm = round(
-            float(torch.sqrt(((self.d6_state[:, 0:1] ** 2) * self.d6_open_bay).sum() / torch.clamp(self.d6_open_bay.sum(), min=1.0)).item()),
-            3,
-        )
+        u8_both = torch.cat(
+            [
+                torch.clamp((small_2d - 295.0) / 880.0 * 255.0, 0.0, 255.0).to(torch.uint8).reshape(-1),
+                torch.clamp(128.0 + (wave_2d / 2.5) * 127.0, 0.0, 255.0).to(torch.uint8).reshape(-1),
+            ]
+        ).tolist()
+        u8_slice = u8_both[: 64 * 24]
+        u8_wave = u8_both[64 * 24 :]
 
         phi_est = round(max(0.45, min(1.55, (0.232 - o2_fb) / 0.11 + (0.55 if fuel_active else 0.0))), 3)
         pipe_area_m2 = math.pi * (0.0010**2)
@@ -1786,10 +1792,7 @@ class AsterD51Thermo3DGPU:
                 round(max(0.0, min(1.0 - lube_water_frac, self.core1d.lubricator_oil_pct / 100.0)), 3),
                 round(max(0.0, 1.0 - lube_water_frac - self.core1d.lubricator_oil_pct / 100.0), 3),
             ],
-            alcohol_3d_wick_fill=[
-                round(float(((self.d7_alc[:, 0:1] * cm).sum() / torch.clamp(cm.sum(), min=1.0)).item()), 3)
-                for cm in self.d7_cup_rois
-            ],
+            alcohol_3d_wick_fill=alc_wick_fills,
             sh_wall_temp_c=round(max(self.core1d.T_boiler_c, sh_wall_mean_c), 1),
             tender_bay_temp_c=bay_temp_c,
             tender_wave_rms_mm=wave_rms_mm,
@@ -1831,16 +1834,18 @@ class AsterD51Thermo3DGPU:
         else:
             v_hand_eff = 0.0
 
-        # 高频运行轻量级 Cab & Tender PINO 算子 (每 12 步 = 166.7Hz 对齐 cfd_subdiv，或大步长/手摇动作步立即刷新)
+        # 高频运行轻量级 Cab & Tender & Safety PINO 算子 (避免 2000Hz 每步重复阻塞 CUDA 流，按子步或大步长刷新)
+        pino_fast_div = 8 if (
+            abs(v_hand_eff) > 1e-4
+            or bool(getattr(ctrl, "sight_drain_valve", False))
+            or bool(getattr(ctrl, "tender_drain_open", False))
+            or bool(getattr(ctrl, "fuel_cap_open", False))
+        ) else min(16, max(12, self.cfd_subdiv // 2))
         if (
             self.pino_4op_loaded
             and (
-                self._step_counter % 12 == 0
+                self._step_counter % pino_fast_div == 0
                 or dt >= 0.002
-                or abs(v_hand_eff) > 1e-4
-                or bool(getattr(ctrl, "sight_drain_valve", False))
-                or bool(getattr(ctrl, "tender_drain_open", False))
-                or bool(getattr(ctrl, "fuel_cap_open", False))
             )
         ):
             self._run_cab_tender_pino(

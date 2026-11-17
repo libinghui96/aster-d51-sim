@@ -38,11 +38,12 @@ import torch
 
 from sim.bonsai_copilot import AsyncBonsaiCopilot, CopilotDiagnosis
 from sim.human_engineer_agent import HumanEngineerAgent
-from sim.hw_guard import HardwareThermalPowerGuard, apply_cpu_thread_and_nice_caps
+from sim.hw_guard import HardwareThermalPowerGuard, apply_cpu_thread_and_nice_caps, quarantine_overclocked_cpus
 from sim.ideal_oracle_controller import IdealOracleController
 from sim.run_cosim import CoSimRunner
 from sim.thermo_1d import CabControls, ThermoTelemetry
 
+_QUARANTINED_OC_CPUS = quarantine_overclocked_cpus(safe_max_khz=5_200_000)
 apply_cpu_thread_and_nice_caps(max_threads=6, nice_delta=2)
 
 
@@ -61,6 +62,7 @@ class _SafeTeeStream:
         self._orig = orig_stream
         self._orig_dead = False
         self._log_path = log_path
+        self._at_line_start = True
         self._log_path.parent.mkdir(parents=True, exist_ok=True)
 
     def write(self, data: str) -> int:
@@ -72,8 +74,16 @@ class _SafeTeeStream:
             except OSError:
                 self._orig_dead = True
         try:
+            ts = time.strftime("%Y-%m-%d %H:%M:%S")
+            out_chunks: list[str] = []
+            for part in data.splitlines(keepends=True):
+                if self._at_line_start and part.strip():
+                    out_chunks.append(f"[{ts}] {part}")
+                else:
+                    out_chunks.append(part)
+                self._at_line_start = part.endswith("\n")
             with self._log_path.open("a", encoding="utf-8") as f:
-                f.write(data)
+                f.write("".join(out_chunks))
         except OSError:
             pass
         return len(data)
@@ -290,12 +300,19 @@ class GPU3DRealtimeBridge:
     def __init__(self, scene: str = "roller", preset: str = "hot", enable_copilot: bool = True):
         self.scene = scene if scene in SCENE_XML_MAP else "roller"
         self.preset = preset
-        self.runner = CoSimRunner(SCENE_XML_MAP[self.scene], preset=preset, use_gpu_3d=True)
+        # 实时推流采用 cfd_subdiv=48 (41.7Hz 7域体素+5算子PINO, 2000Hz 精确 MuJoCo+IAPWS)，彻底消除单核与 GPU 持续满载死顶!
+        self.runner = CoSimRunner(
+            SCENE_XML_MAP[self.scene],
+            preset=preset,
+            use_gpu_3d=True,
+            cfd_subdiv=48,
+            snapshot_every_cfd=1,
+        )
         self.human_agent = HumanEngineerAgent()
         self.oracle_agent = IdealOracleController()
         self.ai_mode: str = "off"  # "off" | "human" | "oracle"
         self.ai_status: str = ""
-        self.copilot = AsyncBonsaiCopilot(enabled=enable_copilot)
+        self.copilot = AsyncBonsaiCopilot(enabled=enable_copilot, interval_sec=25.0)
         self.clients: Set[web.WebSocketResponse] = set()
         self.last_tel: ThermoTelemetry = self.runner.step_once()
 
@@ -406,7 +423,7 @@ class GPU3DRealtimeBridge:
             self.switch_scene(str(msg.get("scene", "roller")))
 
     async def ws_handler(self, request: web.Request) -> web.WebSocketResponse:
-        ws = web.WebSocketResponse(max_msg_size=2 * 1024 * 1024, heartbeat=55.0, autoping=True)
+        ws = web.WebSocketResponse(max_msg_size=2 * 1024 * 1024, heartbeat=55.0, autoping=True, compress=15)
         await ws.prepare(request)
         self.clients.add(ws)
         peer = request.remote or "browser"
@@ -479,11 +496,11 @@ class GPU3DRealtimeBridge:
             return web.Response(status=204)
         raise web.HTTPNotFound()
 
-    async def sim_broadcast_loop(self, target_fps: float = 36.0) -> None:
+    async def sim_broadcast_loop(self, target_fps: float = 30.0) -> None:
         frame_dt = 1.0 / target_fps
         dt_mj = float(self.runner.model.opt.timestep)
-        steps_per_frame = max(1, int(round(frame_dt / dt_mj)))
-        hw_guard = HardwareThermalPowerGuard(max_cpu_c=80.0, max_gpu_c=73.0, max_gpu_w=265.0)
+        steps_per_frame = min(48, max(1, int(round(frame_dt / dt_mj))))
+        hw_guard = HardwareThermalPowerGuard(max_cpu_c=76.0, max_gpu_c=70.0, max_gpu_w=215.0)
         frame_idx = 0
 
         while True:
@@ -492,17 +509,17 @@ class GPU3DRealtimeBridge:
                 continue
 
             frame_idx += 1
-            if frame_idx % 18 == 0 and hw_guard.is_hot_or_high_power():
-                await asyncio.sleep(0.04)
+            if frame_idx % 12 == 0 and hw_guard.is_hot_or_high_power():
+                await asyncio.sleep(0.045)
 
             t0 = time.perf_counter()
             try:
                 tel = self.last_tel
                 for s_i in range(steps_per_frame):
                     tel = self.runner.step_once()
-                    # 每 8 步主动让出一次 asyncio 事件循环 (<4ms 粒度)，防止重负载步进饿死 WS PING/PONG 与控制帧读取!
-                    if s_i % 8 == 7:
-                        await asyncio.sleep(0)
+                    # 每 14 步平滑插入 1ms 微小喘息窗口，消除 CPU/GPU 方波瞬态电流尖峰 (di/dt Vdroop) 与协程饥饿!
+                    if s_i % 14 == 13:
+                        await asyncio.sleep(0.001)
 
                 if not np.all(np.isfinite(self.runner.data.qpos)):
                     print("[WS-3D] 检测到 MuJoCo qpos 非有限值，已自动重置动力学状态保持在线!")
@@ -562,7 +579,8 @@ class GPU3DRealtimeBridge:
                 await asyncio.sleep(0.05)
 
             elapsed = time.perf_counter() - t0
-            await asyncio.sleep(max(0.004, frame_dt - elapsed))
+            # 强制每帧至少保留 10ms 硬件稳压冷却间隙，杜绝单线程 96% 占空比死顶!
+            await asyncio.sleep(max(0.010, frame_dt - elapsed))
 
 
 async def async_main(args: argparse.Namespace) -> None:
@@ -582,8 +600,10 @@ async def async_main(args: argparse.Namespace) -> None:
     print("=" * 78)
     print("  Aster D51 RTX 5080 Live 3D Thermo-Fluid + PINO + Bonsai-2:27B Server Ready!")
     print(f"  GPU Device   : {gpu_str} ({bridge.runner.thermo.total_voxels:,} 3D STL Voxels, PINO={bridge.runner.thermo.pino_loaded})")
+    if _QUARANTINED_OC_CPUS:
+        print(f"  CPU Guard    : 已自动隔离 BIOS 5.4GHz 超频风险核 {_QUARANTINED_OC_CPUS} (绑定安全核: {sorted(os.sched_getaffinity(0))})")
     print(f"  Web 3D UI    : http://{args.host}:{args.port}/   (浏览器直接打开即可！)")
-    print(f"  WebSocket URL: ws://{args.host}:{args.port}/ws   (兼容 Vite 5173 自动直连)")
+    print(f"  WebSocket URL: ws://{args.host}:{args.port}/ws   (兼容 Vite 5173 自动直连, {args.fps:.0f} FPS deflate)")
     print("=" * 78)
 
     sim_task = asyncio.create_task(bridge.sim_broadcast_loop(target_fps=args.fps))
@@ -603,7 +623,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--scene", choices=["roller", "curve"], default="roller")
     parser.add_argument("--preset", choices=["cold", "hot"], default="hot")
-    parser.add_argument("--fps", type=float, default=36.0)
+    parser.add_argument("--fps", type=float, default=30.0)
     parser.add_argument("--no-copilot", action="store_true", help="禁用异步本地 Ollama bonsai-2:27b L3 诊断副驾")
     parser.add_argument("--no-replace", action="store_true", help="不自动清理同端口已有的旧 gpu_3d_server 进程")
     args = parser.parse_args()

@@ -27,8 +27,72 @@ from pathlib import Path
 from typing import Dict, Optional
 
 
-def apply_cpu_thread_and_nice_caps(max_threads: int = 8, nice_delta: int = 4) -> None:
-    """限制底层数值库线程扇出，防止 i9-12900K 在 PL1=4095W 解锁状态下 24 核满载瞬时冲顶。"""
+def quarantine_overclocked_cpus(safe_max_khz: int = 5_200_000) -> list[int]:
+    """
+    自动检测并隔离主板 BIOS 超频核心 (零 sudo 依赖，进程及子线程自动继承):
+      - Intel i9-12900K 官方最高睿频规范为 5.20 GHz (5,200,000 kHz)；
+      - 实测本机 ASUS ROG MAXIMUS Z690 HERO 将 cpu4-5/8-11 (尤以物理 Core 16 = cpu8/cpu9) 超频至 5.40 GHz，
+        在单主线程高频脉冲负载下触发 CPU 8 寄存器翻转 (kern.log: insn_decode_mmio Oops / libpython segfault / ACPI BERT Fatal Reset)；
+      - 若检测到部分逻辑核 scaling_max_freq > safe_max_khz，自动通过 os.sched_setaffinity 将当前进程绑定至未超频安全核!
+    """
+    if not hasattr(os, "sched_setaffinity"):
+        return []
+    cpu_root = Path("/sys/devices/system/cpu")
+    if not cpu_root.exists():
+        return []
+
+    safe_cpus: list[int] = []
+    oc_cpus: list[int] = []
+    for d in sorted(cpu_root.glob("cpu[0-9]*"), key=lambda p: int(p.name[3:]) if p.name[3:].isdigit() else 9999):
+        suffix = d.name[3:]
+        if not suffix.isdigit():
+            continue
+        cid = int(suffix)
+        freq_file = d / "cpufreq" / "scaling_max_freq"
+        try:
+            max_khz = int(freq_file.read_text().strip())
+        except Exception:
+            safe_cpus.append(cid)
+            continue
+        if max_khz > safe_max_khz:
+            oc_cpus.append(cid)
+        else:
+            safe_cpus.append(cid)
+
+    if oc_cpus and len(safe_cpus) >= 4:
+        try:
+            allowed_now = os.sched_getaffinity(0)
+            target_set = set(safe_cpus) & set(allowed_now)
+            if len(target_set) >= 4:
+                os.sched_setaffinity(0, target_set)
+                return sorted(oc_cpus)
+        except OSError:
+            pass
+    return []
+
+
+def has_unclamped_overclocked_cpus(safe_max_khz: int = 5_200_000) -> bool:
+    """检查宿主机是否仍存在未通过 setup_host_power_guard.sh 压制的 >5.20GHz BIOS 超频核心 (保护外部未绑核守护进程如 ollama)。"""
+    cpu_root = Path("/sys/devices/system/cpu")
+    if not cpu_root.exists():
+        return False
+    for freq_file in cpu_root.glob("cpu[0-9]*/cpufreq/scaling_max_freq"):
+        try:
+            if int(freq_file.read_text().strip()) > safe_max_khz:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def apply_cpu_thread_and_nice_caps(
+    max_threads: int = 8,
+    nice_delta: int = 4,
+    safe_max_khz: int = 5_200_000,
+) -> None:
+    """隔离 BIOS 超频不稳定核心 (如 5.40GHz CPU 8)，并限制底层数值库线程扇出与批处理优先级。"""
+    quarantine_overclocked_cpus(safe_max_khz=safe_max_khz)
+
     t_str = str(max(1, int(max_threads)))
     for env_key in (
         "OMP_NUM_THREADS",

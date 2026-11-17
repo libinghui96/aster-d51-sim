@@ -25,8 +25,11 @@ from dataclasses import asdict
 from sim.auto_fireman import AutoFiremanAgent
 from sim.bonsai_copilot import AsyncBonsaiCopilot
 from sim.human_engineer_agent import HumanEngineerAgent
+from sim.hw_guard import HardwareThermalPowerGuard, apply_cpu_thread_and_nice_caps
 from sim.ideal_oracle_controller import IdealOracleController
 from sim.thermo_1d import AsterD51Thermo1D, CabControls, CylinderCalibration, ThermoTelemetry
+
+apply_cpu_thread_and_nice_caps(max_threads=6, nice_delta=2)
 
 # GLFW 按键编码 (已避开 MuJoCo Viewer 内置渲染快捷键)
 KEY_UP = 265        # 加減弁 +
@@ -201,7 +204,14 @@ def render_dashboard(
 class CoSimRunner:
     """封装 MuJoCo 与 1D / RTX 5080 3D 热流体耦合步进器"""
 
-    def __init__(self, xml_path: Path, preset: str = "cold", use_gpu_3d: bool = False):
+    def __init__(
+        self,
+        xml_path: Path,
+        preset: str = "cold",
+        use_gpu_3d: bool = False,
+        cfd_subdiv: int = 12,
+        snapshot_every_cfd: int = 3,
+    ):
         self.model = mujoco.MjModel.from_xml_path(str(xml_path))
         self.calib = calibrate_model_and_valves(self.model)
         self.data = mujoco.MjData(self.model)
@@ -209,7 +219,11 @@ class CoSimRunner:
         if self.use_gpu_3d:
             from sim.thermo_3d_gpu import AsterD51Thermo3DGPU
 
-            self.thermo: Any = AsterD51Thermo3DGPU(self.calib)
+            self.thermo: Any = AsterD51Thermo3DGPU(
+                self.calib,
+                cfd_subdiv=cfd_subdiv,
+                snapshot_every_cfd=snapshot_every_cfd,
+            )
             print(
                 f"[RTX 5080 3D] 已加载 {self.thermo.total_voxels:,} 体素五大零件域求解器 "
                 f"(STL 体素化耗时 {self.thermo.voxelize_init_ms:.1f} ms, PINO={self.thermo.pino_loaded}, "
@@ -444,11 +458,12 @@ def run_interactive(
 ) -> None:
     import mujoco.viewer
 
-    runner = CoSimRunner(xml_path, preset=preset, use_gpu_3d=use_gpu_3d)
+    runner = CoSimRunner(xml_path, preset=preset, use_gpu_3d=use_gpu_3d, cfd_subdiv=36, snapshot_every_cfd=2)
+    hw_guard = HardwareThermalPowerGuard(max_cpu_c=78.0, max_gpu_c=72.0, max_gpu_w=230.0)
     human_agent = HumanEngineerAgent()
     oracle_agent = IdealOracleController()
     ai_mode = ai_mode_init if ai_mode_init in ("off", "human", "oracle") else ("oracle" if auto_fireman else "off")
-    copilot = AsyncBonsaiCopilot(enabled=enable_copilot) if enable_copilot else None
+    copilot = AsyncBonsaiCopilot(enabled=enable_copilot, interval_sec=25.0) if enable_copilot else None
 
     def on_key(keycode: int) -> None:
         nonlocal ai_mode
@@ -510,9 +525,11 @@ def run_interactive(
         elif keycode == KEY_8:
             runner.apply_hot_preset()
 
+    target_hz = 36.0 if use_gpu_3d else 60.0
     dt = runner.model.opt.timestep
-    steps_per_frame = max(1, int(round((1.0 / 60.0) / dt)))
+    steps_per_frame = max(1, int(round((1.0 / target_hz) / dt)))
     last_print = 0.0
+    frame_idx = 0
 
     with mujoco.viewer.launch_passive(runner.model, runner.data, key_callback=on_key) as viewer:
         viewer.cam.azimuth = 135.0
@@ -521,6 +538,9 @@ def run_interactive(
         viewer.cam.lookat[:] = [0.04, 0.0, 0.03]
 
         while viewer.is_running():
+            frame_idx += 1
+            if frame_idx % 18 == 0 and hw_guard.is_hot_or_high_power():
+                time.sleep(0.035)
             t0 = time.perf_counter()
             tel = None
             for _ in range(steps_per_frame):
@@ -566,9 +586,11 @@ def run_interactive(
                 last_print = now
 
             elapsed = time.perf_counter() - t0
-            sleep_s = (1.0 / 60.0) - elapsed
-            if sleep_s > 0:
+            sleep_s = (1.0 / target_hz) - elapsed
+            if sleep_s > 0.002:
                 time.sleep(sleep_s)
+            else:
+                time.sleep(0.003)
     if copilot is not None:
         copilot.shutdown()
 
