@@ -61,6 +61,7 @@
 - 启动本地 RTX 5080 Live 3D WebSocket 推流桥（默认绑定 `0.0.0.0:8765`，自带旧进程接管与防伪终端断开 `_SafeTeeStream` 高可用保护，详见 `docs/LESSONS_LEARNED.md` 失误 21）：`python -m sim.gpu_3d_server --scene roller --preset hot`
 - 无 GUI 自动化全流程试车验收与绘图：`python -m sim.run_cosim --xml models/d51_full.xml --headless-demo --gpu-3d`
 - 同步资产并构建 Web 3D 实时交互前端：`python scripts/05_sync_web_assets.py && npm --prefix web run build`
+- 同步本项目踩坑经验至全局及远端 `live-steam-twin` 插件（已由 `.agents/hooks.json` 与 `.git/hooks/{pre-commit,post-commit,pre-push}` 全自动触发）：`python scripts/11_sync_lessons_to_plugin.py --push-plugin`
 
 ---
 
@@ -81,3 +82,4 @@
 - **严禁批量/循环直接读取高分辨率图片或 PDF**：在本地或远程 SSH 的 IDE Agent 会话中，**绝对禁止**循环调用文件读取工具遍历 `data/ortho_views/*.png`、`logs/*.png` 或 `data/raw_pdfs/*.pdf`。多轮对话会将已读高清图片反复打包重发（Vision Token 滚雪球效应），极易触发 API 限流重试（`Model unavailable`）与远程传输卡死。
 - **本地脚本先行提取纯文本**：凡需从 PDF/切片提取零件表（BOM）、文字说明、尺寸标注或自动图像测量（如霍夫圆/边缘检测），一律编写本地 Python 脚本（`pymupdf` / `cv2` / `numpy`）在毫秒级处理并输出为纯文本 `.json` / `.md` 后再读取。
 - **最小化视觉确认**：日常 CAD 建模、MJCF 编译与热流联调一律围绕纯文本代码（`.py` / `.json` / `.xml`）与数值遥测指标闭环迭代；仅在确需人工/视觉核对单一局部细节时，先通过脚本裁剪并降采样出低分辨率局部 ROI 单图，或交由独立子代理单次读取并仅返回纯文本结论。
+- **跨车型经验实时双向继承纪律（`aster-d51-sim` → `live-steam-twin`）**：凡在本项目新发现通用踩坑经验并写入 `docs/LESSONS_LEARNED.md`，或沉淀了新的通用标定/CAD/门禁算子时，必须确保同步更新至全局插件 `~/.gemini/config/plugins/live-steam-twin/` 及项目镜像 `tools/live-steam-twin-plugin/`（日常修改、提交与推送均由 `.agents/hooks.json` 与 `scripts/install_git_hooks.sh` 自动联动同步并推送到 `libinghui96/live-steam-twin`）。

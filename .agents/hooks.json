@@ -1,0 +1,17 @@
+{
+  "d51-lessons-auto-sync": {
+    "enabled": true,
+    "PostToolUse": [
+      {
+        "matcher": ".*(write|edit|replace).*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ./scripts/11_sync_lessons_to_plugin.py --post-tool-hook",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
