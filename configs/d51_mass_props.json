@@ -1,6 +1,7 @@
 {
   "meta": {
-    "stage": "P2-C~G (V2-SWEPT-TUBE-CAB-TENDER-AI)",
+    "stage": "STAGE-16-EXACT-STEP-BREP-AND-HOLLOW-WALL-LUMEN",
+    "cad_master_format": "ISO-10303-21 STEP (.step) exact analytic B-Rep + smooth high-precision hollow STL (.stl)",
     "units": "SI (kg, m, kg*m^2)",
     "densities_kg_m3": {
       "copper_C1100": 8940.0,
@@ -28,7 +29,11 @@
         -1.9253483655965306e-08,
         -8.528919937754417e-23,
         1.0270898960627728e-21
-      ]
+      ],
+      "step_file": "models/step/driving_wheel_L.step",
+      "stl_file": "models/meshes/driving_wheel_L.stl",
+      "stl_linear_tol_mm": 0.025,
+      "stl_angular_tol_rad": 0.22
     },
     "driving_wheel_R": {
       "density_kg_m3": 7350.0,
@@ -46,7 +51,11 @@
         -9.618825155495812e-22,
         7.60650805037685e-22,
         -1.9253483655965378e-08
-      ]
+      ],
+      "step_file": "models/step/driving_wheel_R.step",
+      "stl_file": "models/meshes/driving_wheel_R.stl",
+      "stl_linear_tol_mm": 0.025,
+      "stl_angular_tol_rad": 0.22
     },
     "main_driving_wheel_L": {
       "density_kg_m3": 7350.0,
@@ -64,7 +73,11 @@
         -5.024907400317925e-08,
         -2.3103114820174495e-22,
         1.0608458313065324e-21
-      ]
+      ],
+      "step_file": "models/step/main_driving_wheel_L.step",
+      "stl_file": "models/meshes/main_driving_wheel_L.stl",
+      "stl_linear_tol_mm": 0.025,
+      "stl_angular_tol_rad": 0.22
     },
     "main_driving_wheel_R": {
       "density_kg_m3": 7350.0,
@@ -82,7 +95,11 @@
         -1.0487977554436043e-21,
         6.809275001614892e-22,
         -5.024907400317926e-08
-      ]
+      ],
+      "step_file": "models/step/main_driving_wheel_R.step",
+      "stl_file": "models/meshes/main_driving_wheel_R.stl",
+      "stl_linear_tol_mm": 0.025,
+      "stl_angular_tol_rad": 0.22
     },
     "return_crank_L": {
       "density_kg_m3": 7930.0,
@@ -100,7 +117,11 @@
         1.1009658403586774e-09,
         -1.1561033698468175e-08,
         7.38782249107188e-10
-      ]
+      ],
+      "step_file": "models/step/return_crank_L.step",
+      "stl_file": "models/meshes/return_crank_L.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "return_crank_R": {
       "density_kg_m3": 7930.0,
@@ -118,7 +139,11 @@
         -7.387822491071862e-10,
         1.1561033698468185e-08,
         1.1009658403586736e-09
-      ]
+      ],
+      "step_file": "models/step/return_crank_R.step",
+      "stl_file": "models/meshes/return_crank_R.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "main_rod": {
       "density_kg_m3": 7930.0,
@@ -136,7 +161,11 @@
         1.0576584740287554e-24,
         5.665060066170983e-09,
         3.1611684389103226e-26
-      ]
+      ],
+      "step_file": "models/step/main_rod.step",
+      "stl_file": "models/meshes/main_rod.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "coupling_rod": {
       "density_kg_m3": 7930.0,
@@ -154,7 +183,11 @@
         -3.370035173937341e-13,
         5.4195120592138345e-11,
         -7.0232395007180916e-15
-      ]
+      ],
+      "step_file": "models/step/coupling_rod.step",
+      "stl_file": "models/meshes/coupling_rod.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "coupling_rod_front": {
       "density_kg_m3": 7930.0,
@@ -172,7 +205,11 @@
         -1.221309212753483e-13,
         -1.5198022897072297e-09,
         -1.2085163933579304e-14
-      ]
+      ],
+      "step_file": "models/step/coupling_rod_front.step",
+      "stl_file": "models/meshes/coupling_rod_front.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "coupling_rod_rear": {
       "density_kg_m3": 7930.0,
@@ -190,7 +227,11 @@
         -5.758648259126309e-14,
         1.5177747264203327e-09,
         7.181691754608643e-15
-      ]
+      ],
+      "step_file": "models/step/coupling_rod_rear.step",
+      "stl_file": "models/meshes/coupling_rod_rear.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "eccentric_rod_L": {
       "density_kg_m3": 7930.0,
@@ -208,7 +249,11 @@
         8.73087853031947e-09,
         4.511127927333461e-10,
         -9.243729107480846e-12
-      ]
+      ],
+      "step_file": "models/step/eccentric_rod_L.step",
+      "stl_file": "models/meshes/eccentric_rod_L.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "eccentric_rod_R": {
       "density_kg_m3": 7930.0,
@@ -226,7 +271,11 @@
         -8.730878530319468e-09,
         4.5111279273334676e-10,
         9.243729107480908e-12
-      ]
+      ],
+      "step_file": "models/step/eccentric_rod_R.step",
+      "stl_file": "models/meshes/eccentric_rod_R.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "expansion_link_L": {
       "density_kg_m3": 7930.0,
@@ -244,7 +293,11 @@
         4.0511271614777633e-10,
         2.7039365181198812e-09,
         -2.6842363673452656e-09
-      ]
+      ],
+      "step_file": "models/step/expansion_link_L.step",
+      "stl_file": "models/meshes/expansion_link_L.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.16
     },
     "expansion_link_R": {
       "density_kg_m3": 7930.0,
@@ -262,7 +315,11 @@
         -4.0511271614777675e-10,
         2.70393651811988e-09,
         2.68423636734527e-09
-      ]
+      ],
+      "step_file": "models/step/expansion_link_R.step",
+      "stl_file": "models/meshes/expansion_link_R.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.16
     },
     "die_block_L": {
       "density_kg_m3": 8500.0,
@@ -280,7 +337,11 @@
         -5.8020687711049585e-27,
         1.7104373473131323e-27,
         -7.052293188362763e-27
-      ]
+      ],
+      "step_file": "models/step/die_block_L.step",
+      "stl_file": "models/meshes/die_block_L.stl",
+      "stl_linear_tol_mm": 0.012,
+      "stl_angular_tol_rad": 0.16
     },
     "die_block_R": {
       "density_kg_m3": 8500.0,
@@ -298,7 +359,11 @@
         3.763537088880866e-27,
         1.9463597400459784e-27,
         2.7972305879640012e-27
-      ]
+      ],
+      "step_file": "models/step/die_block_R.step",
+      "stl_file": "models/meshes/die_block_R.stl",
+      "stl_linear_tol_mm": 0.012,
+      "stl_angular_tol_rad": 0.16
     },
     "radius_rod_L": {
       "density_kg_m3": 7930.0,
@@ -316,7 +381,11 @@
         -1.8657152649035183e-08,
         -7.654831463580163e-24,
         -2.006979097331138e-25
-      ]
+      ],
+      "step_file": "models/step/radius_rod_L.step",
+      "stl_file": "models/meshes/radius_rod_L.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "radius_rod_R": {
       "density_kg_m3": 7930.0,
@@ -334,7 +403,11 @@
         1.86571526490352e-08,
         -6.6007397230171256e-24,
         1.4337371171301404e-25
-      ]
+      ],
+      "step_file": "models/step/radius_rod_R.step",
+      "stl_file": "models/meshes/radius_rod_R.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "combination_lever": {
       "density_kg_m3": 7930.0,
@@ -352,7 +425,11 @@
         -5.123363059756439e-26,
         5.540278356221946e-25,
         -3.409157333278356e-24
-      ]
+      ],
+      "step_file": "models/step/combination_lever.step",
+      "stl_file": "models/meshes/combination_lever.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "union_link_L": {
       "density_kg_m3": 7930.0,
@@ -370,7 +447,11 @@
         -6.45854857071879e-11,
         4.735129369199828e-25,
         2.135747911308185e-26
-      ]
+      ],
+      "step_file": "models/step/union_link_L.step",
+      "stl_file": "models/meshes/union_link_L.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "union_link_R": {
       "density_kg_m3": 7930.0,
@@ -388,7 +469,11 @@
         6.45854857071868e-11,
         5.532317933969323e-25,
         2.0240657410385158e-26
-      ]
+      ],
+      "step_file": "models/step/union_link_R.step",
+      "stl_file": "models/meshes/union_link_R.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "lift_link_L": {
       "density_kg_m3": 7930.0,
@@ -406,7 +491,11 @@
         -2.5687554789619406e-21,
         5.12247443531022e-21,
         -2.7213520019671254e-09
-      ]
+      ],
+      "step_file": "models/step/lift_link_L.step",
+      "stl_file": "models/meshes/lift_link_L.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "lift_link_R": {
       "density_kg_m3": 7930.0,
@@ -424,7 +513,11 @@
         2.5687558724856466e-21,
         5.122460139348133e-21,
         2.7213520019671266e-09
-      ]
+      ],
+      "step_file": "models/step/lift_link_R.step",
+      "stl_file": "models/meshes/lift_link_R.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "motion_bracket_L": {
       "density_kg_m3": 7350.0,
@@ -442,7 +535,11 @@
         -6.978838813102704e-08,
         1.141091642655408e-07,
         9.357355958040258e-08
-      ]
+      ],
+      "step_file": "models/step/motion_bracket_L.step",
+      "stl_file": "models/meshes/motion_bracket_L.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.24
     },
     "motion_bracket_R": {
       "density_kg_m3": 7350.0,
@@ -460,7 +557,11 @@
         6.978838813102704e-08,
         1.141091642655408e-07,
         -9.357355958040258e-08
-      ]
+      ],
+      "step_file": "models/step/motion_bracket_R.step",
+      "stl_file": "models/meshes/motion_bracket_R.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.24
     },
     "slide_bar_L": {
       "density_kg_m3": 7930.0,
@@ -478,7 +579,11 @@
         -1.1579914930179627e-25,
         7.4112021408217496e-09,
         -2.721622403455939e-26
-      ]
+      ],
+      "step_file": "models/step/slide_bar_L.step",
+      "stl_file": "models/meshes/slide_bar_L.stl",
+      "stl_linear_tol_mm": 0.018,
+      "stl_angular_tol_rad": 0.24
     },
     "slide_bar_R": {
       "density_kg_m3": 7930.0,
@@ -496,7 +601,11 @@
         1.3012192210834541e-24,
         7.4112021408217496e-09,
         -1.8231737838524213e-26
-      ]
+      ],
+      "step_file": "models/step/slide_bar_R.step",
+      "stl_file": "models/meshes/slide_bar_R.stl",
+      "stl_linear_tol_mm": 0.018,
+      "stl_angular_tol_rad": 0.24
     },
     "piston_tail_sheath_L": {
       "density_kg_m3": 7930.0,
@@ -514,7 +623,11 @@
         2.253841557831038e-25,
         3.288491816063483e-11,
         -7.868636298091759e-27
-      ]
+      ],
+      "step_file": "models/step/piston_tail_sheath_L.step",
+      "stl_file": "models/meshes/piston_tail_sheath_L.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "piston_tail_sheath_R": {
       "density_kg_m3": 7930.0,
@@ -532,7 +645,11 @@
         -4.507683115662076e-25,
         3.288491816063483e-11,
         6.506756938806647e-27
-      ]
+      ],
+      "step_file": "models/step/piston_tail_sheath_R.step",
+      "stl_file": "models/meshes/piston_tail_sheath_R.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "valve_spindle_sheath_L": {
       "density_kg_m3": 7930.0,
@@ -550,7 +667,11 @@
         -4.562280173558975e-17,
         2.8464544944324154e-11,
         6.866102921776474e-20
-      ]
+      ],
+      "step_file": "models/step/valve_spindle_sheath_L.step",
+      "stl_file": "models/meshes/valve_spindle_sheath_L.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "valve_spindle_sheath_R": {
       "density_kg_m3": 7930.0,
@@ -568,61 +689,77 @@
         4.562280173558975e-17,
         2.8464544944324154e-11,
         -6.866102921776474e-20
-      ]
+      ],
+      "step_file": "models/step/valve_spindle_sheath_R.step",
+      "stl_file": "models/meshes/valve_spindle_sheath_R.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_reach_rod": {
       "density_kg_m3": 7930.0,
-      "volume_cm3": 0.3904,
-      "mass_kg": 0.003095983900182807,
+      "volume_cm3": 0.3902,
+      "mass_kg": 0.0030945515899511037,
       "com_m": [
-        -0.07482334700862965,
-        2.5091026757415717e-06,
-        0.0027345422275625213
+        -0.0747846825676262,
+        2.514093016855673e-06,
+        0.004091444996784949
       ],
       "fullinertia": [
-        1.349916808207831e-07,
-        7.551487496190272e-06,
-        7.417876988451167e-06,
-        4.3660004024127814e-10,
-        -2.3636892231060637e-07,
-        7.517477387802039e-12
-      ]
+        7.000844129426443e-08,
+        7.478087460648598e-06,
+        7.409459960624373e-06,
+        4.3550728342478236e-10,
+        3.445222762932312e-07,
+        1.7807622588974227e-11
+      ],
+      "step_file": "models/step/cab_reach_rod.step",
+      "stl_file": "models/meshes/cab_reach_rod.stl",
+      "stl_linear_tol_mm": 0.018,
+      "stl_angular_tol_rad": 0.24
     },
     "drain_cock_linkage": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 0.7677,
-      "mass_kg": 0.006525675692794036,
+      "volume_cm3": 0.7667,
+      "mass_kg": 0.0065166585945513385,
       "com_m": [
-        0.0008826615219184237,
-        8.551762161307213e-18,
-        -0.005232817531167794
+        0.0008762428472367257,
+        -1.2808321006647053e-17,
+        -0.005130545894451566
       ],
       "fullinertia": [
-        4.050039569064402e-06,
-        2.9145003152002813e-07,
-        3.877738390318288e-06,
-        -3.1914569880006386e-23,
-        2.3237790093599786e-08,
-        2.955108237060825e-22
-      ]
+        4.039984312136392e-06,
+        2.9773225185022464e-07,
+        3.859879501416694e-06,
+        -1.5527650082340345e-22,
+        2.3463797255689007e-08,
+        1.144290156831023e-21
+      ],
+      "step_file": "models/step/drain_cock_linkage.step",
+      "stl_file": "models/meshes/drain_cock_linkage.stl",
+      "stl_linear_tol_mm": 0.018,
+      "stl_angular_tol_rad": 0.24
     },
     "drain_pull_rod": {
       "density_kg_m3": 7930.0,
-      "volume_cm3": 0.346,
-      "mass_kg": 0.002744162779180988,
+      "volume_cm3": 0.4874,
+      "mass_kg": 0.0038650249400628603,
       "com_m": [
-        -0.011326211966086148,
-        -0.017600000028226464,
-        0.00799999985242367
+        -0.050231945185765264,
+        -0.01780000002045146,
+        0.008499999720260889
       ],
       "fullinertia": [
-        1e-09,
-        1.8047855333137435e-05,
-        1.804784234668958e-05,
-        7.026191015756922e-15,
-        -1.2895221088983817e-14,
-        -5.874199152458459e-17
-      ]
+        4.6895750582118326e-09,
+        3.235024621380427e-05,
+        3.2350233226928296e-05,
+        1.0123658176744356e-14,
+        7.142176088149427e-14,
+        -6.775251109502279e-17
+      ],
+      "step_file": "models/step/drain_pull_rod.step",
+      "stl_file": "models/meshes/drain_pull_rod.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_backhead_plate": {
       "density_kg_m3": 7350.0,
@@ -640,43 +777,55 @@
         -1.5511046850880255e-21,
         -5.0661624616207377e-08,
         -2.813763317712348e-22
-      ]
+      ],
+      "step_file": "models/step/cab_backhead_plate.step",
+      "stl_file": "models/meshes/cab_backhead_plate.stl",
+      "stl_linear_tol_mm": 0.028,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_deck_and_mounts": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 3.7509,
-      "mass_kg": 0.03188295492930918,
+      "volume_cm3": 4.1409,
+      "mass_kg": 0.03519765916780917,
       "com_m": [
-        -0.12993883812447973,
-        -0.0004372975581540863,
-        0.01886328486254113
+        -0.13135488072425133,
+        9.939236701843615e-05,
+        0.018468523725722552
       ],
       "fullinertia": [
-        1.4949395516253919e-05,
-        2.8201447571037268e-06,
-        1.76380918053928e-05,
-        5.379164704406603e-08,
-        1.1870800066574479e-08,
-        -5.9137358301121765e-08
-      ]
+        1.5516334595426878e-05,
+        3.456708943235025e-06,
+        1.8696097863254364e-05,
+        1.8448708704888738e-07,
+        -1.8025290850992596e-07,
+        -5.0381474219633795e-08
+      ],
+      "step_file": "models/step/cab_deck_and_mounts.step",
+      "stl_file": "models/meshes/cab_deck_and_mounts.stl",
+      "stl_linear_tol_mm": 0.028,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_reverser_stand": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 0.5226,
-      "mass_kg": 0.004441686865970199,
+      "volume_cm3": 0.4591,
+      "mass_kg": 0.003901936026523463,
       "com_m": [
-        -0.0002776930036590288,
-        -1.0674422913626678e-19,
-        0.010226445098550311
+        -0.0018795882582808095,
+        0.00010360976488060421,
+        0.009663992887637765
       ],
       "fullinertia": [
-        2.904460177527328e-07,
-        5.702948196309846e-07,
-        2.968439397934624e-07,
-        -1.4925907064565212e-23,
-        9.975027583755677e-09,
-        7.552179428487655e-24
-      ]
+        2.4491864066361256e-07,
+        4.823513555248033e-07,
+        2.506719772513117e-07,
+        -9.103143047915759e-10,
+        1.5308259972675022e-08,
+        -4.663761642428263e-09
+      ],
+      "step_file": "models/step/cab_reverser_stand.step",
+      "stl_file": "models/meshes/cab_reverser_stand.stl",
+      "stl_linear_tol_mm": 0.02,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_reverser_wheel": {
       "density_kg_m3": 7930.0,
@@ -694,7 +843,11 @@
         7.830263009499726e-26,
         6.714783599902521e-10,
         -4.0514629913782705e-26
-      ]
+      ],
+      "step_file": "models/step/cab_reverser_wheel.step",
+      "stl_file": "models/meshes/cab_reverser_wheel.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.22
     },
     "cab_reverser_nut": {
       "density_kg_m3": 8500.0,
@@ -712,61 +865,77 @@
         -1.4155343563970754e-27,
         1.511643016534789e-25,
         1.1856511518093896e-25
-      ]
+      ],
+      "step_file": "models/step/cab_reverser_nut.step",
+      "stl_file": "models/meshes/cab_reverser_nut.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_regulator_lever": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 0.0464,
-      "mass_kg": 0.00039433753329916934,
+      "volume_cm3": 0.0613,
+      "mass_kg": 0.0005214115255816453,
       "com_m": [
-        -0.0002683653718547597,
-        0.004439948088123002,
-        8.181414266173942e-20
+        -0.003190555169375379,
+        -0.00027495639759126745,
+        2.3955225428677888e-05
       ],
       "fullinertia": [
-        9.975354902433516e-09,
-        1e-09,
-        9.86107925383189e-09,
-        2.3047093237804413e-10,
-        3.0563990252317034e-26,
-        -2.033266705300248e-25
-      ]
+        1.189922352057018e-09,
+        1.0998790842310958e-08,
+        1.1532875642367643e-08,
+        1.3723910209350934e-09,
+        -3.985167585711588e-11,
+        -5.932503043874253e-12
+      ],
+      "step_file": "models/step/cab_regulator_lever.step",
+      "stl_file": "models/meshes/cab_regulator_lever.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_blower_wheel": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 0.0299,
-      "mass_kg": 0.0002542196582456053,
+      "volume_cm3": 0.0421,
+      "mass_kg": 0.00035784359730830405,
       "com_m": [
-        0.00036921837583722195,
-        -2.341919541876044e-19,
-        5.1969442820489503e-20
+        0.0003240793226166659,
+        -2.164363310388052e-19,
+        -9.493763423203052e-20
       ],
       "fullinertia": [
-        1e-09,
-        1e-09,
-        1e-09,
-        -1.42203816776693e-26,
-        9.034087219690674e-26,
-        -4.5140361676576547e-26
-      ]
+        2.146522618916607e-09,
+        1.3681950989989526e-09,
+        1.3681950989989741e-09,
+        -1.8328861448682784e-26,
+        1.6109549552992825e-25,
+        -4.637817486265788e-26
+      ],
+      "step_file": "models/step/cab_blower_wheel.step",
+      "stl_file": "models/meshes/cab_blower_wheel.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "cab_whistle_lever": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 0.0261,
-      "mass_kg": 0.00022186998863534405,
+      "volume_cm3": 0.0258,
+      "mass_kg": 0.00021902728111102915,
       "com_m": [
-        -0.00015997607417396074,
-        0.00344346956310659,
-        0.001702608395681571
+        -4.640055429558203e-20,
+        0.0037155588919225518,
+        0.0007676508741319873
       ],
       "fullinertia": [
-        3.4272329957262246e-09,
+        3.465502825681886e-09,
         1e-09,
-        2.5748712187039547e-09,
-        9.717267049685104e-11,
-        5.000217817523536e-11,
-        -1.3799702689652137e-09
-      ]
+        2.881595359535371e-09,
+        2.776512003319224e-26,
+        5.7815934636602194e-27,
+        -9.889204938500692e-10
+      ],
+      "step_file": "models/step/cab_whistle_lever.step",
+      "stl_file": "models/meshes/cab_whistle_lever.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_sight_glass_tube": {
       "density_kg_m3": 2230.0,
@@ -784,7 +953,11 @@
         7.005539291062737e-26,
         -3.5334115494611854e-25,
         2.246793602358816e-26
-      ]
+      ],
+      "step_file": "models/step/cab_sight_glass_tube.step",
+      "stl_file": "models/meshes/cab_sight_glass_tube.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "cab_sight_drain": {
       "density_kg_m3": 8500.0,
@@ -802,7 +975,11 @@
         8.70823052756819e-27,
         -2.941025303315735e-26,
         3.149487777654144e-27
-      ]
+      ],
+      "step_file": "models/step/cab_sight_drain.step",
+      "stl_file": "models/meshes/cab_sight_drain.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_pg_dial": {
       "density_kg_m3": 2700.0,
@@ -820,7 +997,11 @@
         1.414352475120426e-26,
         1.8321344441574187e-24,
         -1.6769664762688513e-24
-      ]
+      ],
+      "step_file": "models/step/cab_pg_dial.step",
+      "stl_file": "models/meshes/cab_pg_dial.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "cab_pressure_needle": {
       "density_kg_m3": 7930.0,
@@ -838,7 +1019,11 @@
         1.2039846111090145e-28,
         5.876322755782721e-12,
         -5.637746221783601e-28
-      ]
+      ],
+      "step_file": "models/step/cab_pressure_needle.step",
+      "stl_file": "models/meshes/cab_pressure_needle.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_blowdown_screw": {
       "density_kg_m3": 8500.0,
@@ -856,7 +1041,11 @@
         -3.774320379332015e-26,
         1.014466288751237e-26,
         -4.218055354161107e-26
-      ]
+      ],
+      "step_file": "models/step/cab_blowdown_screw.step",
+      "stl_file": "models/meshes/cab_blowdown_screw.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_firebox_door": {
       "density_kg_m3": 8500.0,
@@ -874,25 +1063,33 @@
         -9.253619307719097e-26,
         1.6801033957803098e-09,
         6.103908828744888e-24
-      ]
+      ],
+      "step_file": "models/step/cab_firebox_door.step",
+      "stl_file": "models/meshes/cab_firebox_door.stl",
+      "stl_linear_tol_mm": 0.018,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_bypass_lever": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 0.074,
-      "mass_kg": 0.0006291046148183937,
+      "volume_cm3": 0.0805,
+      "mass_kg": 0.0006841065148949184,
       "com_m": [
-        -0.0010623597931564137,
-        3.8280319108831585e-10,
-        -0.0021784767031225306
+        -0.0007347451606780437,
+        0.0012646266399091801,
+        -0.0017971167231370987
       ],
       "fullinertia": [
-        4.6388725916661646e-09,
-        7.883793635381241e-09,
-        3.925024509003366e-09,
-        -5.963267755959234e-16,
-        1.5903523648145245e-09,
-        -5.240658649549512e-16
-      ]
+        8.539723113069523e-09,
+        5.858537740243427e-09,
+        6.210192035593072e-09,
+        2.3560493324317522e-09,
+        1.0038394277906286e-09,
+        -1.7277855831237233e-09
+      ],
+      "step_file": "models/step/cab_bypass_lever.step",
+      "stl_file": "models/meshes/cab_bypass_lever.stl",
+      "stl_linear_tol_mm": 0.014,
+      "stl_angular_tol_rad": 0.24
     },
     "cab_roof_hatch": {
       "density_kg_m3": 8500.0,
@@ -910,7 +1107,33 @@
         6.222777687454975e-23,
         3.503478279142863e-09,
         -1.272848049823436e-23
-      ]
+      ],
+      "step_file": "models/step/cab_roof_hatch.step",
+      "stl_file": "models/meshes/cab_roof_hatch.stl",
+      "stl_linear_tol_mm": 0.03,
+      "stl_angular_tol_rad": 0.24
+    },
+    "safety_valve_poppet": {
+      "density_kg_m3": 8500.0,
+      "volume_cm3": 0.018,
+      "mass_kg": 0.00015266886408278529,
+      "com_m": [
+        -2.2252621552949984e-19,
+        -4.487539714163666e-20,
+        0.0016140587783482325
+      ],
+      "fullinertia": [
+        1e-09,
+        1e-09,
+        1e-09,
+        1.0599222860928476e-26,
+        -5.7622780074772116e-27,
+        -3.790216704252777e-27
+      ],
+      "step_file": "models/step/safety_valve_poppet.step",
+      "stl_file": "models/meshes/safety_valve_poppet.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "tender_hp_links": {
       "density_kg_m3": 8500.0,
@@ -928,7 +1151,11 @@
         -8.169430942998918e-17,
         -4.982677997696772e-24,
         -1.6608944848809165e-25
-      ]
+      ],
+      "step_file": "models/step/tender_hp_links.step",
+      "stl_file": "models/meshes/tender_hp_links.stl",
+      "stl_linear_tol_mm": 0.018,
+      "stl_angular_tol_rad": 0.24
     },
     "tender_handpump_lever": {
       "density_kg_m3": 8500.0,
@@ -946,7 +1173,11 @@
         2.0931813494086767e-25,
         -9.152086201832758e-25,
         -7.616010687773564e-25
-      ]
+      ],
+      "step_file": "models/step/tender_handpump_lever.step",
+      "stl_file": "models/meshes/tender_handpump_lever.stl",
+      "stl_linear_tol_mm": 0.02,
+      "stl_angular_tol_rad": 0.24
     },
     "tender_handpump_ram": {
       "density_kg_m3": 8500.0,
@@ -964,7 +1195,11 @@
         5.2940713941347563e-20,
         1.1555437268782252e-14,
         -8.452702231571069e-21
-      ]
+      ],
+      "step_file": "models/step/tender_handpump_ram.step",
+      "stl_file": "models/meshes/tender_handpump_ram.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "tender_drain_plug": {
       "density_kg_m3": 8500.0,
@@ -982,7 +1217,11 @@
         -2.1262730909145297e-25,
         7.711260784744411e-24,
         -6.4368245213935255e-24
-      ]
+      ],
+      "step_file": "models/step/tender_drain_plug.step",
+      "stl_file": "models/meshes/tender_drain_plug.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "tender_coal_cover": {
       "density_kg_m3": 8500.0,
@@ -1000,7 +1239,11 @@
         -1.792345625796182e-22,
         1.7412194229838205e-07,
         3.1208895491811575e-24
-      ]
+      ],
+      "step_file": "models/step/tender_coal_cover.step",
+      "stl_file": "models/meshes/tender_coal_cover.stl",
+      "stl_linear_tol_mm": 0.032,
+      "stl_angular_tol_rad": 0.24
     },
     "tender_fuel_valve": {
       "density_kg_m3": 8500.0,
@@ -1018,7 +1261,11 @@
         -7.11110330387579e-21,
         1.582029660712677e-15,
         5.217808774933277e-19
-      ]
+      ],
+      "step_file": "models/step/tender_fuel_valve.step",
+      "stl_file": "models/meshes/tender_fuel_valve.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "tender_fuel_cap": {
       "density_kg_m3": 8500.0,
@@ -1036,7 +1283,11 @@
         1.5615914059802067e-24,
         -1.7873134317201047e-24,
         6.156403847363153e-25
-      ]
+      ],
+      "step_file": "models/step/tender_fuel_cap.step",
+      "stl_file": "models/meshes/tender_fuel_cap.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "tender_rear_ladder": {
       "density_kg_m3": 8500.0,
@@ -1054,169 +1305,209 @@
         1.3457611203193666e-19,
         -7.591461454950415e-08,
         -2.4738255888223653e-20
-      ]
+      ],
+      "step_file": "models/step/tender_rear_ladder.step",
+      "stl_file": "models/meshes/tender_rear_ladder.stl",
+      "stl_linear_tol_mm": 0.02,
+      "stl_angular_tol_rad": 0.24
     },
     "umb_hose_fuel": {
       "density_kg_m3": 1180.0,
-      "volume_cm3": 0.5747,
-      "mass_kg": 0.0006781050882138494,
+      "volume_cm3": 0.4817,
+      "mass_kg": 0.0005683939591979253,
       "com_m": [
-        -0.018404825979823722,
-        -3.5712157646430176e-19,
-        0.008363504261333985
+        -0.016478206857818017,
+        1.472505830523005e-19,
+        0.008435614516891031
       ],
       "fullinertia": [
-        2.138262951848306e-09,
-        4.8945623293465096e-08,
-        4.879494545367978e-08,
-        -1.023571410980548e-23,
-        -1.3423186247143226e-09,
-        -1.2300944785526048e-24
-      ]
+        5.220793384155041e-09,
+        3.425188298316499e-08,
+        3.411963651872945e-08,
+        -2.256065346207115e-25,
+        -7.917336231555246e-10,
+        2.1761740718082056e-25
+      ],
+      "step_file": "models/step/umb_hose_fuel.step",
+      "stl_file": "models/meshes/umb_hose_fuel.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "umb_hose_fuel_r2m": {
       "density_kg_m3": 1180.0,
-      "volume_cm3": 0.5543,
-      "mass_kg": 0.0006541003390814514,
+      "volume_cm3": 0.4936,
+      "mass_kg": 0.000582463611579802,
       "com_m": [
-        -0.0175038205575683,
-        -0.0038776762298297143,
-        0.00819272533215342
+        -0.01625024252803382,
+        -0.0037004463757013455,
+        0.008285568229063272
       ],
       "fullinertia": [
-        7.0322480368218475e-09,
-        4.343642250141958e-08,
-        4.786313624807241e-08,
-        -1.3921696853531387e-08,
-        -2.116584714082615e-09,
-        -7.580293737443888e-10
-      ]
+        7.848868013092146e-09,
+        3.423400695766041e-08,
+        3.6537614031185565e-08,
+        -8.440402419583354e-09,
+        -1.0297717291120492e-09,
+        -3.0122861710735695e-10
+      ],
+      "step_file": "models/step/umb_hose_fuel_r2m.step",
+      "stl_file": "models/meshes/umb_hose_fuel_r2m.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "umb_hose_feed": {
       "density_kg_m3": 1820.0,
-      "volume_cm3": 0.4638,
-      "mass_kg": 0.0008440399535351574,
+      "volume_cm3": 0.3344,
+      "mass_kg": 0.0006086332794233448,
       "com_m": [
-        -0.015650000684582267,
-        -0.007050017378045464,
-        -0.005339280651270485
+        -0.015599722619542953,
+        -0.02024538941052578,
+        -0.004651508952372978
       ],
       "fullinertia": [
-        9.358035030134684e-08,
-        2.3082861868064323e-08,
-        1.1053915531110288e-07,
-        -3.65221943078755e-08,
-        1.5567462185572369e-15,
-        -9.589460643110216e-15
-      ]
+        3.146123306228419e-09,
+        2.859693941533251e-08,
+        2.8184656484834638e-08,
+        -2.35371105132071e-09,
+        -8.050745014991816e-10,
+        -7.382779271386732e-11
+      ],
+      "step_file": "models/step/umb_hose_feed.step",
+      "stl_file": "models/meshes/umb_hose_feed.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "umb_hose_feed_r2m": {
       "density_kg_m3": 1820.0,
-      "volume_cm3": 0.5189,
-      "mass_kg": 0.0009443090612380445,
+      "volume_cm3": 0.3096,
+      "mass_kg": 0.0005635027203419058,
       "com_m": [
-        -0.01382885184435248,
-        -0.010427787077793547,
-        -0.005523588242629961
+        -0.013763585574544782,
+        -0.023616756456018826,
+        -0.004701990881429679
       ],
       "fullinertia": [
-        1.4938850590695936e-07,
-        1.5494907178128922e-08,
-        1.5822971011956772e-07,
-        -2.980817754842576e-08,
-        -1.725326776158484e-10,
-        -8.26189998638401e-10
-      ]
+        6.250096552321076e-09,
+        1.9386779476643653e-08,
+        2.2391166866813958e-08,
+        -7.711739884428798e-09,
+        -8.037515639778175e-10,
+        -3.7119706636839437e-10
+      ],
+      "step_file": "models/step/umb_hose_feed_r2m.step",
+      "stl_file": "models/meshes/umb_hose_feed_r2m.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "umb_union_34_8": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 0.1611,
-      "mass_kg": 0.0013690276537908386,
+      "volume_cm3": 0.1522,
+      "mass_kg": 0.0012932895914387072,
       "com_m": [
-        -0.004871983578538748,
-        0.007200000000000001,
-        -0.003200000000000001
+        -0.005028002118253058,
+        -0.019200000000000005,
+        -0.0025
       ],
       "fullinertia": [
-        6.347642910185303e-09,
-        6.7340069533610034e-09,
-        6.734006953361073e-09,
-        7.730704965069891e-24,
+        7.116731718556334e-09,
+        6.8426771459664755e-09,
+        6.842677145966228e-09,
         0.0,
-        -7.730704965069891e-24
-      ]
+        -1.9326762412674728e-24,
+        1.5461409930139782e-23
+      ],
+      "step_file": "models/step/umb_union_34_8.step",
+      "stl_file": "models/meshes/umb_union_34_8.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "umb_union_34_8_r2m": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 0.1611,
-      "mass_kg": 0.0013690276537908386,
+      "volume_cm3": 0.1522,
+      "mass_kg": 0.0012932895914387072,
       "com_m": [
-        -0.004871983578538748,
-        0.007200000000000001,
-        -0.003200000000000001
+        -0.005028002118253058,
+        -0.019200000000000005,
+        -0.0025
       ],
       "fullinertia": [
-        6.347642910185303e-09,
-        6.7340069533610034e-09,
-        6.734006953361073e-09,
-        7.730704965069891e-24,
+        7.116731718556334e-09,
+        6.8426771459664755e-09,
+        6.842677145966228e-09,
         0.0,
-        -7.730704965069891e-24
-      ]
+        -1.9326762412674728e-24,
+        1.5461409930139782e-23
+      ],
+      "step_file": "models/step/umb_union_34_8_r2m.step",
+      "stl_file": "models/meshes/umb_union_34_8_r2m.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "umb_hose_return": {
       "density_kg_m3": 1820.0,
-      "volume_cm3": 0.4285,
-      "mass_kg": 0.0007798021085986751,
+      "volume_cm3": 0.3371,
+      "mass_kg": 0.0006135638999457017,
       "com_m": [
-        -0.015349999511497577,
-        0.007049998995627488,
-        -0.003398771282334172
+        -0.015405223707780379,
+        0.020245964368512392,
+        -0.004452464099169591
       ],
       "fullinertia": [
-        7.918471014563868e-08,
-        2.3255168009846258e-08,
-        1.011157862802717e-07,
-        3.917349646752763e-08,
-        7.217846025014298e-17,
-        -5.031034288549564e-16
-      ]
+        3.047971849953002e-09,
+        2.959305565644011e-08,
+        2.9300682823574237e-08,
+        2.4120690659846516e-09,
+        -8.203646352565832e-10,
+        7.393844352098008e-11
+      ],
+      "step_file": "models/step/umb_hose_return.step",
+      "stl_file": "models/meshes/umb_hose_return.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "umb_hose_return_r2m": {
       "density_kg_m3": 1820.0,
-      "volume_cm3": 0.3781,
-      "mass_kg": 0.0006880703081532983,
+      "volume_cm3": 0.3807,
+      "mass_kg": 0.0006928144211003259,
       "com_m": [
-        -0.016760432161365833,
-        0.0034014087605893496,
-        -0.0034428359843823807
+        -0.016810988606836875,
+        0.016617421332441863,
+        -0.004497727254772693
       ],
       "fullinertia": [
-        4.089695932643729e-08,
-        3.1547533662084e-08,
-        7.128172260690328e-08,
-        3.38066116376303e-08,
-        -3.1927899735884327e-10,
-        3.7544418969653333e-10
-      ]
+        4.69725118780555e-09,
+        4.1442092777240706e-08,
+        4.237959725137642e-08,
+        -7.592707372572661e-09,
+        -1.3370553942331266e-09,
+        -2.653949552054434e-10
+      ],
+      "step_file": "models/step/umb_hose_return_r2m.step",
+      "stl_file": "models/meshes/umb_hose_return_r2m.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "chassis_equalizer_brakes": {
       "density_kg_m3": 7350.0,
-      "volume_cm3": 3.8436,
-      "mass_kg": 0.02825075308592267,
+      "volume_cm3": 4.4703,
+      "mass_kg": 0.032856454532669895,
       "com_m": [
-        0.02691359320271353,
-        -1.2600190037678287e-17,
-        0.005083818614964451
+        0.025340532037186853,
+        3.011123234872651e-17,
+        0.005902984290764693
       ],
       "fullinertia": [
-        9.41521513295486e-06,
-        6.017041901412107e-05,
-        6.165730044185265e-05,
-        -9.473336794714706e-21,
-        1.3250800963685098e-06,
-        4.631664904405635e-22
-      ]
+        1.0573556246090721e-05,
+        0.0001017599497846074,
+        0.00010395204958999584,
+        -5.73288093614623e-21,
+        2.6850443289805664e-06,
+        7.551412919832576e-21
+      ],
+      "step_file": "models/step/chassis_equalizer_brakes.step",
+      "stl_file": "models/meshes/chassis_equalizer_brakes.stl",
+      "stl_linear_tol_mm": 0.025,
+      "stl_angular_tol_rad": 0.24
     },
     "axle_pump_eccentric": {
       "density_kg_m3": 8500.0,
@@ -1234,7 +1525,11 @@
         -8.799905213369557e-24,
         1.9413910318778874e-24,
         -5.619931250202299e-24
-      ]
+      ],
+      "step_file": "models/step/axle_pump_eccentric.step",
+      "stl_file": "models/meshes/axle_pump_eccentric.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "leading_truck_frame": {
       "density_kg_m3": 7350.0,
@@ -1252,7 +1547,11 @@
         5.675990978188361e-22,
         -4.2441162578023384e-08,
         -5.1852280669592653e-23
-      ]
+      ],
+      "step_file": "models/step/leading_truck_frame.step",
+      "stl_file": "models/meshes/leading_truck_frame.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.24
     },
     "trailing_truck_frame": {
       "density_kg_m3": 7350.0,
@@ -1270,7 +1569,11 @@
         1.941870050173281e-21,
         1.0491341893266449e-07,
         3.401139418637688e-23
-      ]
+      ],
+      "step_file": "models/step/trailing_truck_frame.step",
+      "stl_file": "models/meshes/trailing_truck_frame.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.24
     },
     "piston_crosshead_L": {
       "density_kg_m3": 8200.0,
@@ -1288,7 +1591,11 @@
         3.5396268281174943e-08,
         1.2071362326312138e-07,
         5.6937523834748645e-09
-      ]
+      ],
+      "step_file": "models/step/piston_crosshead_L.step",
+      "stl_file": "models/meshes/piston_crosshead_L.stl",
+      "stl_linear_tol_mm": 0.018,
+      "stl_angular_tol_rad": 0.24
     },
     "piston_crosshead_R": {
       "density_kg_m3": 8200.0,
@@ -1306,7 +1613,11 @@
         -3.5396268281174943e-08,
         1.2071362326312135e-07,
         -5.693752383474866e-09
-      ]
+      ],
+      "step_file": "models/step/piston_crosshead_R.step",
+      "stl_file": "models/meshes/piston_crosshead_R.stl",
+      "stl_linear_tol_mm": 0.018,
+      "stl_angular_tol_rad": 0.24
     },
     "slide_valve_L": {
       "density_kg_m3": 8250.0,
@@ -1324,7 +1635,11 @@
         -1.0606804297737496e-11,
         5.190398318022764e-09,
         4.233973391185516e-13
-      ]
+      ],
+      "step_file": "models/step/slide_valve_L.step",
+      "stl_file": "models/meshes/slide_valve_L.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "slide_valve_R": {
       "density_kg_m3": 8250.0,
@@ -1342,7 +1657,11 @@
         1.0606804297733526e-11,
         5.190398318022764e-09,
         -4.2339733911850905e-13
-      ]
+      ],
+      "step_file": "models/step/slide_valve_R.step",
+      "stl_file": "models/meshes/slide_valve_R.stl",
+      "stl_linear_tol_mm": 0.016,
+      "stl_angular_tol_rad": 0.24
     },
     "reverser_shaft": {
       "density_kg_m3": 7930.0,
@@ -1360,97 +1679,165 @@
         9.937139726878044e-09,
         -4.979803874140579e-08,
         -1.0745551007708757e-07
-      ]
+      ],
+      "step_file": "models/step/reverser_shaft.step",
+      "stl_file": "models/meshes/reverser_shaft.stl",
+      "stl_linear_tol_mm": 0.018,
+      "stl_angular_tol_rad": 0.24
     },
-    "driving_axlebox": {
+    "driving_axlebox_L": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 1.3399,
-      "mass_kg": 0.011389291642551787,
+      "volume_cm3": 0.5628,
+      "mass_kg": 0.004783445821275892,
       "com_m": [
-        1.3257218805856456e-21,
-        -6.448311227168579e-18,
-        0.0013692120185716888
+        2.4897036216409914e-19,
+        0.016,
+        0.0006394840904007746
       ],
       "fullinertia": [
-        2.7555103833778315e-06,
-        3.1037166580458786e-07,
-        2.7086006594157053e-06,
-        -2.9956481739645826e-23,
-        9.719128651359545e-25,
-        1.540332004909591e-23
-      ]
+        8.243197005477664e-08,
+        1.3774816551478368e-07,
+        7.398490879455688e-08,
+        1.3770318219030743e-23,
+        -4.614369067147285e-25,
+        -7.730704965069891e-24
+      ],
+      "step_file": "models/step/driving_axlebox_L.step",
+      "stl_file": "models/meshes/driving_axlebox_L.stl",
+      "stl_linear_tol_mm": 0.02,
+      "stl_angular_tol_rad": 0.24
     },
-    "tender_axlebox": {
-      "density_kg_m3": 7350.0,
-      "volume_cm3": 0.5658,
-      "mass_kg": 0.004158683390077411,
+    "driving_axlebox_R": {
+      "density_kg_m3": 8500.0,
+      "volume_cm3": 0.5628,
+      "mass_kg": 0.004783445821275893,
       "com_m": [
-        -2.511606976524137e-20,
-        0.0,
-        0.0012256894603138125
+        1.4796178417042338e-19,
+        -0.016,
+        0.0006394840904007745
       ],
       "fullinertia": [
-        2.2229846190634834e-06,
-        3.507354904447152e-08,
-        2.213767552538103e-06,
-        -1.5040768630569803e-23,
-        4.0728213643168208e-25,
-        -2.841034074663185e-23
-      ]
+        8.24319700547764e-08,
+        1.3774816551478368e-07,
+        7.398490879455664e-08,
+        3.714362151185924e-24,
+        -8.912080988404752e-25,
+        1.5461409930139782e-23
+      ],
+      "step_file": "models/step/driving_axlebox_R.step",
+      "stl_file": "models/meshes/driving_axlebox_R.stl",
+      "stl_linear_tol_mm": 0.02,
+      "stl_angular_tol_rad": 0.24
+    },
+    "tender_axlebox_L": {
+      "density_kg_m3": 7350.0,
+      "volume_cm3": 0.1703,
+      "mass_kg": 0.0012516402797649554,
+      "com_m": [
+        9.290367681640436e-20,
+        0.027795567119312786,
+        1.4713620436902346e-05
+      ],
+      "fullinertia": [
+        8.945462970844438e-09,
+        1.3742921272514971e-08,
+        8.1536979392325e-09,
+        3.467135702049954e-24,
+        2.4457317083237464e-26,
+        -3.691395663999717e-11
+      ],
+      "step_file": "models/step/tender_axlebox_L.step",
+      "stl_file": "models/meshes/tender_axlebox_L.stl",
+      "stl_linear_tol_mm": 0.02,
+      "stl_angular_tol_rad": 0.24
+    },
+    "tender_axlebox_R": {
+      "density_kg_m3": 7350.0,
+      "volume_cm3": 0.1703,
+      "mass_kg": 0.001251640279764955,
+      "com_m": [
+        3.911733760690711e-21,
+        -0.02779556711931279,
+        1.471362043690234e-05
+      ],
+      "fullinertia": [
+        8.945462970844225e-09,
+        1.374292127251497e-08,
+        8.153697939232286e-09,
+        -5.669447700153645e-25,
+        2.669449335593515e-26,
+        3.6913956639997066e-11
+      ],
+      "step_file": "models/step/tender_axlebox_R.step",
+      "stl_file": "models/meshes/tender_axlebox_R.stl",
+      "stl_linear_tol_mm": 0.02,
+      "stl_angular_tol_rad": 0.24
     },
     "cylinder_block_L": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 10.2552,
-      "mass_kg": 0.08716960839872838,
+      "volume_cm3": 10.1468,
+      "mass_kg": 0.08624790809414445,
       "com_m": [
-        0.005299725967112484,
-        -0.0017439405971692416,
-        0.0069918309049274135
+        0.005296938861470006,
+        -0.0017325491830300333,
+        0.006978316345778009
       ],
       "fullinertia": [
-        1.1038140566726455e-05,
-        1.2088680106062713e-05,
-        8.328250557260096e-06,
-        -1.2960202762819237e-07,
-        2.393345942901968e-07,
-        4.0841172072861897e-08
-      ]
+        1.098836721347197e-05,
+        1.2047359278340512e-05,
+        8.296289345745451e-06,
+        -1.3564206972019914e-07,
+        2.6424140046453954e-07,
+        4.2681622593078424e-08
+      ],
+      "step_file": "models/step/cylinder_block_L.step",
+      "stl_file": "models/meshes/cylinder_block_L.stl",
+      "stl_linear_tol_mm": 0.024,
+      "stl_angular_tol_rad": 0.24
     },
     "cylinder_block_R": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 10.2552,
-      "mass_kg": 0.08716960839872838,
+      "volume_cm3": 10.1468,
+      "mass_kg": 0.08624790809414445,
       "com_m": [
-        0.005299725967112484,
-        0.0017439405971692416,
-        0.0069918309049274135
+        0.005296938861470006,
+        0.0017325491830300333,
+        0.00697831634577801
       ],
       "fullinertia": [
-        1.1038140566726455e-05,
-        1.2088680106062713e-05,
-        8.328250557260096e-06,
-        1.2960202762819237e-07,
-        2.3933459429019635e-07,
-        -4.084117207286214e-08
-      ]
+        1.098836721347197e-05,
+        1.2047359278340509e-05,
+        8.296289345745451e-06,
+        1.3564206972019927e-07,
+        2.6424140046454e-07,
+        -4.268162259307818e-08
+      ],
+      "step_file": "models/step/cylinder_block_R.step",
+      "stl_file": "models/meshes/cylinder_block_R.stl",
+      "stl_linear_tol_mm": 0.024,
+      "stl_angular_tol_rad": 0.24
     },
     "boiler_superstructure": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 216.0626,
-      "mass_kg": 1.8365317175767808,
+      "volume_cm3": 218.0706,
+      "mass_kg": 1.8536001735392489,
       "com_m": [
-        0.03263361523758086,
-        8.451004772537114e-05,
-        0.04309424359432353
+        0.03149406718442082,
+        -1.3653530713972222e-05,
+        0.04281296975746538
       ],
       "fullinertia": [
-        0.0019151664126644172,
-        0.01745173278695936,
-        0.01729007951016815,
-        -5.679269754764024e-06,
-        0.00014514740015128728,
-        3.6628976512252677e-06
-      ]
+        0.0019324747866197526,
+        0.017416997084678847,
+        0.01729288851141311,
+        -9.307296581342114e-06,
+        0.0001761047185330749,
+        1.4122018861803465e-06
+      ],
+      "step_file": "models/step/boiler_superstructure.step",
+      "stl_file": "models/meshes/boiler_superstructure.stl",
+      "stl_linear_tol_mm": 0.085,
+      "stl_angular_tol_rad": 0.28
     },
     "boiler_firebox_flues": {
       "density_kg_m3": 8940.0,
@@ -1468,61 +1855,77 @@
         4.197308883118076e-10,
         -1.8831015575499078e-05,
         -7.180249228350025e-11
-      ]
+      ],
+      "step_file": "models/step/boiler_firebox_flues.step",
+      "stl_file": "models/meshes/boiler_firebox_flues.stl",
+      "stl_linear_tol_mm": 0.028,
+      "stl_angular_tol_rad": 0.24
     },
     "superheater_piping": {
       "density_kg_m3": 7930.0,
-      "volume_cm3": 8.2624,
-      "mass_kg": 0.0655205715141399,
+      "volume_cm3": 5.3689,
+      "mass_kg": 0.04257503220392405,
       "com_m": [
-        0.051161835246126185,
-        -5.088869402449649e-05,
-        0.044523616155934774
+        0.0546950189546996,
+        -4.630034183164203e-05,
+        0.04370317280377146
       ],
       "fullinertia": [
-        1.9696817291948714e-05,
-        0.00031461647373757774,
-        0.00030499162736530983,
-        -6.542972137645831e-07,
-        4.2139308538032814e-05,
-        3.7325067930523446e-08
-      ]
+        1.2808667356149898e-05,
+        0.00018524262676767589,
+        0.00017988787627958285,
+        -3.7906790611354005e-07,
+        2.501040634048213e-05,
+        2.160503664140253e-08
+      ],
+      "step_file": "models/step/superheater_piping.step",
+      "stl_file": "models/meshes/superheater_piping.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "exhaust_blast_pipe": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 1.7412,
-      "mass_kg": 0.014800017870152282,
+      "volume_cm3": 1.23,
+      "mass_kg": 0.010454857498870295,
       "com_m": [
-        0.12999999999999995,
-        0.0,
-        0.015509967459094845
+        0.13000000000109097,
+        6.304846702408732e-13,
+        0.015576235798250428
       ],
       "fullinertia": [
-        1.6393484592194474e-06,
-        5.819865011896213e-07,
-        1.1558283179054375e-06,
-        0.0,
-        -7.916241884231569e-21,
-        1.2369127944111826e-22
-      ]
+        1.2126649257970396e-06,
+        5.008063340678887e-07,
+        8.077722788678279e-07,
+        -2.7986789844756078e-18,
+        4.7659734264016157e-17,
+        1.3790010546404666e-17
+      ],
+      "step_file": "models/step/exhaust_blast_pipe.step",
+      "stl_file": "models/meshes/exhaust_blast_pipe.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "blower_nozzle_17_3": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 0.8665,
-      "mass_kg": 0.007364986307998073,
+      "volume_cm3": 0.5636,
+      "mass_kg": 0.004790216053136114,
       "com_m": [
-        0.015344069802324608,
-        0.003992729952470067,
-        0.03866814123936431
+        0.015243432756186821,
+        0.0038967064340309013,
+        0.03874789848901082
       ],
       "fullinertia": [
-        1.664668874506146e-07,
-        4.1854939816246604e-05,
-        4.1693211082299455e-05,
-        7.249011937461753e-08,
-        1.7972584735293343e-06,
-        -5.5722651522694365e-09
-      ]
+        1.1068213218857268e-07,
+        2.7582869483751726e-05,
+        2.7476427405142317e-05,
+        -1.1936542751059607e-08,
+        1.1823532654401324e-06,
+        9.274150696235302e-11
+      ],
+      "step_file": "models/step/blower_nozzle_17_3.step",
+      "stl_file": "models/meshes/blower_nozzle_17_3.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "smokebox_petticoat": {
       "density_kg_m3": 7930.0,
@@ -1540,187 +1943,231 @@
         -1.8290237931872162e-22,
         1.1816620826721192e-19,
         -7.81210873469908e-23
-      ]
+      ],
+      "step_file": "models/step/smokebox_petticoat.step",
+      "stl_file": "models/meshes/smokebox_petticoat.stl",
+      "stl_linear_tol_mm": 0.02,
+      "stl_angular_tol_rad": 0.24
     },
     "tandem_safety_valves": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 0.5091,
-      "mass_kg": 0.004327674906581941,
+      "volume_cm3": 0.3947,
+      "mass_kg": 0.003354635436894394,
       "com_m": [
-        -0.03950000000000001,
-        2.1811733556575837e-19,
-        0.07409150562535816
+        -0.03950000000000007,
+        1.1308626962625108e-19,
+        0.07416774968583373
       ],
       "fullinertia": [
-        4.252702714927565e-08,
-        1.8964664370229937e-07,
-        1.6763958389499408e-07,
-        5.268387659586764e-25,
-        -5.937181413173676e-21,
-        4.7442783025741815e-24
-      ]
+        3.597661347339908e-08,
+        1.5560856720431432e-07,
+        1.3675450109666816e-07,
+        -2.4819035715497955e-25,
+        -1.7811544239521028e-20,
+        5.306777314972182e-24
+      ],
+      "step_file": "models/step/tandem_safety_valves.step",
+      "stl_file": "models/meshes/tandem_safety_valves.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "feedwater_piping": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 2.4436,
-      "mass_kg": 0.020770380190952422,
+      "volume_cm3": 2.2272,
+      "mass_kg": 0.01893120224792782,
       "com_m": [
-        -0.07832664740315619,
-        -0.0009686691459661704,
-        0.005961651511877983
+        -0.08815647940556576,
+        -0.002185614346472163,
+        0.007815272341721727
       ],
       "fullinertia": [
-        2.1891334722068126e-06,
-        3.835557922021683e-05,
-        3.7971991512092766e-05,
-        -9.98060775114192e-07,
-        7.759133247627094e-07,
-        4.263567526349182e-07
-      ]
+        2.802125049842615e-06,
+        4.120303197175928e-05,
+        4.08737459054551e-05,
+        -3.757313399956605e-07,
+        2.853965135373989e-06,
+        1.7427567319070952e-07
+      ],
+      "step_file": "models/step/feedwater_piping.step",
+      "stl_file": "models/meshes/feedwater_piping.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "displacement_lubricator": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 4.0083,
-      "mass_kg": 0.03407019616619177,
+      "volume_cm3": 1.4593,
+      "mass_kg": 0.012404046620403624,
       "com_m": [
-        0.15354007112568246,
-        0.0002013291045762575,
-        0.006591418738644995
+        0.15313988053949254,
+        0.0004240704005998626,
+        0.007249592798283104
       ],
       "fullinertia": [
-        9.875282490235996e-07,
-        2.5321255874722603e-06,
-        2.6815493195996586e-06,
-        1.6692265569437864e-07,
-        1.0665768644888422e-08,
-        -1.5387732459646306e-08
-      ]
+        5.744137247772942e-07,
+        1.2766939181175383e-06,
+        1.4233558119441534e-06,
+        1.223296362047573e-07,
+        -8.099032114671778e-09,
+        -9.234658992204858e-09
+      ],
+      "step_file": "models/step/displacement_lubricator.step",
+      "stl_file": "models/meshes/displacement_lubricator.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "boiler_aux_valves": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 6.1934,
-      "mass_kg": 0.05264352528970935,
+      "volume_cm3": 5.8366,
+      "mass_kg": 0.049611049445159004,
       "com_m": [
-        -0.10682585728472732,
-        0.0014064599339405003,
-        0.04530990720115448
+        -0.10980330749684958,
+        -0.0016960820517956012,
+        0.047395037707097756
       ],
       "fullinertia": [
-        3.484889407604497e-05,
-        3.616181307277487e-05,
-        3.122743189787692e-05,
-        -4.474675314157113e-06,
-        1.0722846003517007e-05,
-        6.9757639910652585e-06
-      ]
+        2.8901114592945396e-05,
+        2.630158899159861e-05,
+        2.4847819550647166e-05,
+        -3.1457400158922876e-06,
+        7.2814439394224e-06,
+        5.431881231631443e-06
+      ],
+      "step_file": "models/step/boiler_aux_valves.step",
+      "stl_file": "models/meshes/boiler_aux_valves.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "alcohol_burner": {
       "density_kg_m3": 8200.0,
-      "volume_cm3": 4.5795,
-      "mass_kg": 0.037551805943642054,
+      "volume_cm3": 3.3448,
+      "mass_kg": 0.02742708665937977,
       "com_m": [
-        -0.08629807813867582,
-        9.527994855339268e-12,
-        0.0129986497041386
+        -0.08460121783025118,
+        -1.1412462256536098e-09,
+        0.013323050015554762
       ],
       "fullinertia": [
-        9.355872910462785e-07,
-        1.993688230468108e-05,
-        2.020963978094888e-05,
-        -3.668535609707626e-15,
-        -1.2525242205222867e-06,
-        -1.8670679897476372e-16
-      ]
+        8.555596474676742e-07,
+        1.298880148708989e-05,
+        1.3314684820915748e-05,
+        2.725251794192487e-13,
+        -7.77996498246673e-07,
+        -2.4288373305090484e-14
+      ],
+      "step_file": "models/step/alcohol_burner.step",
+      "stl_file": "models/meshes/alcohol_burner.stl",
+      "stl_linear_tol_mm": 0.022,
+      "stl_angular_tol_rad": 0.185
     },
     "tender_body": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 107.3696,
-      "mass_kg": 0.912641551257332,
+      "volume_cm3": 107.7217,
+      "mass_kg": 0.9156342951651234,
       "com_m": [
-        0.0006460647461930971,
-        5.708821311377763e-19,
-        0.03363173910713082
+        0.0010108039665560945,
+        2.0204249245581917e-06,
+        0.03377248851865318
       ],
       "fullinertia": [
-        0.001269372592358216,
-        0.0046152878398181265,
-        0.005041487890133045,
-        -1.7963638378650985e-19,
-        -2.809712002773345e-05,
-        6.189192095140691e-19
-      ]
+        0.0012727503991659245,
+        0.004657437599626101,
+        0.005080706548603293,
+        5.723459733407717e-07,
+        -3.935108358207119e-05,
+        2.7866079583015254e-07
+      ],
+      "step_file": "models/step/tender_body.step",
+      "stl_file": "models/meshes/tender_body.stl",
+      "stl_linear_tol_mm": 0.085,
+      "stl_angular_tol_rad": 0.28
     },
     "tender_internals": {
       "density_kg_m3": 8500.0,
-      "volume_cm3": 60.9223,
-      "mass_kg": 0.5178393646465499,
+      "volume_cm3": 44.991,
+      "mass_kg": 0.38242368136892296,
       "com_m": [
-        -0.005773926022176768,
-        0.00015825407013061833,
-        0.03373263160443765
+        -0.002606040815373621,
+        0.00015622210386952013,
+        0.03486002430194931
       ],
       "fullinertia": [
-        0.0004563225776307947,
-        0.0015078758926892837,
-        0.0015933791407995628,
-        4.181149869625649e-06,
-        -3.543461888125586e-05,
-        7.479843225818175e-07
-      ]
+        0.00034245423876638265,
+        0.0011397373442097718,
+        0.0011942625131086042,
+        3.6975506854077055e-06,
+        -3.463168035649773e-05,
+        4.880401516501454e-07
+      ],
+      "step_file": "models/step/tender_internals.step",
+      "stl_file": "models/meshes/tender_internals.stl",
+      "stl_linear_tol_mm": 0.024,
+      "stl_angular_tol_rad": 0.185
     },
     "tender_bogie_frame": {
       "density_kg_m3": 7350.0,
-      "volume_cm3": 7.9574,
-      "mass_kg": 0.05848698341772845,
+      "volume_cm3": 8.0858,
+      "mass_kg": 0.059430768192950276,
       "com_m": [
-        3.2034600292563806e-17,
-        3.664503073542786e-17,
-        0.0015003337683755407
+        7.703577146304085e-18,
+        -2.6388036060727242e-17,
+        0.0014121719244404114
       ],
       "fullinertia": [
-        2.54729590701213e-05,
-        1.4689603347390555e-05,
-        3.96828665532995e-05,
-        -1.5241312212310046e-21,
-        6.919933810340037e-21,
-        2.8026068703089927e-21
-      ]
+        2.629285055042705e-05,
+        1.5287286455174334e-05,
+        4.104511153250508e-05,
+        -1.3206630455897663e-21,
+        2.6596990781563828e-21,
+        -5.4085199521467e-21
+      ],
+      "step_file": "models/step/tender_bogie_frame.step",
+      "stl_file": "models/meshes/tender_bogie_frame.stl",
+      "stl_linear_tol_mm": 0.025,
+      "stl_angular_tol_rad": 0.24
     },
     "truck_wheel_L": {
       "density_kg_m3": 7350.0,
-      "volume_cm3": 1.3112,
-      "mass_kg": 0.009637067785663431,
+      "volume_cm3": 0.8884,
+      "mass_kg": 0.006529817913825516,
       "com_m": [
-        -2.980542498189419e-19,
-        -9.846785845211655e-05,
-        5.982971155601979e-19
+        5.518557380869163e-19,
+        -0.0001453243320312159,
+        6.247809873979622e-19
       ],
       "fullinertia": [
-        5.418985216796151e-07,
-        1.0698395589962143e-06,
-        5.418985216796033e-07,
-        -5.540239330206958e-24,
-        -4.409419714037169e-23,
-        1.1773616343785111e-22
-      ]
+        4.1152215527294494e-07,
+        8.109866790670465e-07,
+        4.115221552729364e-07,
+        -5.906174135135604e-25,
+        -3.855565608743469e-23,
+        8.953347334681404e-23
+      ],
+      "step_file": "models/step/truck_wheel_L.step",
+      "stl_file": "models/meshes/truck_wheel_L.stl",
+      "stl_linear_tol_mm": 0.02,
+      "stl_angular_tol_rad": 0.22
     },
     "truck_wheel_R": {
       "density_kg_m3": 7350.0,
-      "volume_cm3": 1.3112,
-      "mass_kg": 0.00963706778566343,
+      "volume_cm3": 0.8884,
+      "mass_kg": 0.006529817913825516,
       "com_m": [
-        4.335334542820974e-20,
-        9.846785845211663e-05,
-        1.087796124767088e-18
+        1.4606181763496098e-18,
+        0.00014532433203121563,
+        1.5517638468456972e-18
       ],
       "fullinertia": [
-        5.418985216796151e-07,
-        1.0698395589962145e-06,
-        5.418985216796033e-07,
-        1.2684247258006883e-24,
-        -2.3715735130845832e-23,
-        -1.0759976086953255e-22
-      ]
+        4.115221552729448e-07,
+        8.109866790670465e-07,
+        4.1152215527293647e-07,
+        4.438570679270364e-24,
+        -6.008114373523023e-23,
+        -8.492991364192629e-23
+      ],
+      "step_file": "models/step/truck_wheel_R.step",
+      "stl_file": "models/meshes/truck_wheel_R.stl",
+      "stl_linear_tol_mm": 0.02,
+      "stl_angular_tol_rad": 0.22
     }
   }
 }

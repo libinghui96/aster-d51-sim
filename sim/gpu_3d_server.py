@@ -38,9 +38,12 @@ import torch
 
 from sim.bonsai_copilot import AsyncBonsaiCopilot, CopilotDiagnosis
 from sim.human_engineer_agent import HumanEngineerAgent
+from sim.hw_guard import HardwareThermalPowerGuard, apply_cpu_thread_and_nice_caps
 from sim.ideal_oracle_controller import IdealOracleController
 from sim.run_cosim import CoSimRunner
 from sim.thermo_1d import CabControls, ThermoTelemetry
+
+apply_cpu_thread_and_nice_caps(max_threads=6, nice_delta=2)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -476,15 +479,21 @@ class GPU3DRealtimeBridge:
             return web.Response(status=204)
         raise web.HTTPNotFound()
 
-    async def sim_broadcast_loop(self, target_fps: float = 60.0) -> None:
+    async def sim_broadcast_loop(self, target_fps: float = 36.0) -> None:
         frame_dt = 1.0 / target_fps
         dt_mj = float(self.runner.model.opt.timestep)
         steps_per_frame = max(1, int(round(frame_dt / dt_mj)))
+        hw_guard = HardwareThermalPowerGuard(max_cpu_c=80.0, max_gpu_c=73.0, max_gpu_w=265.0)
+        frame_idx = 0
 
         while True:
             if not self.clients:
-                await asyncio.sleep(0.06)
+                await asyncio.sleep(0.08)
                 continue
+
+            frame_idx += 1
+            if frame_idx % 18 == 0 and hw_guard.is_hot_or_high_power():
+                await asyncio.sleep(0.04)
 
             t0 = time.perf_counter()
             try:
@@ -594,7 +603,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--scene", choices=["roller", "curve"], default="roller")
     parser.add_argument("--preset", choices=["cold", "hot"], default="hot")
-    parser.add_argument("--fps", type=float, default=60.0)
+    parser.add_argument("--fps", type=float, default=36.0)
     parser.add_argument("--no-copilot", action="store_true", help="禁用异步本地 Ollama bonsai-2:27b L3 诊断副驾")
     parser.add_argument("--no-replace", action="store_true", help="不自动清理同端口已有的旧 gpu_3d_server 进程")
     args = parser.parse_args()

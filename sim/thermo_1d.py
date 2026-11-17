@@ -56,6 +56,7 @@ class CabControls:
     sight_drain_valve: bool = False  # 1-2 左侧透明玻璃水面计下座冲洗吹扫针阀开关
     cab_roof_open: bool = False   # 21-15/28 驾驶室车顶前铰接天窗翻开状态
     coal_cover_open: bool = False # 36-1/36-2 煤水车前部炭库盖翻开整备酒精箱状态
+    safety_test_pin: bool = False # 28-6 安全阀顶端「上部の小さな突起」镊子提拉排汽测试开关 (Manual p.30)
     thermal_warp: float = 1.0     # 热力学时间倍率 (1.0=真实物理时间, >1.0=加速烧水升温)
     grade_deg: float = 0.0        # 附加模拟线路坡度 (度, >0 上坡, <0 下坡, 用于滚轮台假水位测试)
 
@@ -125,6 +126,11 @@ class ThermoTelemetry:
     exhaust_g_s: float = 0.0               # 20-7 烟室乏汽喷嘴瞬时排汽质量流率 (g/s)
     blower_g_s: float = 0.0                # 17-3 烟室通风喷嘴瞬时蒸汽流率 (g/s)
     safety_g_s: float = 0.0                # 28-6x2 双安全阀超压泄放蒸汽流率 (g/s)
+    safety_valve_lift_mm: float = 0.0      # 28-6x2 Gauge-1 蓄压环腔突跳安全阀实时阀瓣升程 (mm, 0..0.58mm)
+    safety_huddling_kgf: float = 0.0       # 28-6 蓄压反冲环腔实时表压 (kgf/cm²)
+    siphon_seal_water_pct: float = 96.0    # 13-1 压力表虹吸弯管底部液封水塞充盈度 (%)
+    roscoe_quill_oil_rate_mg_min: float = 0.0  # 4-2 置换注油器中心立管蒸汽油顶出速率 (mg/min)
+    pino_5op_active: bool = False          # 五算子 PINO 套件在线标志
     boiler_water_ml: float = 210.0         # 锅筒实时残余液态水体积 (ml, 干烧可直至 0.0 ml)
     water_free_z_mm: float = 55.5          # 锅筒自由液面真实物理高度 Z (mm, 18.2..69.5 mm)
     steam_gen_g_s: float = 0.0
@@ -258,6 +264,11 @@ class AsterD51Thermo1D:
         self.T_superheat_c = 25.0
         self.T_sh_wall_c = 25.0                                         # 17-5 双 U 四程过热器 SUS304 管壁温度 (°C)
         self.safety_valve_open = False
+        self.safety_valve_lift_mm = 0.0
+        self.safety_valve_vel_mm_s = 0.0
+        self.safety_huddling_kgf = 0.0
+        self.siphon_seal_water_pct = 92.0
+        self.roscoe_quill_oil_rate_mg_min = 0.0
 
         self.alcohol_ml = 130.0
         self.sump_fuel_ml = 0.0
@@ -290,12 +301,13 @@ class AsterD51Thermo1D:
         self.mariotte_headspace_kpa = 2.50
         self.steam_dryness_dome = 0.96
         self.steam_dryness_chest = 0.96
-        # L2 4-Operator PINO 实时物理神经算子注入槽 (为 None 时使用 1D + 离线 CFD LUT 兜底)
+        # L2 5-Operator PINO 实时物理神经算子注入槽 (为 None 时使用 1D + 离线 CFD LUT 兜底)
         self.ext_pino_burner: Optional[Dict[str, float]] = None
         self.ext_pino_cyl_L: Optional[Tuple[float, float, float, float, float, float]] = None
         self.ext_pino_cyl_R: Optional[Tuple[float, float, float, float, float, float]] = None
         self.ext_pino_cab: Optional[Tuple[float, ...]] = None
         self.ext_pino_tender: Optional[Tuple[float, ...]] = None
+        self.ext_pino_safety: Optional[Tuple[float, ...]] = None
 
     def reset_hot_ready(self) -> None:
         """一键热炉预设：气压 3.8 kgf/cm²、水位 50%、暖缸就绪，可直接开阀发车"""
@@ -586,8 +598,8 @@ class AsterD51Thermo1D:
         else:
             self.T_cyl_wall_c += (25.0 - self.T_cyl_wall_c) * 0.002 * dt_th
 
-        # 4-2 前车架卧式置换式注油器 (イラスト 4, 25):
-        # 主蒸汽经毛细管进入 4-2 黄铜油箱，受前车架环境气流冷却凝结沉底，按等体积置换将蒸汽油顶入 13-4/7-9 三通 (3.5 kgf/cm² 巡航续航 ~60 min)
+        # 4-2 前车架卧式置换式注油器 (イラスト 4, 25, 真壁厚 t=0.80mm + 内部 ID 1.1mm 中心溢流立管):
+        # 主蒸汽经毛细管进入 4-2 黄铜油箱顶腔，经 0.80mm 黄铜筒壁向环境气流散热凝结沉底，按等体积置换将热态蒸汽油顶入内部溢流立管口进入 7-9 给汽歧管
         if self.P_steam_chest > P_ATM + 2500.0 and self.lube_condensate_ml < self.lube_tank_cap_ml:
             t_sat_lube_c = sat_temp_c(self.P_steam_chest)
             air_cool_factor = 1.0 + 0.022 * min(40.0, abs(omega_3))
@@ -599,6 +611,9 @@ class AsterD51Thermo1D:
             self.lubricator_oil_pct = max(
                 0.0, 100.0 * (1.0 - self.lube_condensate_ml / self.lube_tank_cap_ml)
             )
+            self.roscoe_quill_oil_rate_mg_min = round((dv_disp_ml / max(1e-9, dt_th)) * 890.0 * 60.0, 3)
+        else:
+            self.roscoe_quill_oil_rate_mg_min = 0.0
 
         # O4-3: 过热 (>225°C)、干摩缺油或水锤冲击累积损伤密封圈
         seal_wear_rate = 0.0
@@ -627,18 +642,58 @@ class AsterD51Thermo1D:
         F_vfric_L = self._compute_slide_valve_friction(self.P_cyl_L, v_vL)
         F_vfric_R = self._compute_slide_valve_friction(self.P_cyl_R, v_vR)
 
-        # --- 4. 通风阀 (11-13)、银焊热损伤渗漏与双安全阀 (28-6: 4.0 kgf/cm² 起跳, 3.6 kgf/cm² 回座) ---
+        # --- 4. 通风阀 (11-13)、银焊热损伤渗漏与 28-6x2 Gauge-1 蓄压环腔突跳安全阀 (零 boolean 迟滞开关!) ---
         p_gauge_kgf = max(0.0, (self.P_boiler - P_ATM) / PA_PER_KGF_CM2)
-        if p_gauge_kgf >= 4.00:
-            self.safety_valve_open = True
-        elif p_gauge_kgf <= 3.60:
-            self.safety_valve_open = False
+        # 求解 28-6 纵列双突跳安全阀真实二阶牛顿—蓄压环腔反冲裙边动力学 (零 boolean 迟滞开关!):
+        #   阀座 ø2.20mm (A_seat = 3.8013 mm²), 蓄压环腔外径 ø2.60mm (ΔA_lip = 1.5080 mm²), 反冲裙边特征间隙 c_skirt = 0.035mm,
+        #   dF_hud/dy|_{y=0+} = +6.1 N/mm >> k_s = 0.028 N/mm 满足流体静力正反馈失稳突跳条件 (4.000 kgf/cm² 瞬时全开 -> 3.56 kgf/cm² 干脆回座!)
+        d_seat_sv = 2.20
+        a_seat_mm2 = 3.801327
+        da_lip_mm2 = 1.507964
+        f_preload_n = 1.49113
+        k_spring_n_mm = 0.095
+        f_pin_pull_n = 1.68 if bool(getattr(ctrl, "safety_test_pin", False)) else 0.0
+        hud_gain_eff = 0.365
+        if self.ext_pino_safety is not None and self.safety_valve_lift_mm > 0.08 and p_gauge_kgf > 0.5:
+            pino_phud = float(self.ext_pino_safety[0])
+            hb_ref = self.safety_valve_lift_mm / (self.safety_valve_lift_mm + 0.035)
+            hud_gain_eff = max(0.33, min(0.41, pino_phud / max(1e-4, p_gauge_kgf * hb_ref)))
+
+        dt_sv = min(0.00020, max(1e-5, dt / 4.0))
+        n_sv_steps = max(4, min(24, int(math.ceil(dt / dt_sv))))
+        dt_sv_use = dt / n_sv_steps
+        y_mm = float(self.safety_valve_lift_mm)
+        vy_mm_s = float(self.safety_valve_vel_mm_s)
+        p_hud_now = 0.0
+        for _ in range(n_sv_steps):
+            hb = y_mm / (y_mm + 0.035) if y_mm > 0.0 else 0.0
+            p_hud_now = p_gauge_kgf * hb * hud_gain_eff
+            f_up_n = 0.0980665 * (p_gauge_kgf * a_seat_mm2 + p_hud_now * da_lip_mm2) + f_pin_pull_n
+            f_spr_n = f_preload_n + k_spring_n_mm * y_mm
+            acc_mm_s2 = (f_up_n - f_spr_n - 0.00075 * vy_mm_s) / 1.5e-5
+            vy_mm_s += acc_mm_s2 * dt_sv_use
+            y_mm += vy_mm_s * dt_sv_use
+            if y_mm <= 0.0:
+                y_mm = 0.0
+                if vy_mm_s < 0.0:
+                    vy_mm_s = 0.0
+            elif y_mm >= 0.56:
+                y_mm = 0.56
+                if vy_mm_s > 0.0:
+                    vy_mm_s = 0.0
+
+        self.safety_valve_lift_mm = y_mm
+        self.safety_valve_vel_mm_s = vy_mm_s
+        self.safety_huddling_kgf = p_hud_now
+        self.safety_valve_open = bool(y_mm > 0.025)
 
         a_blower = 0.16e-6 * ctrl.blower_valve
         a_whistle = 0.28e-6 * max(0.0, min(1.0, float(getattr(ctrl, "whistle_valve", 0.0))))
         sg_drain_open = 1.0 if bool(getattr(ctrl, "sight_drain_valve", False)) else 0.0
         a_sg_purge = 0.14e-6 * sg_drain_open
-        a_safety = 3.6e-6 if self.safety_valve_open else 0.0
+        # 2 只纵列 28-6 突跳安全阀总有效泄放喉口面积 A_safety = 2 * min(A_seat, pi * d_seat * y)
+        a_single_sv_m2 = min(a_seat_mm2, math.pi * d_seat_sv * y_mm) * 1e-6
+        a_safety = 2.0 * a_single_sv_m2
         a_braze_damage_leak = 0.9e-6 * max(0.0, self.copper_anneal_damage - 0.55)
         blowdown_open = max(0.0, min(1.0, float(getattr(ctrl, "blowdown_valve", 0.0))))
 
@@ -983,6 +1038,12 @@ class AsterD51Thermo1D:
             self.sight_glass_level_pct += min(1.0, 12.0 * dt_th) * (target_sg_pct - self.sight_glass_level_pct)
             self.pg_bourdon_kgf += min(1.0, 7.5 * dt_th) * (p_gauge_now - self.pg_bourdon_kgf)
 
+        # 13-1 压力表虹吸弯管 (OD 2.0 / ID 1.2mm, 壁厚 t=0.40mm) 底部 U 弯液封水塞动态平衡:
+        if has_steam and p_gauge_now > 0.08:
+            self.siphon_seal_water_pct = min(100.0, self.siphon_seal_water_pct + 0.65 * dt_th)
+        else:
+            self.siphon_seal_water_pct = max(86.0, self.siphon_seal_water_pct - 0.02 * dt_th)
+
         rpm = (omega_3 / (2.0 * math.pi)) * 60.0
         v_real_ms = abs(omega_3) * (0.5 * 0.0438) * 32.0
         dry_alarm = (crown_submerged_mm <= 0.5 and ctrl.burner_lit) or (self.T_crown_c >= 240.0)
@@ -1038,6 +1099,11 @@ class AsterD51Thermo1D:
             exhaust_g_s=mdot_cyl_exh * 1000.0,
             blower_g_s=mdot_blw * 1000.0,
             safety_g_s=mdot_sv * 1000.0,
+            safety_valve_lift_mm=round(self.safety_valve_lift_mm, 4),
+            safety_huddling_kgf=round(self.safety_huddling_kgf, 3),
+            siphon_seal_water_pct=round(self.siphon_seal_water_pct, 2),
+            roscoe_quill_oil_rate_mg_min=self.roscoe_quill_oil_rate_mg_min,
+            pino_5op_active=(self.ext_pino_safety is not None),
             boiler_water_ml=self.M_water_kg * 1000.0,
             water_free_z_mm=self.water_free_z_mm,
             steam_gen_g_s=max(mdot_steam_out, evap_rate_kg_s) * 1000.0,

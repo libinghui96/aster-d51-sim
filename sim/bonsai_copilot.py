@@ -53,16 +53,20 @@ class AsyncBonsaiCopilot:
         self,
         ollama_url: str = "http://127.0.0.1:11434",
         preferred_model: str = "bonsai-2:27b",
-        interval_sec: float = 3.0,
+        interval_sec: float = 12.0,
         enabled: bool = True,
     ):
         self.ollama_url = ollama_url.rstrip("/")
         self.model = preferred_model
-        self.interval_sec = max(1.5, float(interval_sec))
+        self.interval_sec = max(5.0, float(interval_sec))
         self.enabled = bool(enabled)
 
         self._lock = threading.Lock()
         self._latest_payload: Optional[Dict[str, Any]] = None
+        self._payload_dirty: bool = False
+        self._last_submit_mono: float = 0.0
+        self._last_query_sig: Optional[tuple] = None
+        self._last_query_mono: float = 0.0
         self._diagnosis = CopilotDiagnosis(model_name=self.model)
         self._stop_evt = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -123,6 +127,8 @@ class AsyncBonsaiCopilot:
             }
         with self._lock:
             self._latest_payload = compact
+            self._payload_dirty = True
+            self._last_submit_mono = time.monotonic()
 
     def get_latest_diagnosis(self) -> CopilotDiagnosis:
         with self._lock:
@@ -147,21 +153,45 @@ class AsyncBonsaiCopilot:
             return None
 
     def _worker_loop(self) -> None:
+        from sim.hw_guard import HardwareThermalPowerGuard
+        hw_guard = HardwareThermalPowerGuard(max_cpu_c=78.0, max_gpu_c=70.0, max_gpu_w=240.0)
         detected = self._detect_model()
         if detected:
             self.model = detected
 
         while not self._stop_evt.is_set():
             snap = None
+            now_m = time.monotonic()
             with self._lock:
-                if self._latest_payload is not None:
+                # 严禁无客户端连接或暂停时死循环唤醒 Ollama 27B GPU 推理!
+                if (
+                    self._latest_payload is not None
+                    and self._payload_dirty
+                    and (now_m - self._last_submit_mono) <= 2.5
+                ):
                     snap = dict(self._latest_payload)
+                    self._payload_dirty = False
 
-            if snap is not None:
-                t0 = time.perf_counter()
-                diag = self._query_ollama(snap, t0)
-                with self._lock:
-                    self._diagnosis = diag
+            if snap is not None and not hw_guard.is_hot_or_high_power():
+                ctrl_s = snap.get("ctrl") or {}
+                sig = (
+                    round(float(snap.get("P_boil_kgf", 0.0)) * 4.0),
+                    round(float(snap.get("T_boil_c", 25.0)) / 5.0),
+                    round(float(snap.get("gauge_lvl_pct", 50.0)) / 5.0),
+                    bool(snap.get("hydrolock")),
+                    bool(snap.get("dry_alarm")),
+                    bool(snap.get("mariotte_flood")),
+                    round(float(ctrl_s.get("reg", 0.0)) * 5.0),
+                    bool(ctrl_s.get("lit", False)),
+                    bool(ctrl_s.get("fan", False)),
+                )
+                if sig != self._last_query_sig or (now_m - self._last_query_mono) >= 45.0:
+                    t0 = time.perf_counter()
+                    diag = self._query_ollama(snap, t0)
+                    self._last_query_sig = sig
+                    self._last_query_mono = time.monotonic()
+                    with self._lock:
+                        self._diagnosis = diag
 
             self._stop_evt.wait(self.interval_sec)
 

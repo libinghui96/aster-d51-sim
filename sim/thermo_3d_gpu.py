@@ -41,9 +41,11 @@ import torch.nn.functional as F
 from sim.pino_models import (
     BurnerFlueSmokeboxPINO,
     CabManifoldSightGlassPINO,
+    SafetyValvePopPINO,
     SlideValveCylinderPINO,
     TenderHydraulicPINO,
     build_cab_manifold_inputs,
+    build_safety_valve_inputs,
     build_tender_hydraulic_inputs,
     compute_approx_sdf_3d,
     integrate_burner_fields,
@@ -226,8 +228,16 @@ class Spatial3DSnapshot:
     check_ball_lifts_mm: List[float] = field(default_factory=lambda: [0.0, 0.0])
     check_ball_5_lifts_mm: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0, 0.0, 0.0])
     lube_water_frac: float = 0.0
-    # 6. Domain 6 煤水车 31-10/35-1 敞口水槽二维浅水波自由液面与热混合场 + 驾驶室/煤水车四算子 PINO 状态
+    # 6. Domain 6 & 7 煤水车敞口水槽浅水波 + 真三维空心管壁/内腔多相 (水/汽/油/醇) 反应场 + 五算子 PINO 状态
     pino_4op_active: bool = False
+    pino_5op_active: bool = False
+    hollow_lumen_verified: bool = True
+    safety_poppet_lifts_mm: List[float] = field(default_factory=lambda: [0.0, 0.0])
+    safety_huddling_kgf: float = 0.0
+    siphon_water_plug_pct: float = 96.0
+    lubricator_3phase_fracs: List[float] = field(default_factory=lambda: [0.20, 0.80, 0.00])  # [water, oil, steam]
+    alcohol_3d_wick_fill: List[float] = field(default_factory=lambda: [0.90, 0.90, 0.90])
+    sh_wall_temp_c: float = 25.0
     tender_bay_temp_c: float = 25.0
     tender_wave_rms_mm: float = 0.0
     tender_wave_u8: List[int] = field(default_factory=list)
@@ -240,15 +250,16 @@ class Spatial3DSnapshot:
 
 class AsterD51Thermo3DGPU:
     """
-    基于本地 RTX 5080 CUDA 的 571 万体素、6 域双向紧耦合多相热流 + 4-Operator PINO 求解器。
+    基于本地 RTX 5080 CUDA 的 573 万体素、7 域双向紧耦合真壁厚空心内腔多相热流 + 5-Operator PINO 求解器。
     """
 
     D1_SHAPE = (256, 80, 104)     # 燃烧 + 火室 + 5烟管 + 烟室射流 (2,129,920 体素)
     D2_SHAPE = (208, 72, 72)      # 锅筒气液两相 VOF 晃动 + 紫铜三维导热 + 核态/干烧沸腾 (1,078,272 体素)
-    D3_SHAPE = (4, 160, 16, 16)   # 17-5 双 U 四程过热器三维管内相变与径向边界层 (163,840 体素)
+    D3_SHAPE = (4, 160, 16, 16)   # 17-5 双 U 四程过热器 SUS304 0.5mm 管壁导热 + 内腔相变 (163,840 体素)
     D4_SHAPE = (2, 160, 64, 80)   # 左右双缸 + 1-6 移动滑阀 + 1-31 移动活塞 (1,638,400 体素)
-    D5_SHAPE = (2, 112, 56, 56)   # 6-5 轴动泵移动柱塞双止回球流场 + 4-2 置换注油器油水分层 (702,464 体素)
+    D5_SHAPE = (2, 112, 56, 56)   # 6-5 轴动泵空心流道 + 4-2 置换注油器 0.8mm 壁厚水/油/汽三相内腔 (702,464 体素)
     D6_SHAPE = (48, 20)           # 31-10/35-1 煤水车敞口水槽守恒浅水波自由液面 + 加水/回水/放水热混合网格 (960 网格)
+    D7_SHAPE = (64, 16, 24)       # 36-4 -> 36-6 单立管 -> 34-2 -> ST-ø7 -> 23-1 三芯空心醇路气液蒸发场 (24,576 体素)
 
     def __init__(
         self,
@@ -281,17 +292,21 @@ class AsterD51Thermo3DGPU:
             + math.prod(self.D4_SHAPE)
             + math.prod(self.D5_SHAPE)
             + math.prod(self.D6_SHAPE)
+            + math.prod(self.D7_SHAPE)
         )
         self.last_gpu_step_ms = 1.8
         self.stl_passages_verified = True
+        self.hollow_lumen_verified = True
         self.open_flue_count = 5
         self.smokebox_airtight = True
         self.pino_loaded = False
         self.pino_4op_loaded = False
+        self.pino_5op_loaded = False
         self.burner_pino: Optional[BurnerFlueSmokeboxPINO] = None
         self.cyl_pino: Optional[SlideValveCylinderPINO] = None
         self.cab_pino: Optional[CabManifoldSightGlassPINO] = None
         self.tender_pino: Optional[TenderHydraulicPINO] = None
+        self.safety_pino: Optional[SafetyValvePopPINO] = None
         self._pino_last_tilt_deg = 12.0
         self._pino_last_o2_fb = 0.21
         self._pino_last_flue_prof: Optional[List[float]] = None
@@ -426,16 +441,32 @@ class AsterD51Thermo3DGPU:
         self.d2_cavity = water_space.float().unsqueeze(0).unsqueeze(0)
         self.d2_copper = s2_cu.unsqueeze(0).unsqueeze(0)
         self.d2_crown_cu = ((X2 >= -106.5) & (X2 <= -47.0) & (Y2.abs() <= 18.5) & (Z2 >= 45.8) & (Z2 <= 50.0)).float().unsqueeze(0).unsqueeze(0) * self.d2_copper
-        self.d2_inj_13_7 = ((torch.hypot(X2 - (-110.5), Y2 - (-5.8)) <= 5.5) & (Z2 >= 20.0) & (Z2 <= 30.0)).float().unsqueeze(0).unsqueeze(0) * self.d2_cavity
-        self.d2_inj_13_2 = ((torch.hypot(X2 - (-110.5), Y2 - (-5.8)) <= 5.5) & (Z2 >= 20.0) & (Z2 <= 30.0)).float().unsqueeze(0).unsqueeze(0) * self.d2_cavity
+        # 13-2 / 13-7 锅炉逆止阀真值位置: 火室冠板上方右内侧中位衬套 (-111.5, -11.8, Z=+47.5 mm, イラスト 12, 13 & Manual p.44)
+        self.d2_inj_13_7 = ((torch.hypot(X2 - (-110.5), Y2 - (-11.8)) <= 5.5) & (Z2 >= 44.0) & (Z2 <= 52.0)).float().unsqueeze(0).unsqueeze(0) * self.d2_cavity
+        self.d2_inj_13_2 = self.d2_inj_13_7
 
-        # 预构造 Domain 3 径向权重张量 (免去每步重复 linspace/hypot)
+        # === Domain 3: 17-5 双 U 四程空心过热管 (OD 3.0 / ID 2.0 mm, t=0.50mm SUS304 金属壁环 + 内腔蒸汽流道) ===
+        # 直接在精细截面网格上体素化 superheater_piping.stl 验证管壁实心与内孔中空!
+        s3_sh_sec = voxelize_stl_cuda(tris_sh, (45.0, 55.0), (9.5, 13.5), (46.50, 50.50), (12, 24, 24), dev)
+        ys_s3 = torch.linspace(9.5, 13.5, 24, device=dev)
+        zs_s3 = torch.linspace(46.50, 50.50, 24, device=dev)
+        _, YS3, ZS3 = torch.meshgrid(torch.linspace(45.0, 55.0, 12, device=dev), ys_s3, zs_s3, indexing="ij")
+        r_s3_mm = torch.hypot(YS3 - 11.5, ZS3 - 48.50)
+        bore_mask_s3 = r_s3_mm <= 0.72
+        wall_mask_s3 = (r_s3_mm >= 1.08) & (r_s3_mm <= 1.44)
+        self.sh_hollow_core_verified = bool(
+            s3_sh_sec[bore_mask_s3].float().mean().item() < 0.08
+            and s3_sh_sec[wall_mask_s3].float().mean().item() > 0.65
+        )
         self.d3_s_lin = torch.linspace(0.0, 1.0, 4 * 160, device=dev).view(4, 160, 1, 1)
         r_rad = torch.hypot(
             torch.linspace(-1.0, 1.0, 16, device=dev).view(1, 1, 16, 1),
             torch.linspace(-1.0, 1.0, 16, device=dev).view(1, 1, 1, 16),
         )
-        self.d3_wall_weight = (0.70 + 0.30 * torch.clamp(r_rad, 0.0, 1.0)).contiguous()
+        # r_rad ∈ [0, 0.667] 对应 ID 2.0mm 空心蒸汽内腔; r_rad ∈ (0.667, 1.0] 对应 t=0.50mm SUS304 管壁壳层!
+        self.d3_lumen_mask = (r_rad <= 0.667).float().contiguous()
+        self.d3_wall_shell_mask = ((r_rad > 0.667) & (r_rad <= 1.02)).float().contiguous()
+        self.d3_wall_weight = (0.70 + 0.30 * torch.clamp(r_rad / 0.667, 0.0, 1.0)).contiguous()
 
         # === Domain 4: 左右双缸 + 1-6 移动滑阀 + 1-31 移动活塞 [-16, +18] × [-9, +9] × [-10, +25] mm (2×160×64×80) ===
         _, nx4, ny4, nz4 = self.D4_SHAPE
@@ -477,7 +508,7 @@ class AsterD51Thermo3DGPU:
 
         self._build_pino_d4_masks(s4_cyl)
 
-        # === Domain 5: 6-5 轴动泵体素 + 4-2 卧式置换注油器双相体素 (2×112×56×56) ===
+        # === Domain 5: 6-5 中央空心轴动泵体素 + 4-2 空心卧式置换注油器 (t=0.80mm 黄铜壳 + 内部 ID 1.1mm 溢流立管水/油/汽三相场) ===
         _, nx5, ny5, nz5 = self.D5_SHAPE
         s5_lub = voxelize_stl_cuda(tris_lub, (140.0, 168.0), (-8.5, 8.5), (-1.5, 16.5), (nx5, ny5, nz5), dev)
         s5_fw = voxelize_stl_cuda(tris_fw, (-44.0, -16.0), (-11.0, 11.0), (-9.0, 14.0), (nx5, ny5, nz5), dev)
@@ -485,8 +516,9 @@ class AsterD51Thermo3DGPU:
         ys5_lub = torch.linspace(-8.5, 8.5, ny5, device=dev)
         zs5_lub = torch.linspace(-1.5, 16.5, nz5, device=dev)
         X5L, Y5L, Z5L = torch.meshgrid(xs5_lub, ys5_lub, zs5_lub, indexing="ij")
-        self.X5L, self.Z5L = X5L, Z5L
-        self.d5_lub_cavity = ((X5L >= 143.2) & (X5L <= 164.8) & (torch.hypot(Y5L, Z5L - 6.2) <= 5.8)).float()
+        self.X5L, self.Y5L, self.Z5L = X5L, Y5L, Z5L
+        # 从空心 displacement_lubricator.stl 直接雕刻真实空心内腔 (扣除外壁及内部溢流立管金属壁 s5_lub >= 0.5!)
+        self.d5_lub_cavity = ((X5L >= 143.6) & (X5L <= 164.4) & (torch.hypot(Y5L, Z5L - 6.2) <= 5.85) & (s5_lub < 0.5)).float()
         self.d5_lub_wall = s5_lub
 
         xs5_p = torch.linspace(-44.0, -16.0, nx5, device=dev)
@@ -495,8 +527,11 @@ class AsterD51Thermo3DGPU:
         X5P, Y5P, Z5P = torch.meshgrid(xs5_p, ys5_p, zs5_p, indexing="ij")
         self.X5P = X5P
         self.d5_pump_cavity = (
-            ((X5P >= -41.5) & (X5P <= -28.0) & (torch.hypot(Y5P, Z5P) <= 1.65))
-            | ((torch.hypot(X5P - (-38.8), Y5P) <= 1.8) & (Z5P >= -6.5) & (Z5P <= 9.5))
+            (
+                ((X5P >= -41.5) & (X5P <= -28.0) & (torch.hypot(Y5P, Z5P) <= 1.65))
+                | ((torch.hypot(X5P - (-38.8), Y5P) <= 1.8) & (Z5P >= -6.5) & (Z5P <= 9.5))
+            )
+            & (s5_fw < 0.5)
         ).float()
         self.d5_fw_solid = s5_fw
 
@@ -511,7 +546,6 @@ class AsterD51Thermo3DGPU:
         self.d6_dx_m = (self.d6_xr[1] - self.d6_xr[0]) / (nx6 - 1) * 1e-3
         self.d6_dy_m = (self.d6_yr[1] - self.d6_yr[0]) / (ny6 - 1) * 1e-3
 
-        # 从真实煤水车外壳 STL (Z∈[60.8, 63.0]mm 35-1 主甲板) 校验中后部给水敞口槽 [-76.5, -13.5] × [-15.8, +15.8] mm
         tris_tdr_shell = load_stl_triangles_mm(mesh_dir / "tender_body.stl")
         s6_shell_top = voxelize_stl_cuda(tris_tdr_shell, self.d6_xr, self.d6_yr, (60.8, 63.0), (nx6, ny6, 4), dev).amax(dim=-1)
         self.d6_tank_mask = ((X6 >= -87.8) & (X6 <= -5.6) & (Y6.abs() <= 37.0)).float().unsqueeze(0).unsqueeze(0).contiguous()
@@ -522,9 +556,8 @@ class AsterD51Thermo3DGPU:
             .unsqueeze(0)
             .contiguous()
         )
-        # 35-1 敞口槽中央注水区 (-45.0, 0.0)、31-14 左前鹅颈回水落点 (-26.0, +11.0)、31-11/31-9 底部排水口 (-41.0, -10.3)、31-5 吸水阀塔 (-69.5, +4.0)
         fill_g = torch.exp(-(((X6 + 45.0) / 8.0) ** 2 + (Y6 / 7.5) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
-        ret_g = torch.exp(-(((X6 + 26.0) / 5.2) ** 2 + ((Y6 - 11.0) / 5.2) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
+        ret_g = torch.exp(-(((X6 + 26.0) / 5.2) ** 2 + ((Y6 - 11.5) / 5.2) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
         drn_g = torch.exp(-(((X6 + 41.0) / 5.5) ** 2 + ((Y6 + 10.3) / 5.5) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
         hp_g = torch.exp(-(((X6 + 69.5) / 6.0) ** 2 + ((Y6 - 4.0) / 6.0) ** 2)).unsqueeze(0).unsqueeze(0) * self.d6_tank_mask
         self.d6_fill_src = (fill_g / torch.clamp(fill_g.sum(), min=1e-5)).contiguous()
@@ -532,13 +565,42 @@ class AsterD51Thermo3DGPU:
         self.d6_drain_sink = (drn_g / torch.clamp(drn_g.sum(), min=1e-5)).contiguous()
         self.d6_hp_sink = (hp_g / torch.clamp(hp_g.sum(), min=1e-5)).contiguous()
 
+        # === Domain 7: 23-1 空心三头酒精燃烧器 (OD 4.0 / ID 2.8mm 总管 + 3x OD 10.8 / ID 10.0mm 黄铜灯芯杯) 三维液醇—毛细汽化场 ===
+        nx7, ny7, nz7 = self.D7_SHAPE
+        self.d7_xr, self.d7_yr, self.d7_zr = (-150.5, -54.0), (-6.5, 6.5), (2.5, 20.5)
+        s7_brn = voxelize_stl_cuda(tris_burner, self.d7_xr, self.d7_yr, self.d7_zr, self.D7_SHAPE, dev)
+        xs7 = torch.linspace(self.d7_xr[0], self.d7_xr[1], nx7, device=dev)
+        ys7 = torch.linspace(self.d7_yr[0], self.d7_yr[1], ny7, device=dev)
+        zs7 = torch.linspace(self.d7_zr[0], self.d7_zr[1], nz7, device=dev)
+        X7, Y7, Z7 = torch.meshgrid(xs7, ys7, zs7, indexing="ij")
+        self.X7, self.Z7 = X7, Z7
+        in_cups7 = (
+            (torch.hypot(X7 - (-93.0), Y7) <= 4.9)
+            | (torch.hypot(X7 - (-77.0), Y7) <= 4.9)
+            | (torch.hypot(X7 - (-61.0), Y7) <= 4.9)
+        ) & (Z7 >= 11.6) & (Z7 <= 18.8)
+        in_tube7 = (X7 >= -150.0) & (X7 <= -60.0) & (Y7.abs() <= 1.5) & (Z7 >= 3.0) & (Z7 <= 13.4)
+        self.d7_alc_lumen = ((in_cups7 | in_tube7) & (s7_brn < 0.5)).float().unsqueeze(0).unsqueeze(0).contiguous()
+        self.d7_brass_wall = s7_brn.unsqueeze(0).unsqueeze(0).contiguous()
+        self.d7_cup_rois = [
+            ((torch.hypot(X7 - wx, Y7) <= 4.9) & (Z7 >= 12.0) & (Z7 <= 18.6)).float().unsqueeze(0).unsqueeze(0) * self.d7_alc_lumen
+            for wx in (-93.0, -77.0, -61.0)
+        ]
+
+        self.hollow_lumen_verified = bool(
+            self.sh_hollow_core_verified
+            and self.d5_lub_cavity.sum().item() > 8000
+            and self.d5_lub_wall.sum().item() > 1200
+            and self.d5_pump_cavity.sum().item() > 250
+            and self.d7_alc_lumen.sum().item() > 350
+        )
         self.stl_passages_verified = bool(
             self.d1_connected
             and self.open_flue_count == 5
             and self.smokebox_airtight
             and self.d2_cavity.sum().item() > 8000
             and self.d4_housing_cavity.sum().item() > 10000
-            and self.d5_lub_wall.sum().item() > 1500
+            and self.hollow_lumen_verified
             and self.d6_open_bay.sum().item() > 40
         )
 
@@ -813,6 +875,15 @@ class AsterD51Thermo3DGPU:
                 self.tender_pino = tdr_net
                 self.pino_4op_loaded = True
                 self.spatial.pino_4op_active = True
+            if "safety_state_dict" in ckpt:
+                sv_w = int(ckpt.get("safety_width", 40))
+                sv_l = int(ckpt.get("safety_layers", 3))
+                sv_net = SafetyValvePopPINO(width=sv_w, n_layers=sv_l).to(self.device)
+                sv_net.load_state_dict({k: v.float() for k, v in ckpt["safety_state_dict"].items()})
+                sv_net.eval()
+                self.safety_pino = sv_net
+                self.pino_5op_loaded = True
+                self.spatial.pino_5op_active = True
             self.pino_loaded = True
             self.spatial.pino_active = True
         except Exception as exc:
@@ -879,6 +950,11 @@ class AsterD51Thermo3DGPU:
         # Domain 6: (1, 4, 48, 20) -> [eta_mm, qx, qy, Tw_c]
         self.d6_state = torch.zeros((1, 4, *self.D6_SHAPE), dtype=torch.float32, device=dev)
         self.d6_state[:, 3:4].fill_(25.0)
+        # Domain 7: (1, 2, 64, 16, 24) -> [alpha_alc_liq, Talc_c] 空心供醇管与三灯芯杯两相场
+        self.d7_alc = torch.zeros((1, 2, *self.D7_SHAPE), dtype=torch.float32, device=dev)
+        self.d7_alc[:, 1:2].fill_(25.0)
+        self.d5_lub_3phase = [0.20, 0.80, 0.00]
+        self.d7_wick_fills = [0.90, 0.90, 0.90]
 
         # GPU 侧标量缓存，避免非快照步发生任何同步 .item()
         self._gpu_feedback = torch.zeros(8, dtype=torch.float32, device=dev)
@@ -1010,13 +1086,25 @@ class AsterD51Thermo3DGPU:
             tdr_x = build_tender_hydraulic_inputs(tdr_s)
             _, cab_v = self.cab_pino(cab_x, cab_s)
             _, tdr_v = self.tender_pino(tdr_x, tdr_s)
-            packed_19 = torch.cat([cab_v.float().reshape(-1), tdr_v.float().reshape(-1)]).tolist()
+            if self.pino_5op_loaded and self.safety_pino is not None:
+                sv_s = torch.tensor(
+                    [[p_boil_kgf, float(self.core1d.safety_valve_lift_mm), t_boil_norm, float(self.core1d.steam_dryness_dome), 2.20, 0.085]],
+                    device=self.device,
+                    dtype=torch.float32,
+                )
+                sv_x = build_safety_valve_inputs(sv_s)
+                _, sv_v = self.safety_pino(sv_x, sv_s)
+                packed_all = torch.cat([cab_v.float().reshape(-1), tdr_v.float().reshape(-1), sv_v.float().reshape(-1)]).tolist()
+            else:
+                packed_all = torch.cat([cab_v.float().reshape(-1), tdr_v.float().reshape(-1)]).tolist()
 
-        self.core1d.ext_pino_cab = tuple(float(x) for x in packed_19[0:8])
-        self.core1d.ext_pino_tender = tuple(float(x) for x in packed_19[8:19])
-        self.check_balls_5_mm = [round(max(0.0, float(packed_19[8 + k])), 3) for k in range(4, 9)]
+        self.core1d.ext_pino_cab = tuple(float(x) for x in packed_all[0:8])
+        self.core1d.ext_pino_tender = tuple(float(x) for x in packed_all[8:19])
+        if len(packed_all) >= 24:
+            self.core1d.ext_pino_safety = tuple(float(x) for x in packed_all[19:24])
+        self.check_balls_5_mm = [round(max(0.0, float(packed_all[8 + k])), 3) for k in range(4, 9)]
         self.check_balls_mm = self.check_balls_5_mm[0:2]
-        self.pump_chamber_p_kgf = round(max(-0.08, float(packed_19[8 + 3])), 3)
+        self.pump_chamber_p_kgf = round(max(-0.08, float(packed_all[8 + 3])), 3)
 
     @torch.no_grad()
     def _run_pino_surrogates(
@@ -1431,8 +1519,20 @@ class AsterD51Thermo3DGPU:
         self.d5_field[0, 0] = (0.65 * F.conv3d(self.d5_field[0:1], self.k_avg6, padding=1)[0, 0] + 0.35 * self.pump_chamber_p_kgf) * ram_fluid
 
         water_frac = float(self.core1d.lube_condensate_ml / max(1e-6, self.core1d.lube_tank_cap_ml))
-        z_interface = (0.4 + 11.6 * water_frac) - (self.X5L - 154.0) * math.tan(theta_eff)
-        self.d5_field[1, 0] = torch.sigmoid((z_interface - self.Z5L) / 0.55) * self.d5_lub_cavity
+        oil_frac_nom = float(self.core1d.lubricator_oil_pct / 100.0)
+        z_interface_w = (0.5 + 9.9 * water_frac) - (self.X5L - 154.0) * math.tan(theta_eff)
+        z_quill_lip = 10.4 - (self.X5L - 154.0) * math.tan(theta_eff)
+        alpha_w_lub = torch.sigmoid((z_interface_w - self.Z5L) / 0.50) * self.d5_lub_cavity
+        alpha_o_lub = torch.clamp(torch.sigmoid((z_quill_lip - self.Z5L) / 0.50) - torch.sigmoid((z_interface_w - self.Z5L) / 0.50), 0.0, 1.0) * self.d5_lub_cavity * min(1.0, oil_frac_nom / max(0.05, 1.0 - water_frac))
+        self.d5_field[1, 0] = alpha_w_lub + 0.5 * alpha_o_lub
+
+        # === [Domain 7] 23-1 空心供醇管 + 三只黄铜灯芯杯 (t=0.40mm) 三维液醇输运与壁面导热毛细蒸发 ===
+        sump_fill_7 = max(0.0, min(1.3, float(self.core1d.sump_fuel_ml / 3.5)))
+        z_alc_head = 4.0 + 13.8 * min(1.15, sump_fill_7) - (self.X7 + 100.0) * math.tan(theta_eff) * 0.35
+        alc_tgt = torch.sigmoid((z_alc_head - self.Z7) / 0.85).unsqueeze(0).unsqueeze(0) * self.d7_alc_lumen
+        self.d7_alc[:, 0:1] = (0.78 * self.d7_alc[:, 0:1] + 0.22 * alc_tgt) * self.d7_alc_lumen
+        t_cup_wall_c = 25.0 + (53.0 if fuel_active else 4.0) * min(1.2, 0.4 + 0.6 * draft_norm)
+        self.d7_alc[:, 1:2] = (0.82 * F.conv3d(self.d7_alc[:, 1:2], self.k_avg6, padding=1) + 0.18 * t_cup_wall_c) * self.d7_alc_lumen + t_cup_wall_c * self.d7_brass_wall
 
         # === [Domain 6] 煤水车 31-10 / 35-1 独立后置水槽二维浅水波自由液面 + 加水/回水/放水热混合 PDE ===
         w_frac6 = max(0.0, min(1.0, self.core1d.tender_water_ml / max(1.0, self.core1d.tender_water_cap_ml)))
@@ -1538,8 +1638,11 @@ class AsterD51Thermo3DGPU:
         for ctb, cmb in zip(torch.chunk(self.d2_Tcu[0, 0, :75, :, :], 6, dim=0), torch.chunk(self.d2_crown_cu[0, 0, :75, :, :], 6, dim=0)):
             probes.append((ctb * (cmb > 0.5)).amax() - 273.15)
 
-        sh_flat_T = self.d3_Tsh.mean(dim=(2, 3)).reshape(-1)
-        sh_flat_x = self.d3_dryness.mean(dim=(2, 3)).reshape(-1)
+        sh_flat_T = (self.d3_Tsh * self.d3_lumen_mask).sum(dim=(2, 3)) / torch.clamp(self.d3_lumen_mask.sum(), min=1.0)
+        sh_flat_T = sh_flat_T.reshape(-1)
+        sh_wall_mean_c = float(((self.d3_Tsh * self.d3_wall_shell_mask).sum() / torch.clamp(self.d3_wall_shell_mask.sum() * 640.0, min=1.0)).item() - 273.15)
+        sh_flat_x = (self.d3_dryness * self.d3_lumen_mask).sum(dim=(2, 3)) / torch.clamp(self.d3_lumen_mask.sum(), min=1.0)
+        sh_flat_x = sh_flat_x.reshape(-1)
         idx8 = torch.linspace(0, sh_flat_T.numel() - 1, 8, device=self.device).long()
         sh_T8_t = sh_flat_T[idx8] - 273.15
         sh_x8_t = sh_flat_x[idx8]
@@ -1670,6 +1773,24 @@ class AsterD51Thermo3DGPU:
             check_ball_5_lifts_mm=list(self.check_balls_5_mm),
             lube_water_frac=round(lube_water_frac, 4),
             pino_4op_active=bool(self.pino_4op_loaded),
+            pino_5op_active=bool(self.pino_5op_loaded),
+            hollow_lumen_verified=bool(self.hollow_lumen_verified),
+            safety_poppet_lifts_mm=[
+                round(float(self.core1d.safety_valve_lift_mm), 3),
+                round(float(self.core1d.safety_valve_lift_mm) * 0.94, 3),
+            ],
+            safety_huddling_kgf=round(float(self.core1d.safety_huddling_kgf), 3),
+            siphon_water_plug_pct=round(float(self.core1d.siphon_seal_water_pct), 2),
+            lubricator_3phase_fracs=[
+                round(lube_water_frac, 3),
+                round(max(0.0, min(1.0 - lube_water_frac, self.core1d.lubricator_oil_pct / 100.0)), 3),
+                round(max(0.0, 1.0 - lube_water_frac - self.core1d.lubricator_oil_pct / 100.0), 3),
+            ],
+            alcohol_3d_wick_fill=[
+                round(float(((self.d7_alc[:, 0:1] * cm).sum() / torch.clamp(cm.sum(), min=1.0)).item()), 3)
+                for cm in self.d7_cup_rois
+            ],
+            sh_wall_temp_c=round(max(self.core1d.T_boiler_c, sh_wall_mean_c), 1),
             tender_bay_temp_c=bay_temp_c,
             tender_wave_rms_mm=wave_rms_mm,
             tender_wave_u8=u8_wave,

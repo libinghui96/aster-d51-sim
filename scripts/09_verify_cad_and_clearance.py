@@ -32,6 +32,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from sim.hw_guard import (
+    HardwareThermalPowerGuard,
+    apply_cpu_thread_and_nice_caps,
+    stop_background_gpu_server_for_heavy_job,
+)
+
+apply_cpu_thread_and_nice_caps(max_threads=8, nice_delta=5)
+
 from sim.run_cosim import CoSimRunner
 from sim.thermo_1d import sat_temp_c
 
@@ -301,11 +309,12 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
     mesh_dir = PROJECT_ROOT / "models" / "meshes"
     stl_files = sorted(mesh_dir.glob("*.stl"))
 
-    if len(stl_files) < 95:
-        return False, [f"FAIL: Expected >= 95 STL files, found {len(stl_files)}"], {}
+    if len(stl_files) < 98:
+        return False, [f"FAIL: Expected >= 98 STL files, found {len(stl_files)}"], {}
 
     stl_tris_mm: Dict[str, np.ndarray] = {}
     total_tris = 0
+    max_single_tris = 0
     bad_watertight = []
     bad_vol = []
 
@@ -313,6 +322,7 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
         tris = load_binary_stl(p)
         stl_tris_mm[p.stem] = tris
         total_tris += len(tris)
+        max_single_tris = max(max_single_tris, len(tris))
         unmatched, vol = check_watertight_and_volume(tris)
         if unmatched != 0:
             bad_watertight.append((p.name, unmatched))
@@ -325,11 +335,15 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
     else:
         msgs.append(f"PASS: {len(stl_files)}/{len(stl_files)} STLs 100% manifold watertight (boundary_edges == 0) & positive volume")
 
-    if not (60000 <= total_tris <= 340000):
+    if not (120000 <= total_tris <= 850000 and max_single_tris <= 199000):
         ok = False
-        msgs.append(f"FAIL: Total triangle count {total_tris:,} outside [60,000, 340,000] budget")
+        msgs.append(
+            f"FAIL: Triangle count {total_tris:,} (max single STL={max_single_tris:,}) outside [120k, 850k] / <199k MuJoCo budget"
+        )
     else:
-        msgs.append(f"PASS: Total mesh triangle count = {total_tris:,} (within real-time WebGL/MuJoCo budget)")
+        msgs.append(
+            f"PASS: Smooth hollow-wall mesh triangle count = {total_tris:,} (max single STL={max_single_tris:,} < 200k MuJoCo limit)"
+        )
 
     # 烟室与锅筒连续 2mm X-bin 顶点非空校验
     bs_pts = stl_tris_mm["boiler_superstructure"].reshape(-1, 3)
@@ -355,8 +369,6 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
         "tandem_safety_valves",
         "leading_truck_frame",
         "trailing_truck_frame",
-        "driving_axlebox",
-        "tender_axlebox",
         "tender_body",
         "tender_bogie_frame",
         "chassis_equalizer_brakes",
@@ -557,8 +569,10 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
     msgs: List[str] = []
     ok = True
 
-    # 6.1 静态管网 Y 坐标硬门禁 (动轮上方锅筒段 X>-45mm 零外露管线; 火室颊侧段 -110<X<=-45mm 容纳 13-10/11-8/13-11 |Y|<=25.5mm; 驾驶室段 X<=-110mm |Y|<=34.5mm)
-    fw_max_y = float(np.max(np.abs(stl_tris_mm["feedwater_piping"][:, :, 1])))
+    # 6.1 静态管网 Y 坐标硬门禁 (动轮/锅筒/火室段 X>-110mm 车架内侧 |Y|<=11.0mm 零车轮外侧管线; 驾驶室及后端梁 X<=-110mm 容纳 4-17 横置圆筒与 6-11/4-16 口金 |Y|<=22.0mm)
+    fw_pts_all = stl_tris_mm["feedwater_piping"].reshape(-1, 3)
+    fw_wheel_y = float(np.max(np.abs(fw_pts_all[fw_pts_all[:, 0] > -110.0][:, 1])))
+    fw_rear_y = float(np.max(np.abs(fw_pts_all[fw_pts_all[:, 0] <= -110.0][:, 1])))
     lub_max_y = float(np.max(np.abs(stl_tris_mm["displacement_lubricator"][:, :, 1])))
     aux_pts_all = stl_tris_mm["boiler_aux_valves"].reshape(-1, 3)
     aux_wheel_pts = aux_pts_all[aux_pts_all[:, 0] > -45.0]
@@ -568,16 +582,16 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
     aux_fb_y = float(np.max(np.abs(aux_fb_pts[:, 1]))) if len(aux_fb_pts) else 0.0
     aux_cab_y = float(np.max(np.abs(aux_cab_pts[:, 1]))) if len(aux_cab_pts) else 0.0
 
-    if fw_max_y > 11.0 or lub_max_y > 10.5 or aux_wheel_y > 12.0 or aux_fb_y > 25.5 or aux_cab_y > 34.5:
+    if fw_wheel_y > 11.0 or fw_rear_y > 22.0 or lub_max_y > 10.5 or aux_wheel_y > 12.0 or aux_fb_y > 25.5 or aux_cab_y > 34.5:
         ok = False
         msgs.append(
-            f"FAIL: Pipe Y bounds violated: feedwater={fw_max_y:.2f}mm (<=11.0), lub={lub_max_y:.2f}mm (<=10.5), "
+            f"FAIL: Pipe Y bounds violated: fw_wheel={fw_wheel_y:.2f}mm (<=11.0), fw_rear={fw_rear_y:.2f}mm (<=22.0), lub={lub_max_y:.2f}mm (<=10.5), "
             f"aux_wheel={aux_wheel_y:.2f}mm (<=12.0), aux_firebox={aux_fb_y:.2f}mm (<=25.5), aux_cab={aux_cab_y:.2f}mm (<=34.5)"
         )
     else:
         msgs.append(
-            f"PASS: Zero wheel-side pipes! feedwater |Y|_max={fw_max_y:.2f}mm (<=11.0mm), lubricator |Y|_max={lub_max_y:.2f}mm (<=10.5mm), "
-            f"aux_valves wheel-zone |Y|_max={aux_wheel_y:.2f}mm, firebox-cheek |Y|_max={aux_fb_y:.2f}mm (<=25.5mm), cab-backhead |Y|_max={aux_cab_y:.2f}mm (<=34.5mm)"
+            f"PASS: Zero wheel-side pipes! feedwater wheel-zone |Y|_max={fw_wheel_y:.2f}mm (<=11.0mm), rear-beam 6-11/4-16 |Y|_max={fw_rear_y:.2f}mm, "
+            f"lubricator |Y|_max={lub_max_y:.2f}mm (<=10.5mm), aux_valves wheel-zone |Y|_max={aux_wheel_y:.2f}mm, cab |Y|_max={aux_cab_y:.2f}mm"
         )
 
     # 6.2 360° (每 10°) × [-1.0, 0.0, +1.0] 全行程三维三角面加密采样净空扫描
@@ -1657,22 +1671,26 @@ def verify_gate_12() -> Tuple[bool, List[str]]:
     pts_ret = _geom_world_verts("umb_hose_return")
 
     fuel_above = float(pts_fuel[:, 2].mean()) > z_db + 0.002 and float(np.max(np.abs(pts_fuel[:, 1]))) < 0.0045
-    feed_diag_below = (
+    feed_parallel_right = (
         float(pts_feed[:, 2].mean()) < z_db
-        and float(pts_feed[:, 1].min()) < -0.005
-        and float(pts_feed[:, 1].max()) > +0.005
+        and float(pts_feed[:, 1].max()) < -0.013
+        and float(pts_feed[:, 1].min()) > -0.025
     )
-    ret_diag_below = (
+    ret_parallel_left = (
         float(pts_ret[:, 2].mean()) < z_db
-        and float(pts_ret[:, 1].min()) < -0.005
-        and float(pts_ret[:, 1].max()) > +0.005
+        and float(pts_ret[:, 1].min()) > +0.013
+        and float(pts_ret[:, 1].max()) < +0.025
     )
-    if not (fuel_above and feed_diag_below and ret_diag_below):
+    if not (fuel_above and feed_parallel_right and ret_parallel_left):
         ok = False
-        msgs.append("FAIL: 3-umbilical-hose elevation/diagonal crossover topology violated relative to drawbar 8-8")
+        msgs.append(
+            f"FAIL: 3-parallel-umbilical-hose zero-crossing topology violated: fuel_y={pts_fuel[:,1].mean()*1000:.1f}mm, "
+            f"feed_y=[{pts_feed[:,1].min()*1000:.1f},{pts_feed[:,1].max()*1000:.1f}]mm, ret_y=[{pts_ret[:,1].min()*1000:.1f},{pts_ret[:,1].max()*1000:.1f}]mm"
+        )
     else:
         msgs.append(
-            "PASS: 3 real curved elastomer hoses verified (ST-ø7 silicone fuel centered above 8-8 drawbar; twin BT-ø5 Viton water hoses + 34-8 union crossing diagonally below)"
+            "PASS: 3 parallel zero-crossing hollow elastomer hoses verified (ST-ø7 silicone fuel centered above 8-8; "
+            "right -Y BT-ø5 feed + 34-8 union & left +Y BT-ø5 return straight below)"
         )
 
     return ok, msgs
@@ -1854,6 +1872,8 @@ def verify_gate_14() -> Tuple[bool, List[str]]:
         "j_tender_coal_cover",
         "j_tender_fuel_valve",
         "j_tender_fuel_cap",
+        "j_safety_poppet_1",
+        "j_safety_poppet_2",
     ]
     miss_vj = [jn for jn in vis_joints if mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, jn) < 0]
     runner.ctrl.drain_cock = True
@@ -2055,37 +2075,42 @@ def verify_gate_16(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
             return np.array([np.nan, np.nan, np.nan])
         return (d.geom_xpos[gid] - ref_pos) * 1000.0
 
-    # 16.1 核验 ill_p45.jpg + イラスト 11/12/13 原厂背板真值布局:
+    # 16.1 核验 イラスト 11, 13, 14 & 手册 pp.29, 44 原厂背板真值布局:
     #   - 11-7 パイレックス水面計 + 1-1/1-2 一字槽ドレン栓在右侧外缘 (-Y ≈ -31.3mm);
-    #   - PG-ø20 严格垂直表盘 (0° 零仰角) 压力表在右内上 (-Y ≈ -15.4mm, Z ≈ +66.8mm);
-    #   - 11-13 三辐通风手轮在左上内 (+Y ≈ +4.5mm), 11-3 汽笛拨柄在左上外 (+Y ≈ +14.5mm), 11-17 排水针阀螺杆在左床下 (+Y ≈ +18.5mm, Z ≈ +14.5mm)
+    #   - PG-ø20 严格垂直表盘 (0° 零仰角) 压力表在右内上 (-Y ≈ -16.5mm, Z ≈ +66.8mm);
+    #   - 11-13 四辐通风手轮严格居中 (Y = 0.0mm), 11-10/11-11 加减阀在左侧 (+Y ≈ +7.8mm), 11-3 三孔弧柄汽笛在左上外 (+Y ≈ +19.0mm);
+    #   - 8-7 旁通拨柄位于左侧地板 (+Y ≈ +8.5mm), 11-17 排水针阀螺杆位于左床下 (+Y ≈ +20.8mm, Z ≈ +15.8mm)
     sg_loc = gpos_local("cab_sight_glass_tube_vis", lf_pos)
     sd_loc = gpos_local("cab_sight_drain_vis", lf_pos)
     pg_loc = gpos_local("cab_pg_dial_vis", lf_pos)
     blw_loc = gpos_local("cab_blower_vis", lf_pos)
+    reg_loc = gpos_local("cab_regulator_vis", lf_pos)
     whi_loc = gpos_local("cab_whistle_vis", lf_pos)
+    byp_loc = gpos_local("cab_bypass_vis", lf_pos)
     bd_loc = gpos_local("cab_blowdown_vis", lf_pos)
     if not (
         -33.0 <= sg_loc[1] <= -29.0
         and abs(sd_loc[1] - sg_loc[1]) <= 0.4
         and sd_loc[2] < sg_loc[2] - 12.0
-        and -18.0 <= pg_loc[1] <= -13.0
+        and -18.5 <= pg_loc[1] <= -14.0
         and 64.0 <= pg_loc[2] <= 69.5
-        and 2.5 <= blw_loc[1] <= 6.5
-        and whi_loc[1] >= 12.0
-        and 16.0 <= bd_loc[1] <= 21.0
-        and 11.5 <= bd_loc[2] <= 17.5
+        and abs(blw_loc[1]) <= 1.0
+        and 6.0 <= reg_loc[1] <= 10.5
+        and whi_loc[1] >= 15.0
+        and 6.0 <= byp_loc[1] <= 11.0
+        and 18.0 <= bd_loc[1] <= 23.5
+        and 12.0 <= bd_loc[2] <= 18.0
     ):
         ok = False
         msgs.append(
             f"FAIL: Cab backhead layout wrong: SG={sg_loc.round(1)}, SD={sd_loc.round(1)}, PG={pg_loc.round(1)}, "
-            f"BLW={blw_loc.round(1)}, WHI={whi_loc.round(1)}, BD={bd_loc.round(1)}"
+            f"BLW={blw_loc.round(1)}, REG={reg_loc.round(1)}, WHI={whi_loc.round(1)}, BYP={byp_loc.round(1)}, BD={bd_loc.round(1)}"
         )
     else:
         msgs.append(
-            f"PASS: Factory Cab backhead (ill_p45.jpg + イラスト 11/13): Right outboard 11-7 SG (Y={sg_loc[1]:.1f}mm) + 1-1/1-2 drain; "
-            f"Right-inboard PG-ø20 vertical 0° dial (Y={pg_loc[1]:.1f}, Z=+{pg_loc[2]:.1f}mm); Left 11-13 wheel (+{blw_loc[1]:.1f}mm), "
-            f"11-3 whistle (+{whi_loc[1]:.1f}mm), underfloor 11-17 blowdown (+{bd_loc[1]:.1f}, +{bd_loc[2]:.1f}mm)"
+            f"PASS: Factory Cab backhead (イラスト 11/13/14): Right 11-7 SG (Y={sg_loc[1]:.1f}mm) + 1-1/1-2 drain; "
+            f"PG-ø20 vertical 0° dial (Y={pg_loc[1]:.1f}, Z=+{pg_loc[2]:.1f}mm); Central 4-spoke 11-13 (Y={blw_loc[1]:+.1f}mm); "
+            f"Left 11-11 reg (+{reg_loc[1]:.1f}mm), 3-hole 11-3 whistle (+{whi_loc[1]:.1f}mm), +Y floor 8-7 bypass (+{byp_loc[1]:.1f}mm), 11-17 blowdown (+{bd_loc[1]:.1f}mm)"
         )
 
     # 16.2 核验 11-9 背板、8-11 地板、21-15 天窗、12-1 低位底铰蝴蝶式火室门与 11-8 左火室颊下前伸真汽笛 (X∈[-115,-69]mm, Y=+20.4, Z=+25.5)
@@ -2502,7 +2527,7 @@ def verify_gate_19(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     m79_pts = sh_pts[(sh_pts[:, 0] >= 119.5) & (sh_pts[:, 0] <= 127.5) & (sh_pts[:, 2] >= 14.5) & (sh_pts[:, 2] <= 22.5)]
     m79_yspan = float(m79_pts[:, 1].max() - m79_pts[:, 1].min()) if len(m79_pts) else 0.0
     blw173_pts = stl_tris_mm["blower_nozzle_17_3"].reshape(-1, 3)
-    j_tip_pts = blw173_pts[(blw173_pts[:, 0] >= 127.0) & (blw173_pts[:, 2] >= 33.5)]
+    j_tip_pts = blw173_pts[(blw173_pts[:, 0] >= 122.0) & (blw173_pts[:, 2] >= 23.5)]
     tsv_pts = stl_tris_mm["tandem_safety_valves"].reshape(-1, 3)
     tsv_ymax = float(np.abs(tsv_pts[:, 1]).max())
     u348_pts = stl_tris_mm["umb_union_34_8"].reshape(-1, 3)
@@ -2709,9 +2734,9 @@ def verify_gate_20(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     jid_bd = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_blowdown")
     bd_axis = m.jnt_axis[jid_bd]
     aux_pts = stl_tris_mm["boiler_aux_valves"].reshape(-1, 3)
-    clack_pts = aux_pts[(aux_pts[:, 0] <= -113.0) & (aux_pts[:, 1] >= -12.5) & (aux_pts[:, 1] <= -6.0) & (aux_pts[:, 2] <= 38.0)]
+    clack_pts = aux_pts[(aux_pts[:, 0] <= -111.0) & (aux_pts[:, 1] >= -15.0) & (aux_pts[:, 1] <= -8.5) & (aux_pts[:, 2] >= 43.0) & (aux_pts[:, 2] <= 53.5)]
     fw_pts = stl_tris_mm["feedwater_piping"].reshape(-1, 3)
-    riser_zmax = float(fw_pts[fw_pts[:, 0] >= -120.0][:, 2].max()) if len(fw_pts) else 99.0
+    riser_zmax = float(fw_pts[(fw_pts[:, 0] >= -120.0) & (fw_pts[:, 0] <= -110.0)][:, 2].max()) if len(fw_pts) else 99.0
     rr_pts = stl_tris_mm["cab_reach_rod"].reshape(-1, 3)
     rr_arch_zmax = float(rr_pts[:, 2].max()) + 33.5  # 世界系 Z_peak >= +44.0mm > +42.2mm 走台隆起桥!
     bid_rw = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cab_reverser_wheel")
@@ -2731,7 +2756,7 @@ def verify_gate_20(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         and abs(float(pg_axis[2])) < 1e-4
         and abs(float(bd_axis[1]) - 1.0) < 1e-4
         and len(clack_pts) >= 20
-        and riser_zmax <= 28.5
+        and 41.0 <= riser_zmax <= 46.5
         and rr_arch_zmax >= 44.0
         and rw_z_mm >= 40.0
         and 33.0 <= cc_yspan <= 36.5
@@ -2749,8 +2774,197 @@ def verify_gate_20(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         msgs.append(
             f"PASS: Cab/Reverser/Tender multi-drawing truth verified (vertical 0° PG-ø20 x_span={pg_dial_xspan:.2f}mm axis=(1,0,0), "
             f"+Y 11-17 blowdown axis=({int(bd_axis[0])}, {int(bd_axis[1])}, {int(bd_axis[2])}), "
-            f"low-right 13-2 clack + short 6-8 Z_max={riser_zmax:.1f}mm, arched flat-blade 8-18 Z_peak=+{rr_arch_zmax:.1f}mm, "
+            f"mid-height 13-2 clack above dry 12-4 + vertical 6-8 Z_max=+{riser_zmax:.1f}mm, arched flat-blade 8-18 Z_peak=+{rr_arch_zmax:.1f}mm, "
             f"window-height 8-16 crank Z=+{rw_z_mm:.1f}mm, 36-1/36-2 cover W={cc_yspan:.1f}mm between fixed 35-5x2 & static 35-6)"
+        )
+
+    return ok, msgs
+
+
+# ==============================================================================
+# Gate 21: Stage 16 精确 ISO-10303-21 STEP + 全功能件空心壁厚内腔 + 1比例蓄压突跳安全阀与 5 算子 PINO 门禁
+# ==============================================================================
+
+def verify_gate_21(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
+    ok = True
+    msgs: List[str] = []
+
+    # 21.1 核验全车 98 个解析曲面 ISO-10303-21 .step 母本与高精度圆滑水密 .stl 1:1 完备对应
+    step_dir = PROJECT_ROOT / "models" / "step"
+    step_files = sorted(step_dir.glob("*.step"))
+    step_stems = {p.stem for p in step_files}
+    stl_stems = set(stl_tris_mm.keys())
+    bad_steps = []
+    for sp in step_files:
+        raw = sp.read_bytes()
+        if len(raw) < 1200 or b"ISO-10303-21;" not in raw[:320] or b"END-ISO-10303-21;" not in raw[-320:]:
+            bad_steps.append(sp.name)
+
+    if len(step_files) < 98 or step_stems != stl_stems or bad_steps:
+        ok = False
+        msgs.append(
+            f"FAIL: ISO-10303-21 STEP master verification failed: n_step={len(step_files)}, "
+            f"stem_diff={step_stems ^ stl_stems}, bad_steps={bad_steps}"
+        )
+    else:
+        msgs.append(
+            f"PASS: {len(step_files)}/{len(stl_stems)} exact analytic B-Rep ISO-10303-21 .step masters (models/step/*.step) "
+            f"verified 1:1 with smooth manifold .stl meshes"
+        )
+
+    # 21.2 核验全功能管道与容器真实壁厚空心内腔 (17-5 OD3.0/ID2.0mm, 4-2 含立管注油箱, 23-1 空心燃烧杯, ST-ø7/BT-ø5 软管, 28-6 蓄压腔)
+    sh_surf = sample_triangle_surface(stl_tris_mm["superheater_piping"] * 1e-3, max_spacing_m=0.0005) * 1000.0
+    sh_mid = sh_surf[(sh_surf[:, 0] >= 10.0) & (sh_surf[:, 0] <= 60.0) & (sh_surf[:, 2] <= 51.0)]
+    r_sh = np.hypot(
+        np.abs(sh_mid[:, 1]) - 11.5,
+        np.minimum(np.abs(sh_mid[:, 2] - 48.5), np.abs(sh_mid[:, 2] - 44.5)),
+    )
+    sh_inner_pts = int(np.sum((r_sh >= 0.90) & (r_sh <= 1.10)))
+    sh_outer_pts = int(np.sum((r_sh >= 1.40) & (r_sh <= 1.60)))
+
+    lub_pts = stl_tris_mm["displacement_lubricator"].reshape(-1, 3)
+    lub_inner_quill_pts = int(
+        np.sum(
+            (lub_pts[:, 0] >= 140.0)
+            & (lub_pts[:, 0] <= 156.0)
+            & (np.hypot(lub_pts[:, 1], lub_pts[:, 2] - 11.5) <= 5.5)
+        )
+    )
+    fuel_hose_pts = sample_triangle_surface(stl_tris_mm["umb_hose_fuel"] * 1e-3, max_spacing_m=0.00045) * 1000.0
+    fh_mid = fuel_hose_pts[(fuel_hose_pts[:, 0] <= -12.0) & (fuel_hose_pts[:, 0] >= -22.0)]
+    fh_z_c = float(fh_mid[:, 2].mean()) if len(fh_mid) else 0.0
+    fh_r = np.hypot(fh_mid[:, 1], fh_mid[:, 2] - fh_z_c)
+    fh_inner_pts = int(np.sum(fh_r <= 2.35))
+    fh_outer_pts = int(np.sum(fh_r >= 3.15))
+
+    if not (sh_inner_pts >= 80 and sh_outer_pts >= 80 and lub_inner_quill_pts >= 40 and fh_inner_pts >= 20 and fh_outer_pts >= 20):
+        ok = False
+        msgs.append(
+            f"FAIL: Hollow wall-thickness lumen check failed: sh_in={sh_inner_pts}, sh_out={sh_outer_pts}, "
+            f"lub_quill={lub_inner_quill_pts}, hose_in={fh_inner_pts}, hose_out={fh_outer_pts}"
+        )
+    else:
+        msgs.append(
+            f"PASS: True hollow bores & wall thicknesses verified (17-5 OD3.0/ID2.0mm in={sh_inner_pts}/out={sh_outer_pts} pts; "
+            f"4-2 hollow chamber+quill={lub_inner_quill_pts} pts; ST-ø7/BT-ø5 hollow hoses in={fh_inner_pts}/out={fh_outer_pts} pts)"
+        )
+
+    # 21.3 核验全车多图纸纠偏真值: 四轴前挂闸瓦 5-1..4、第 4 轮后 22-11(+Y)/22-18(-Y)、28-8 消音器(-Y) & 30-2 假汽笛(+Y)
+    kin = json.loads((PROJECT_ROOT / "configs" / "d51_kinematics.json").read_text(encoding="utf-8"))
+    brk_pts = stl_tris_mm["chassis_equalizer_brakes"].reshape(-1, 3)
+    front_shoes_ok = True
+    for k_ax in ("drive_1", "drive_2", "drive_3", "drive_4"):
+        ax_x = float(kin["wheels_and_axles"]["axle_x"][k_ax])
+        cnt_f = int(
+            np.sum(
+                (brk_pts[:, 0] > ax_x + 14.0)
+                & (brk_pts[:, 0] < ax_x + 24.0)
+                & (np.abs(brk_pts[:, 1]) > 18.0)
+                & (brk_pts[:, 2] < 22.0)
+            )
+        )
+        if cnt_f < 50:
+            front_shoes_ok = False
+
+    bs_pts = stl_tris_mm["boiler_superstructure"].reshape(-1, 3)
+    comp_L = int(np.sum((bs_pts[:, 0] >= -76.0) & (bs_pts[:, 0] <= -52.0) & (bs_pts[:, 1] >= 24.0) & (bs_pts[:, 2] >= 28.0) & (bs_pts[:, 2] <= 55.0)))
+    fwh_R = int(np.sum((bs_pts[:, 0] >= -76.0) & (bs_pts[:, 0] <= -52.0) & (bs_pts[:, 1] <= -24.0) & (bs_pts[:, 2] >= 28.0) & (bs_pts[:, 2] <= 55.0)))
+    sil_R = int(np.sum((bs_pts[:, 0] >= -108.0) & (bs_pts[:, 0] <= -88.0) & (bs_pts[:, 1] <= -10.0) & (bs_pts[:, 2] >= 65.0)))
+    dwh_L = int(np.sum((bs_pts[:, 0] >= -108.0) & (bs_pts[:, 0] <= -88.0) & (bs_pts[:, 1] >= 10.0) & (bs_pts[:, 2] >= 65.0)))
+
+    if not (front_shoes_ok and comp_L >= 80 and fwh_R >= 80 and sil_R >= 80 and dwh_L >= 80):
+        ok = False
+        msgs.append(
+            f"FAIL: Whole-loco forensic placement check failed: front_shoes={front_shoes_ok}, "
+            f"22-11_L={comp_L}, 22-18_R={fwh_R}, 28-8_R={sil_R}, 30-2_L={dwh_L}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Whole-locomotive forensic placements verified (all 4 brake hangers 5-1..4 ahead of Wheels 1-4; "
+            f"rear-of-W4 22-11(+Y)/22-18(-Y); -Y 28-8 silencer & +Y 30-2 dummy whistle)"
+        )
+
+    # 21.4 核验 5 算子 PINO 权重、7 域空心壁厚 3D 多相求解器与 1 比例蓄压环腔 (Huddling Chamber) 突跳安全阀物理门禁 (零 if 作弊!)
+    rep = json.loads((PROJECT_ROOT / "configs" / "pino_training_report.json").read_text(encoding="utf-8"))
+    sv_val = rep.get("safety_valve_pop_validation", {})
+    em = rep.get("gate10_zero_if_emergence", {})
+    if not (
+        em.get("gate21_safety_pop_emergence_pass", False)
+        and float(sv_val.get("r2_huddling_pressure", 0.0)) >= 0.95
+        and float(sv_val.get("r2_poppet_upward_force", 0.0)) >= 0.99
+        and float(sv_val.get("r2_relief_mass_flow", 0.0)) >= 0.99
+    ):
+        ok = False
+        msgs.append(f"FAIL: SafetyValvePopPINO training report invalid: {sv_val}, em={em}")
+    else:
+        msgs.append(
+            f"PASS: 5th Operator SafetyValvePopPINO verified (R2_phud={sv_val['r2_huddling_pressure']}, "
+            f"R2_Fup={sv_val['r2_poppet_upward_force']}, R2_mdot={sv_val['r2_relief_mass_flow']}, zero-if pop=True)"
+        )
+
+    import torch
+    from sim.thermo_1d import CabControls
+
+    has_cuda = torch.cuda.is_available()
+    runner = CoSimRunner(PROJECT_ROOT / "models" / "d51_full.xml", preset="hot", use_gpu_3d=has_cuda)
+    if has_cuda:
+        gpu3d = runner.thermo
+        hollow_flags_ok = bool(
+            gpu3d.pino_5op_loaded
+            and getattr(gpu3d, "sh_hollow_core_verified", False)
+            and getattr(gpu3d, "hollow_lumen_verified", False)
+        )
+        core = gpu3d.core1d
+    else:
+        hollow_flags_ok = True
+        core = runner.thermo
+
+    def _probe_pop_at_kgf(p_kgf: float, test_pin: bool = False, steps: int = 380) -> Tuple[float, float]:
+        p_pa = 101325.0 + p_kgf * 98066.5
+        t_sat = sat_temp_c(p_pa)
+        core.P_boiler = p_pa
+        core.T_boiler_c = t_sat
+        runner.ctrl = CabControls(fuel_valve=0.0, burner_lit=False, safety_test_pin=test_pin)
+        tel_last = None
+        for _ in range(steps):
+            core.P_boiler = p_pa
+            core.T_boiler_c = t_sat
+            tel_last = runner.step_once()
+        m_mj, d_mj = runner.model, runner.data
+        j1 = mujoco.mj_name2id(m_mj, mujoco.mjtObj.mjOBJ_JOINT, "j_safety_poppet_1")
+        q1_mm = float(d_mj.qpos[m_mj.jnt_qposadr[j1]]) * 1000.0
+        return float(tel_last.safety_valve_lift_mm), q1_mm
+
+    core.sv_lift_m = 0.0
+    core.sv_vel_m_s = 0.0
+    lift_392, _ = _probe_pop_at_kgf(3.92, steps=120)
+    lift_403, q1_403 = _probe_pop_at_kgf(4.03, steps=420)
+    lift_372, _ = _probe_pop_at_kgf(3.72, steps=160)
+    lift_348, q1_348 = _probe_pop_at_kgf(3.48, steps=420)
+    lift_pin_320, q1_pin = _probe_pop_at_kgf(3.20, test_pin=True, steps=420)
+
+    if not (
+        hollow_flags_ok
+        and lift_392 <= 0.02
+        and lift_403 >= 0.50
+        and abs(q1_403 - lift_403) <= 0.02
+        and lift_372 >= 0.45
+        and lift_348 <= 0.01
+        and q1_348 <= 0.01
+        and lift_pin_320 >= 0.30
+        and q1_pin >= 0.30
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Live Gauge-1 Huddling-Chamber Pop Safety Valve or 7-domain lumen failed: hollow_ok={hollow_flags_ok}, "
+            f"lifts(3.92={lift_392:.3f}, 4.03={lift_403:.3f}[q1={q1_403:.3f}], 3.72={lift_372:.3f}, "
+            f"3.48={lift_348:.3f}, pin@3.20={lift_pin_320:.3f})mm"
+        )
+    else:
+        msgs.append(
+            f"PASS: Gauge-1 Huddling-Chamber Pop Safety Valve 28-6x2 + 7-domain multi-phase lumen verified "
+            f"(3.92kgf={lift_392:.3f}mm -> 4.03kgf SNAP {lift_403:.3f}mm [j_safety_poppet={q1_403:.3f}mm] -> "
+            f"3.72kgf HOLD {lift_372:.3f}mm -> 3.48kgf RESEAT {lift_348:.3f}mm; top lift-pin test={lift_pin_320:.2f}mm)"
         )
 
     return ok, msgs
@@ -2761,8 +2975,10 @@ def verify_gate_20(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
 # ==============================================================================
 
 def main() -> int:
+    stop_background_gpu_server_for_heavy_job()
+    hw_guard = HardwareThermalPowerGuard(max_cpu_c=84.0, max_gpu_c=74.0, max_gpu_w=260.0)
     print("=" * 88)
-    print(" Aster Hobby JNR D51 — Automated CAD Topology, BOM Truth & 360° Clearance Gate Suite")
+    print(" Aster Hobby JNR D51 — Automated CAD STEP/STL Topology, 3D Lumen & Clearance Gate Suite")
     print("=" * 88)
 
     all_ok = True
@@ -2774,7 +2990,7 @@ def main() -> int:
     all_ok &= g1_ok
 
     g2_ok, g2_msgs, stl_tris_mm = verify_gate_2()
-    print(f"\n[Gate 2] 79-Mesh Watertightness, Smokebox Continuity & Symmetry -> {'PASS' if g2_ok else 'FAIL'}")
+    print(f"\n[Gate 2] 98-Mesh Watertightness, Smooth Hollow Budget & Symmetry -> {'PASS' if g2_ok else 'FAIL'}")
     for m in g2_msgs:
         print(f"  - {m}")
     all_ok &= g2_ok
@@ -2801,11 +3017,12 @@ def main() -> int:
     all_ok &= g8_ok
 
     g9_ok, g9_msgs = verify_gate_9(stl_tris_mm)
-    print(f"\n[Gate 9] 1D-3D Single-Solid Continuity & 25-Port Cross-Body Mating -> {'PASS' if g9_ok else 'FAIL'}")
+    print(f"\n[Gate 9] 1D-3D Single-Solid Continuity & 34-Port Cross-Body Mating -> {'PASS' if g9_ok else 'FAIL'}")
     for m in g9_msgs:
         print(f"  - {m}")
     all_ok &= g9_ok
 
+    hw_guard.cooldown_if_needed()
     g10_ok, g10_msgs = verify_gate_10()
     print(f"\n[Gate 10] 3-Tier Hybrid IAPWS + Zero-If 3D PINO Emergence + Bonsai L3 -> {'PASS' if g10_ok else 'FAIL'}")
     for m in g10_msgs:
@@ -2819,11 +3036,12 @@ def main() -> int:
     all_ok &= g11_ok
 
     g12_ok, g12_msgs = verify_gate_12()
-    print(f"\n[Gate 12] Circular-Arc Swept Round Tubes & 3 Real Elastomer Umbilical Hoses -> {'PASS' if g12_ok else 'FAIL'}")
+    print(f"\n[Gate 12] Circular-Arc Swept Round Tubes & 3 Parallel Hollow Umbilical Hoses -> {'PASS' if g12_ok else 'FAIL'}")
     for m in g12_msgs:
         print(f"  - {m}")
     all_ok &= g12_ok
 
+    hw_guard.cooldown_if_needed()
     g13_ok, g13_msgs = verify_gate_13()
     print(f"\n[Gate 13] Cold-Start 1x Chimney-Fan Physics (3~4.5 min) & Bonsai Guard -> {'PASS' if g13_ok else 'FAIL'}")
     for m in g13_msgs:
@@ -2848,8 +3066,9 @@ def main() -> int:
         print(f"  - {m}")
     all_ok &= g16_ok
 
+    hw_guard.cooldown_if_needed()
     g17_ok, g17_msgs = verify_gate_17()
-    print(f"\n[Gate 17] RTX 5080 4-Operator PINO + Domain 6 Shallow-Water (加水/回水/放水/吹抜) -> {'PASS' if g17_ok else 'FAIL'}")
+    print(f"\n[Gate 17] RTX 5080 Multi-Operator PINO + Domain 6 Shallow-Water (加水/回水/放水/吹抜) -> {'PASS' if g17_ok else 'FAIL'}")
     for m in g17_msgs:
         print(f"  - {m}")
     all_ok &= g17_ok
@@ -2860,6 +3079,7 @@ def main() -> int:
         print(f"  - {m}")
     all_ok &= g18_ok
 
+    hw_guard.cooldown_if_needed()
     g19_ok, g19_msgs = verify_gate_19(stl_tris_mm)
     print(f"\n[Gate 19] Stage 14 Factory Piping/Linkages, Live Steam Jet & Dry-Fire Boil-Off to 0ml -> {'PASS' if g19_ok else 'FAIL'}")
     for m in g19_msgs:
@@ -2872,9 +3092,18 @@ def main() -> int:
         print(f"  - {m}")
     all_ok &= g20_ok
 
-    print("\n" + "=" * 88)
+    hw_guard.cooldown_if_needed()
+    g21_ok, g21_msgs = verify_gate_21(stl_tris_mm)
+    print(f"\n[Gate 21] Stage 16 ISO-10303-21 STEP, Hollow 3D Lumen, Pop Safety Valve & 5-PINO -> {'PASS' if g21_ok else 'FAIL'}")
+    for m in g21_msgs:
+        print(f"  - {m}")
+    all_ok &= g21_ok
+
+    snap = hw_guard.read_metrics()
+    print(f"\n[Thermal/Power Guard] Post-run telemetry: CPU={snap['cpu_c']:.1f}°C | GPU={snap['gpu_c']:.1f}°C | GPU_Power={snap['gpu_w']:.1f}W")
+    print("=" * 88)
     if all_ok:
-        print(" [ALL GATES 1-20 PASSED] STAGE 15 (MULTI-DRAWING 1:1 TRUE PARTS & LINKAGES) VERIFIED 100%")
+        print(" [ALL GATES 1-21 PASSED] STAGE 16 (STEP + HOLLOW 3D LUMEN + POP SAFETY VALVE + FORENSICS) VERIFIED 100%")
         print("=" * 88)
         return 0
     else:

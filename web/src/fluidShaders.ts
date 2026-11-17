@@ -653,8 +653,8 @@ export class FluidPartVisualizer {
       return mesh;
     };
 
-    this.cylHeadMeshes = [makeCylChamberMesh(+0.0325), makeCylChamberMesh(-0.0325)];
-    this.cylCrankMeshes = [makeCylChamberMesh(+0.0325), makeCylChamberMesh(-0.0325)];
+    this.cylHeadMeshes = [makeCylChamberMesh(+0.0360), makeCylChamberMesh(-0.0360)];
+    this.cylCrankMeshes = [makeCylChamberMesh(+0.0360), makeCylChamberMesh(-0.0360)];
 
     const makeCondensateMesh = (yCenter: number): THREE.Mesh => {
       const g = new THREE.BoxGeometry(0.025, 0.0085, 0.0026);
@@ -671,7 +671,7 @@ export class FluidPartVisualizer {
       this.root.add(mesh);
       return mesh;
     };
-    this.cylCondMeshes = [makeCondensateMesh(+0.0325), makeCondensateMesh(-0.0325)];
+    this.cylCondMeshes = [makeCondensateMesh(+0.0360), makeCondensateMesh(-0.0360)];
 
     const makePortGlow = (xPos: number, yPos: number): THREE.Mesh => {
       const g = new THREE.BoxGeometry(0.0024, 0.0062, 0.0075);
@@ -690,10 +690,10 @@ export class FluidPartVisualizer {
       return mesh;
     };
     this.portGlowMeshes = [
-      makePortGlow(0.1335, +0.0325), // L Head port
-      makePortGlow(0.1185, +0.0325), // L Crank port
-      makePortGlow(0.1335, -0.0325), // R Head port
-      makePortGlow(0.1185, -0.0325), // R Crank port
+      makePortGlow(0.1335, +0.0360), // L Head port
+      makePortGlow(0.1185, +0.0360), // L Crank port
+      makePortGlow(0.1335, -0.0360), // R Head port
+      makePortGlow(0.1185, -0.0360), // R Crank port
     ];
 
     // 4-2 前车架卧式置换注油器油水分层内芯 (X ∈ [0.1438, 0.1642], Y = 0, Z = 0.0062, r = 0.0050)
@@ -843,7 +843,7 @@ export class FluidPartVisualizer {
         blending: THREE.AdditiveBlending,
       })
     );
-    this.returnStreamMesh.position.set(-0.0260, 0.0110, 0.0537);
+    this.returnStreamMesh.position.set(-0.0260, 0.0115, 0.0536);
     this.returnStreamMesh.scale.set(1.0, 1.0, 0.012);
     this.returnStreamMesh.renderOrder = 5;
     this.returnStreamMesh.visible = false;
@@ -887,8 +887,9 @@ export class FluidPartVisualizer {
 
     this.mariotteBubblePos = new Float32Array(28 * 3);
     for (let i = 0; i < 28; i++) {
-      this.mariotteBubblePos[3 * i] = 0.0348 + (Math.random() - 0.5) * 0.008;
-      this.mariotteBubblePos[3 * i + 1] = 0.0056 + (Math.random() - 0.5) * 0.008;
+      // 36-6 单根真实马氏定液位立管位置 (+21.7, -6.0 mm, イラスト 36)
+      this.mariotteBubblePos[3 * i] = 0.0217 + (Math.random() - 0.5) * 0.0036;
+      this.mariotteBubblePos[3 * i + 1] = -0.0060 + (Math.random() - 0.5) * 0.0036;
       this.mariotteBubblePos[3 * i + 2] = 0.0265 + Math.random() * 0.032;
     }
     const mbGeom = new THREE.BufferGeometry();
@@ -1312,7 +1313,7 @@ export function attachFeedwaterShader(mat: THREE.MeshStandardMaterial, u: CadSha
           ? /* glsl */ `
             #include <emissivemap_fragment>
             if (uFeedStrength > 0.02) {
-              float pulse = pow(0.5 + 0.5 * sin(vLocalHose.z * 210.0 - uFeedPhase * 3.2), 3.0);
+              float pulse = pow(0.5 + 0.5 * sin(vLocalHose.x * 165.0 - uFeedPhase * 3.2), 3.0);
               totalEmissiveRadiance += vec3(0.08, 0.85, 1.0) * pulse * uFeedStrength * 0.75;
             }
           `

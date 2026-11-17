@@ -44,7 +44,7 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install mujoco numpy matplotlib pillow scipy
 
-      - name: Check models are in sync with generator & run Gates 1-19 verification
+      - name: Check models are in sync with generator & run Gates 1-21 verification
         run: |
           python scripts/03_generate_mjcf.py --mode roller --out /tmp/d51_regen.xml
           diff -q /tmp/d51_regen.xml models/d51_full.xml

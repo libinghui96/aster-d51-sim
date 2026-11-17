@@ -1,0 +1,137 @@
+{
+  "meta": {
+    "locomotive": "Aster Hobby JNR D51 (1/32 Gauge 1)",
+    "stage": "Stage 16 Whole-Locomotive Multi-Drawing Forensic Calibration",
+    "coordinate_convention": "+X forward (smokebox), +Y left (JNR driver side), -Y right (fireman side), +Z upward"
+  },
+  "parts": [
+    {
+      "part_no": "11-13/11-14",
+      "name": "Blower 4-Spoke Handwheel & Needle Stem (通風弁)",
+      "joint_type": "hinge",
+      "axis_xyz": [1.0, 0.0, 0.0],
+      "mating_parent": "11-15 center -X face (Y=0.0, Z=+66.5mm)",
+      "verified_views": ["イラスト 11 item 13/14", "イラスト 14 callout Blower Valve", "p44 cab rear photo"]
+    },
+    {
+      "part_no": "11-10/11-11/11-12",
+      "name": "Regulator Gland, Lever & Y-Axis Spindle (加減弁)",
+      "joint_type": "hinge",
+      "axis_xyz": [0.0, 1.0, 0.0],
+      "mating_parent": "11-15 rear +Y left vertical face (Y=+8.2, Z=+66.5mm, -X closed)",
+      "verified_views": ["イラスト 11 item 10/11/12", "イラスト 14 callout Regulater Valve", "Manual p.29 horizontal closed text"]
+    },
+    {
+      "part_no": "11-1/11-2/11-3",
+      "name": "Whistle Valve & 3-Hole Curved Trigger Lever (汽笛弁)",
+      "joint_type": "hinge",
+      "axis_xyz": [1.0, 0.0, 0.0],
+      "mating_parent": "11-15 front +Y left vertical face (Y=+14.8, Z=+62.5mm)",
+      "verified_views": ["イラスト 11 Fig.1", "イラスト 13", "イラスト 14 callout Whistle Valve"]
+    },
+    {
+      "part_no": "13-2/13-7/6-8",
+      "name": "Mid-Height Boiler Clack Valve & Vertical Riser (逆止弁・ボイラ給水管)",
+      "joint_type": "static",
+      "dummy": false,
+      "mating_parent": "12-6 right-inboard bush above dry firebox crown (-115.8, -11.8, +47.5mm)",
+      "verified_views": ["イラスト 12 dry firebox 12-4", "イラスト 13 item 2/7", "p44 cab rear photo"]
+    },
+    {
+      "part_no": "PG-20/13-1",
+      "name": "Vertical 0-deg Pressure Gauge & Bottom-Entry U-Siphon (圧力計・圧力管)",
+      "joint_type": "hinge",
+      "axis_xyz": [1.0, 0.0, 0.0],
+      "mating_parent": "11-15 rear -Y port -> 13-1 U-loop below 13-2 -> PG-20 (-122.0, -16.5, +66.8mm)",
+      "verified_views": ["イラスト 13 orthogonal stem", "p44 differential rim calibration (0.0 deg)"]
+    },
+    {
+      "part_no": "4-17/6-9/8-7",
+      "name": "Transverse Under-Floor Bypass Valve & Left-Floor Lever (バイパスバルブ)",
+      "joint_type": "hinge",
+      "axis_xyz": [0.0, 0.0, 1.0],
+      "mating_parent": "4-8 cradle under 8-11 floor (-136.5, 0.0, +15.0mm); 6-9/8-7 at +Y=+6.8mm",
+      "verified_views": ["イラスト 4 item 17", "イラスト 6 item 9", "イラスト 8 item 7 & 図 8.1", "p44 cab rear photo"]
+    },
+    {
+      "part_no": "8-5/8-6/8-10",
+      "name": "Right-Side Cylinder Drain Shaft & Rear-Notch Knurled Knob (ドレンバルブ)",
+      "joint_type": "slide",
+      "axis_xyz": [1.0, 0.0, 0.0],
+      "mating_parent": "8-11 rear-right step cutout (-143.5, -18.2, +16.8mm) -> 7-1 cam horn",
+      "verified_views": ["イラスト 7 item 1~6", "イラスト 8 item 5/6/10 & 図 8.1", "p44 cab rear photo"]
+    },
+    {
+      "part_no": "11-16/11-17/13-11",
+      "name": "Left Under-Floor Lateral +Y Boiler Blowdown Valve (排水弁)",
+      "joint_type": "hinge",
+      "axis_xyz": [0.0, 1.0, 0.0],
+      "mating_parent": "11-9 lower-left forward flange (-115.5, +20.6, +15.8mm)",
+      "verified_views": ["イラスト 11 item 16/17", "イラスト 13 item 11", "イラスト 14 air-test hose", "Manual p.43"]
+    },
+    {
+      "part_no": "8-12~20",
+      "name": "Window-Height JNR Left Screw Reverser (2-Hole 8-13 Pedestal + 8-16 Crank + Arched 8-18)",
+      "joint_type": "hinge",
+      "axis_xyz": [1.0, 0.0, 0.0],
+      "mating_parent": "8-11 left floor (-127.5, +32.5, +20.0mm), screw Z=+41.2mm",
+      "verified_views": ["イラスト 8 item 12~20", "イラスト 17", "p43 top photo", "p44 cab rear photo"]
+    },
+    {
+      "part_no": "28-6x2/29-7",
+      "name": "Tandem Huddling-Chamber Pop Safety Valves & Lift Pins (安全弁)",
+      "joint_type": "slide",
+      "axis_xyz": [0.0, 0.0, 1.0],
+      "mating_parent": "12-6 top tandem bushes (X=-46.0, -33.0, Y=0.0mm) + PS4-1.9x2 + 29-7 collar",
+      "verified_views": ["イラスト 12", "イラスト 28 item 6", "イラスト 29 item 7", "Manual pp.40, 41, 44 lift-pin maintenance"]
+    },
+    {
+      "part_no": "6-11/4-16/34-8",
+      "name": "3 Parallel Straight Cross-Car Umbilical Hoses (-Y Feed Union, 0 Fuel, +Y Return Barb)",
+      "joint_type": "static",
+      "dummy": false,
+      "mating_parent": "drawbar_8_8 (-Y=-19.2/-21.3 feed, Y=0 fuel, +Y=+19.2/+21.3 return)",
+      "verified_views": ["イラスト 4 item 16", "イラスト 6 item 10/11", "イラスト 34", "イラスト 37 bottom-left cloud", "p46 tender photo"]
+    },
+    {
+      "part_no": "22-11/22-18/22-13",
+      "name": "Rear Raised Walkway Bridges, Compressor (+Y), Aux Pump (-Y) & Under-Walkway Air Tanks",
+      "joint_type": "static",
+      "dummy": true,
+      "mating_parent": "boiler_superstructure behind Wheel 4 (X=-81mm) & under walkways (Z=+25.4mm)",
+      "verified_views": ["イラスト 22 Fig.1 & items 11/13/18/26", "p43 factory top/side photo"]
+    },
+    {
+      "part_no": "28-8",
+      "name": "Rear-Right Vertical Muffler Silencer (サイレンサー)",
+      "joint_type": "static",
+      "dummy": true,
+      "mating_parent": "boiler_superstructure right firebox shoulder (-76.5, -28.8, +50.0mm)",
+      "verified_views": ["イラスト 28 item 8", "p43 factory top photo"]
+    },
+    {
+      "part_no": "30-2/30-3",
+      "name": "Left-Shoulder Dummy Whistle & Wire (汽笛ダミー)",
+      "joint_type": "static",
+      "dummy": true,
+      "mating_parent": "boiler_superstructure left firebox shoulder (-58.0, +10.5, +76.2mm)",
+      "verified_views": ["イラスト 30 item 2/3", "p43 factory top photo"]
+    },
+    {
+      "part_no": "5-1~5-4",
+      "name": "4-Axle Front-Mounted Driver Brake Hangers & Shoes (ブレーキシュー)",
+      "joint_type": "static",
+      "dummy": true,
+      "mating_parent": "chassis_equalizer_brakes in front (+X = ax + 19.0mm) of Wheels 1..4",
+      "verified_views": ["イラスト 5 Fig.1 & items 1~4/12/13", "p43 bottom photo"]
+    },
+    {
+      "part_no": "36-4/36-5/36-6/34-2",
+      "name": "Tender Mariotte Alcohol Tank (+45-deg Ribs, Single 36-6 Spout) & Sump",
+      "joint_type": "hinge",
+      "axis_xyz": [0.0, 0.0, 1.0],
+      "mating_parent": "35-1 front cutout (+30.2, 0.0, +43.25mm) -> single spout (+21.7, -6.0) into 34-2",
+      "verified_views": ["イラスト 34", "イラスト 36", "Manual pp.39, 43", "p46 tender top/bottom photos"]
+    }
+  ]
+}

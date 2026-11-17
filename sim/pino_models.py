@@ -936,3 +936,152 @@ def build_tender_hydraulic_inputs(scalars: torch.Tensor) -> torch.Tensor:
     return torch.stack([cond, pump_src, p_back, elev, inv_lvl, vac_ch, coords], dim=1)
 
 
+class SafetyValvePopPINO(nn.Module):
+    """
+    28-6 ×2 Gauge-1 真蒸汽机车蓄压环腔突跳安全阀 (Huddling-Chamber Pop Safety Valve) 物理神经算子 (Stage 16 Gate 21 #5):
+    零 boolean 迟滞开关! 直接在 24 个轴向—径向可压缩喷管节点上求解:
+      - ø2.20 mm 阀座喉口 -> ø2.60 mm 蓄压反冲环腔 (Huddling Chamber, ΔA_lip = 1.508 mm²) -> 环唇节流缝 -> 十字槽顶盖排汽；
+      - 当 y = 0 时环腔连通大气 P_hud = 0，仅阀座面积 A_seat = 3.801 mm² 受压 (4.00 kgf/cm² 克服弹簧预紧力 F_0 = 1.491 N)；
+      - 一旦微启 y > 0，喉口进汽面积 A_1(y) 增长快于环唇逃逸缝 A_2(y)，环腔憋压 P_hud 跃升并作用于 ΔA_lip 产生突跳全开 (Pop Action)，
+        直至锅压泄降至 ~3.55 kgf/cm² 时推力低于弹簧力而干脆回座！
+
+    输入:
+      node_inp : [B, 6, 24] (截面通径比、无量纲压边界、局部面积梯度、湿蒸汽干度、升程开度比、轴向坐标)
+      scalars  : [B, 6]     = [p_boil_kgf, lift_mm, t_boil_norm, dryness_dome, seat_dia_mm, lip_gap_mm]
+    输出:
+      node_out : [B, 3, 24] = [p_node_kgf, mach_num, dryness_node]
+      pop_vec  : [B, 5]     = [p_hud_kgf, f_upward_N, mdot_single_g_s, jet_vel_m_s, acoustic_db]
+    """
+
+    NUM_NODES = 24
+
+    def __init__(self, width: int = 40, n_layers: int = 3):
+        super().__init__()
+        self.lift = nn.Sequential(
+            nn.Conv1d(6, width, kernel_size=1),
+            nn.GELU(),
+            nn.Conv1d(width, width, kernel_size=3, padding=1),
+        )
+        self.blocks = nn.ModuleList([SpectralManifoldBlock1d(width, modes=10) for _ in range(n_layers)])
+        self.node_head = nn.Sequential(
+            nn.Conv1d(width, width, kernel_size=1),
+            nn.GELU(),
+            nn.Conv1d(width, 3, kernel_size=1),
+        )
+        self.vec_head = nn.Sequential(
+            nn.Linear(width + 6, width),
+            nn.GELU(),
+            nn.Linear(width, 5),
+        )
+
+    def forward(self, node_inp: torch.Tensor, scalars: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        p_boil = scalars[:, 0:1].clamp(min=0.0)
+        lift_mm = scalars[:, 1:2].clamp(min=0.0)
+        dry_x = scalars[:, 3:4].clamp(0.75, 1.0)
+        d_seat = scalars[:, 4:5].clamp(1.6, 3.0)
+        lip_gap = scalars[:, 5:6].clamp(0.03, 0.25)
+
+        h = self.lift(node_inp)
+        for blk in self.blocks:
+            h = blk(h)
+        raw_nodes = self.node_head(h)
+
+        p_nodes = p_boil.unsqueeze(-1) * torch.sigmoid(raw_nodes[:, 0:1])
+        mach_nodes = 1.35 * torch.sigmoid(raw_nodes[:, 1:2]) * (lift_mm / (lift_mm + 0.02)).unsqueeze(-1)
+        x_nodes = torch.clamp(dry_x.unsqueeze(-1) * (0.94 + 0.06 * torch.sigmoid(raw_nodes[:, 2:3])), 0.70, 1.0)
+        node_out = torch.cat([p_nodes, mach_nodes, x_nodes], dim=1)
+
+        pooled = h.mean(dim=-1)
+        raw_v = self.vec_head(torch.cat([pooled, scalars], dim=-1))
+
+        # 硬物理几何与守恒边界投影 (Hard Dual-Orifice Continuity & Seat Force Ansatz):
+        # 1) 阀座截面积 A_seat 与蓄压环唇净增面积 ΔA_lip (单位 mm²; d_hud = d_seat + 0.40 mm)
+        d_hud = d_seat + 0.40
+        a_seat_mm2 = 0.78539816 * (d_seat ** 2)
+        da_lip_mm2 = 0.78539816 * ((d_hud ** 2) - (d_seat ** 2))
+
+        # 2) 喉口帘面积 A_1(y) = pi * d_seat * y vs 环唇外逃面积 A_2(y) = pi * d_hud * sqrt(c_rad^2 + (0.38*y)^2)
+        a1_curtain = 3.14159265 * d_seat * lift_mm
+        a2_escape = 3.14159265 * d_hud * torch.sqrt(lip_gap ** 2 + (0.38 * lift_mm) ** 2)
+        area_ratio_sq = (a1_curtain / (a2_escape + 1e-6)) ** 2
+        hud_bridge = area_ratio_sq / (1.0 + area_ratio_sq)
+
+        # 闭合态 y=0 时 hud_bridge 严格等于 0 -> P_hud = 0; 全开态 y≈0.52mm 时 P_hud ≈ 0.38 * P_boil 托住阀瓣直至 ~3.56 kgf/cm² 回座!
+        hud_gain = 0.22 + 0.42 * torch.sigmoid(raw_v[:, 0:1])
+        p_hud_kgf = p_boil * hud_bridge * hud_gain
+
+        # 3) 作用在阀瓣底部的总向上流体推力 F_upward [N] (1 kgf/cm² * 1 mm² = 0.0980665 N) + 动量反冲修正
+        pa_mm2_to_n = 0.0980665
+        mom_coeff = 0.035 + 0.045 * torch.sigmoid(raw_v[:, 1:2])
+        f_up_n = pa_mm2_to_n * (p_boil * a_seat_mm2 + p_hud_kgf * da_lip_mm2 * (1.0 + mom_coeff))
+
+        # 4) 单阀可压缩阻塞蒸汽泄放流量 [g/s] (y=0 或 p_boil=0 时严格为 0!)
+        a_throat_eff = torch.minimum(a_seat_mm2, a1_curtain)
+        cd_pop = 0.56 + 0.22 * torch.sigmoid(raw_v[:, 2:3])
+        p_abs_bar = p_boil * 0.980665 + 1.01325
+        has_dp = torch.clamp(p_boil / (p_boil + 0.02), 0.0, 1.0)
+        mdot_single_gs = cd_pop * a_throat_eff * p_abs_bar * 0.142 * has_dp / torch.sqrt(dry_x)
+
+        jet_vel = (320.0 + 140.0 * torch.sigmoid(raw_v[:, 3:4])) * torch.tanh(lift_mm * 8.0) * has_dp
+        acoustic_db = 42.0 + 48.0 * torch.tanh(mdot_single_gs * 1.4) * (0.85 + 0.15 * torch.sigmoid(raw_v[:, 4:5]))
+
+        pop_vec = torch.cat([p_hud_kgf, f_up_n, mdot_single_gs, jet_vel, acoustic_db], dim=-1)
+        return node_out, pop_vec
+
+
+def build_safety_valve_inputs(scalars: torch.Tensor) -> torch.Tensor:
+    """从安全阀 6 维标量 [B, 6] 构造 24 节点轴向喷管—蓄压环腔—顶槽特征张量 [B, 6, 24]。"""
+    B = scalars.shape[0]
+    dev = scalars.device
+    dtp = scalars.dtype
+
+    p_n = (scalars[:, 0] / 5.0).clamp(0.0, 1.4)
+    lift_n = (scalars[:, 1] / 0.65).clamp(0.0, 1.5)
+    t_n = scalars[:, 2].clamp(0.0, 1.2)
+    dry_x = scalars[:, 3].clamp(0.75, 1.0)
+    d_n = (scalars[:, 4] / 2.2).clamp(0.7, 1.4)
+    gap_n = (scalars[:, 5] / 0.085).clamp(0.3, 2.5)
+
+    s_coord = torch.linspace(-1.0, 1.0, 24, device=dev, dtype=dtp).unsqueeze(0).expand(B, 24)
+    # 沿程无量纲通径剖面: 进汽道(1.0) -> 阀座帘口(lift_n) -> 蓄压环腔(0.65) -> 环唇缝(gap_n) -> 弹簧腔/十字顶槽(1.2)
+    prof_area = torch.cat(
+        [
+            d_n.unsqueeze(-1).expand(B, 8),
+            (0.02 + lift_n).unsqueeze(-1).expand(B, 4),
+            (0.65 * d_n).unsqueeze(-1).expand(B, 4),
+            (0.18 * gap_n + 0.35 * lift_n).unsqueeze(-1).expand(B, 4),
+            (1.25 * d_n).unsqueeze(-1).expand(B, 4),
+        ],
+        dim=-1,
+    )
+    p_bc = torch.cat(
+        [
+            p_n.unsqueeze(-1).expand(B, 8),
+            (0.6 * p_n * (lift_n / (lift_n + 0.1))).unsqueeze(-1).expand(B, 8),
+            torch.zeros((B, 8), device=dev, dtype=dtp),
+        ],
+        dim=-1,
+    )
+    grad_a = F.pad(prof_area[:, 1:] - prof_area[:, :-1], (0, 1), value=0.0)
+    dry_ch = dry_x.unsqueeze(-1).expand(B, 24)
+    temp_ch = t_n.unsqueeze(-1).expand(B, 24)
+    return torch.stack([prof_area, p_bc, grad_a, dry_ch, temp_ch, s_coord], dim=1)
+
+
+def compute_safety_valve_pde_residuals(scalars: torch.Tensor, pop_vec: torch.Tensor) -> torch.Tensor:
+    """
+    安全阀双孔口质量守恒与闭合态零泄漏 PINN 残差:
+      1) 闭合边界条件: lift_mm == 0 -> p_hud == 0 且 mdot == 0
+      2) 蓄压环腔物理有界单调性: 0 <= p_hud <= 0.65 * p_boil
+    """
+    p_boil = scalars[:, 0].float()
+    lift_mm = scalars[:, 1].float()
+    p_hud = pop_vec[:, 0].float()
+    mdot = pop_vec[:, 2].float()
+
+    closed_mask = (lift_mm < 1e-4).float()
+    res_closed = closed_mask * (p_hud ** 2 + mdot ** 2)
+    res_upper = F.relu(p_hud - 0.65 * p_boil) ** 2
+    return (res_closed + res_upper).mean()
+
+

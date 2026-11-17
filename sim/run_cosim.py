@@ -244,7 +244,7 @@ class CoSimRunner:
         self.is_roller_mode = self.model.jnt_type[0] != mujoco.mjtJoint.mjJNT_FREE
         self._prev_fwd_vel = 0.0
 
-        # P3: 缓存驾驶室与煤水车全部 15 个独立可动操纵件/仪表关节地址
+        # P3 + Stage 16: 缓存驾驶室、双突跳安全阀与煤水车全部 17 个独立可动操纵件/仪表/阀瓣关节地址
         self._vis_joints: dict[str, tuple[int, int]] = {}
         for jname in (
             "j_cab_regulator",
@@ -256,6 +256,8 @@ class CoSimRunner:
             "j_cab_fire_door",
             "j_cab_bypass",
             "j_cab_roof_hatch",
+            "j_safety_poppet_1",
+            "j_safety_poppet_2",
             "j_tender_hp_link",
             "j_tender_handpump",
             "j_tender_drain_plug",
@@ -333,8 +335,9 @@ class CoSimRunner:
                 self.data.qpos[hp_addrs[0]] = q_hp_val
                 self.data.qvel[hp_addrs[1]] = (q_hp_val - q_hp_prev) / max(1e-6, dt)
 
+        sv_lift_m = max(0.0, min(0.00075, float(getattr(tel, "safety_valve_lift_mm", 0.0)) * 1e-3))
         targets = {
-            "j_cab_regulator": 1.12 * self.ctrl.regulator,
+            "j_cab_regulator": 1.15 * self.ctrl.regulator,
             "j_cab_blower": 3.14 * self.ctrl.blower_valve,
             "j_cab_whistle": -0.38 * self.ctrl.whistle_valve,
             "j_cab_sight_drain": 0.0016 if bool(getattr(self.ctrl, "sight_drain_valve", False)) else 0.0,
@@ -343,6 +346,8 @@ class CoSimRunner:
             "j_cab_fire_door": +1.40 * self.ctrl.firebox_door,
             "j_cab_bypass": -1.35 * self.ctrl.bypass_valve,
             "j_cab_roof_hatch": 2.10 if bool(getattr(self.ctrl, "cab_roof_open", False)) else 0.0,
+            "j_safety_poppet_1": sv_lift_m,
+            "j_safety_poppet_2": sv_lift_m * 0.94,
             "j_tender_drain_plug": 0.0050 if bool(getattr(self.ctrl, "tender_drain_open", False)) else 0.0,
             "j_tender_coal_cover": 0.026 if open_water_bay else 0.0,
             "j_tender_fuel_valve": 1.50 * self.ctrl.fuel_valve,
@@ -352,8 +357,11 @@ class CoSimRunner:
             addrs = self._vis_joints.get(jname)
             if addrs is not None:
                 qadr, dadr = addrs
-                curr = float(self.data.qpos[qadr])
-                nxt = curr + alpha * (tgt - curr)
+                if jname.startswith("j_safety_poppet"):
+                    nxt = tgt
+                else:
+                    curr = float(self.data.qpos[qadr])
+                    nxt = curr + alpha * (tgt - curr)
                 self.data.qpos[qadr] = nxt
                 self.data.qvel[dadr] = 0.0
 

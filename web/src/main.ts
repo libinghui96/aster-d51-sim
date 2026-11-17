@@ -462,6 +462,8 @@ async function main() {
       "j_cab_fire_door",
       "j_cab_bypass",
       "j_cab_roof_hatch",
+      "j_safety_poppet_1",
+      "j_safety_poppet_2",
       "j_tender_hp_link",
       "j_tender_handpump",
       "j_tender_hp_ram",
@@ -1220,9 +1222,10 @@ async function main() {
     const pNorm = Math.max(0.0, Math.min(1.05, pGaugeKgf / 6.0));
     const openWaterBay =
       ctrl.coalCoverOpen || ctrl.waterFillValve > 0.02 || ctrl.tenderDrainOpen || Math.abs(hpTgt) > 0.01;
+    const svLiftWasm = pGaugeKgf >= 3.98 ? 0.00056 : 0.0;
     const targets: Record<string, number> = {
       j_reverser_wheel: 12.56 * ctrl.reverser,
-      j_cab_regulator: 1.12 * ctrl.regulator,
+      j_cab_regulator: 1.15 * ctrl.regulator,
       j_cab_blower: 3.14 * ctrl.blowerValve,
       j_cab_whistle: -0.38 * ctrl.whistleValve,
       j_cab_sight_drain: ctrl.sightDrainValve ? 0.0016 : 0.0,
@@ -1231,6 +1234,8 @@ async function main() {
       j_cab_fire_door: +1.40 * ctrl.fireboxDoor,
       j_cab_bypass: -1.35 * ctrl.bypassValve,
       j_cab_roof_hatch: ctrl.cabRoofOpen ? 2.10 : 0.0,
+      j_safety_poppet_1: svLiftWasm,
+      j_safety_poppet_2: svLiftWasm * 0.94,
       j_tender_drain_plug: ctrl.tenderDrainOpen ? 0.0050 : 0.0,
       j_tender_coal_cover: openWaterBay ? 0.026 : 0.0,
       j_tender_fuel_valve: 1.50 * ctrl.fuelValve,
