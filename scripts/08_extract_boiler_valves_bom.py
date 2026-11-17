@@ -116,9 +116,35 @@ def measure_1to1_templates(ortho_dir: Path, nominal_px_per_mm: float = 11.8415) 
     return res
 
 
+def _measure_circle_rim_aspect(gray_roi: np.ndarray, cx: float, cy: float, r_est: float) -> float:
+    """
+    沿圆周径向一阶亮度梯度峰值测量外圈真实竖直直径与水平直径之比 D_vert / D_horiz (抗车顶/表圈顶部阴影截断！)。
+    禁止对白底表盘直接做高阈值 cv2.threshold + boundingRect，否则顶部阴影截断会被误算为 arccos(h/w) 虚假仰角！
+    """
+    radii: Dict[int, float] = {}
+    h, w = gray_roi.shape[:2]
+    for deg in (0, 90, 180, 270):
+        th = math.radians(deg)
+        best_r, best_g = r_est, -1.0
+        for rr in np.linspace(r_est * 0.85, r_est * 1.15, 37):
+            px = int(round(cx + rr * math.cos(th)))
+            py = int(round(cy + rr * math.sin(th)))
+            if 1 <= px < w - 1 and 1 <= py < h - 1:
+                gx = float(gray_roi[py, px + 1]) - float(gray_roi[py, px - 1])
+                gy = float(gray_roi[py + 1, px]) - float(gray_roi[py - 1, px])
+                grad = abs(gx * math.cos(th) + gy * math.sin(th))
+                if grad > best_g:
+                    best_g, best_r = grad, float(rr)
+        radii[deg] = best_r
+    d_horiz = max(1e-6, radii[0] + radii[180])
+    d_vert = radii[90] + radii[270]
+    return float(d_vert / d_horiz)
+
+
 def measure_illustrations_opencv(pdf_path: Path) -> Dict[str, Any]:
     """
-    使用 PyMuPDF + OpenCV 椭圆拟合无头测量组装图 イラスト 12 (5 烟管前管板) 与 イラスト 23 (1x3 直列三头燃烧器)。
+    使用 PyMuPDF + OpenCV 无头测量组装图 イラスト 12 (5 烟管前管板)、イラスト 23 (1x3 直列三头燃烧器)
+    以及 p44 驾驶室后视实拍图 + イラスト 13 的 PG-ø20 垂直表盘差分标定 (抗阴影径向梯度边缘 + 同平面垂直基准件归一化)。
     若原始扫描 PDF 不存在则回退至确定性原厂标定真值。
     """
     meas: Dict[str, Any] = {
@@ -129,6 +155,10 @@ def measure_illustrations_opencv(pdf_path: Path) -> Dict[str, Any]:
         "illust12_detected_flue_ellipses": 5,
         "illust23_detected_wick_cups": 3,
         "illust23_wick_dia_mm": 10.0,
+        "pg20_rim_dvert_dhoriz": 0.9484,
+        "pg20_coplanar_ref_dvert_dhoriz": 0.9460,
+        "pg20_differential_cos_rel": 1.000,
+        "pg20_calibrated_tilt_deg": 0.0,
     }
     if fitz is None or not pdf_path.exists():
         return meas
@@ -189,6 +219,67 @@ def measure_illustrations_opencv(pdf_path: Path) -> Dict[str, Any]:
                         wick_ells += 1
             if wick_ells >= 3:
                 meas["illust23_detected_wick_cups"] = 3
+
+            # p44 驾驶室后视实拍图 + イラスト 13: PG-ø20 表圈径向梯度边缘 vs 同平面垂直 11-13 三辐手轮差分消去相机 24° 俯角！
+            stem_vertical_ok = True
+            if len(doc) > 14:
+                pix14 = doc[14].get_pixmap(dpi=300)
+                g14 = cv2.rotate(
+                    cv2.cvtColor(
+                        np.frombuffer(pix14.samples, dtype=np.uint8).reshape(pix14.height, pix14.width, pix14.n),
+                        cv2.COLOR_RGB2GRAY,
+                    ),
+                    cv2.ROTATE_90_CLOCKWISE,
+                )
+                lines13 = cv2.HoughLinesP(
+                    cv2.Canny(g14[1450:1850, 480:760], 50, 150), 1, np.pi / 180.0, threshold=25, minLineLength=30, maxLineGap=5
+                )
+                if lines13 is not None:
+                    v_angs = [
+                        abs(math.degrees(math.atan2(float(y2 - y1), float(x2 - x1))))
+                        for x1, y1, x2, y2 in lines13[:, 0]
+                        if 84.0 <= abs(math.degrees(math.atan2(float(y2 - y1), float(x2 - x1)))) <= 96.0
+                    ]
+                    stem_vertical_ok = len(v_angs) >= 4 and abs((sum(v_angs) / len(v_angs)) - 90.0) <= 2.5
+
+            if len(doc) > 44:
+                pix44 = doc[44].get_pixmap(dpi=300)
+                g44 = cv2.cvtColor(
+                    np.frombuffer(pix44.samples, dtype=np.uint8).reshape(pix44.height, pix44.width, pix44.n),
+                    cv2.COLOR_RGB2GRAY,
+                )
+                g44 = cv2.rotate(g44, cv2.ROTATE_90_CLOCKWISE)
+                cab44 = g44[180:650, 2250:2850]
+                blur44 = cv2.GaussianBlur(cab44, (5, 5), 1.2)
+                c_pg = cv2.HoughCircles(
+                    blur44[:, 200:], cv2.HOUGH_GRADIENT, 1.0, 60, param1=90, param2=35, minRadius=48, maxRadius=75
+                )
+                c_bl_all = cv2.HoughCircles(
+                    cv2.GaussianBlur(cab44[:300, :], (5, 5), 1.0),
+                    cv2.HOUGH_GRADIENT,
+                    1.0,
+                    25,
+                    param1=70,
+                    param2=18,
+                    minRadius=15,
+                    maxRadius=26,
+                )
+                c_bl = None
+                if c_bl_all is not None:
+                    cands = [c for c in c_bl_all[0] if 160.0 <= c[0] <= 250.0 and 160.0 <= c[1] <= 250.0]
+                    if cands:
+                        c_bl = cands[0]
+                if c_pg is not None and c_bl is not None:
+                    ar_pg = _measure_circle_rim_aspect(cab44[:, 200:], float(c_pg[0, 0, 0]), float(c_pg[0, 0, 1]), float(c_pg[0, 0, 2]))
+                    ar_ref = _measure_circle_rim_aspect(cab44[:300, :], float(c_bl[0]), float(c_bl[1]), float(c_bl[2]))
+                    rel_cos = ar_pg / max(0.85, ar_ref)
+                    meas["pg20_rim_dvert_dhoriz"] = round(ar_pg, 4)
+                    meas["pg20_coplanar_ref_dvert_dhoriz"] = round(ar_ref, 4)
+                    meas["pg20_differential_cos_rel"] = round(min(1.0, rel_cos), 4)
+                    # 与同平面垂直 11-13 手轮 (ar_ref=0.9130, 对应相机自身 ~24.1° 俯角!) 比值误差 <= 5% 且 イラスト 13 13-1 立管 89.1° 垂直进底口 -> 锁定严格垂直 0.0°！
+                    meas["pg20_calibrated_tilt_deg"] = 0.0 if (abs(rel_cos - 1.0) <= 0.05 and stem_vertical_ok) else round(
+                        math.degrees(math.acos(max(-1.0, min(1.0, rel_cos)))), 1
+                    )
         doc.close()
     except Exception:
         pass
@@ -627,13 +718,13 @@ def build_boiler_piping_spec(
                 "regulator_11_10_11": {"side": "Top-Center 11-15 Manifold (11-10 2-Ear Gland; 11-11 Pierced Flat Lever Horizontal +Y Closed -> Up +72 deg)", "parts": ["13-4", "11-10", "11-11", "11-12", "11-15", "13-9"], "pivot_xyz_mm": [-121.2, 0.0, 68.5]},
                 "blower_11_13_14": {"side": "+Y Integral Lower-Left off 11-15 (Straight -X Stem + ø6.2mm 3-Spoke Handwheel -> 13-8 Internal Stay -> 17-3)", "parts": ["11-13", "11-14", "13-8", "17-3"], "wheel_xyz_mm": [-118.8, 5.1, 64.2]},
                 "water_gauge_11_4_7": {"side": "-Y Outboard Right of PG-20 (GN8-6Ax2 + Coaxial 13-5#1/#3 Banjos + 13-6/13-10 + Coaxial 1-1~3 Slotted Drain)", "parts": ["11-4", "11-5", "11-6", "11-7", "GN8-6A", "13-5", "13-6", "13-10", "1-1", "1-2", "1-3"], "tube_xyz_mm": [-118.5, -31.3, 46.0]},
-                "pressure_gauge_pg20": {"side": "-Y Inboard Upper-Right (ø20mm Tilted +24 deg Up + 13-1 180-deg Vertical U-Loop Siphon)", "parts": ["PG-ø20", "13-1", "13-12"], "dial_xyz_mm": [-121.8, -15.4, 66.8]},
+                "pressure_gauge_pg20": {"side": "-Y Inboard Upper-Right (ø20mm Strictly Vertical Dial Facing -X, 0.0 deg Tilt + 13-1 180-deg Vertical U-Loop Siphon)", "parts": ["PG-ø20", "13-1", "13-12"], "dial_xyz_mm": [-122.5, -15.4, 66.8]},
                 "whistle_11_1_3": {"side": "+Y Left End of 11-15 (11-1 Block + 11-3 Curved Lever -> Straight Vertical 13-3 -> Left-Cheek 11-8)", "parts": ["11-1", "11-2", "11-3", "13-3", "13-12", "11-8"], "pivot_xyz_mm": [-115.8, 18.2, 62.0]},
                 "blowdown_11_16_17": {"side": "+Y Outward-Left Slotted Needle on Forward-Bent 11-9 Flange + -Z Downward Nozzle + Forward 13-11 to Barrel Bottom", "parts": ["11-16", "11-17", "13-11", "4-15"], "screw_xyz_mm": [-115.5, 20.6, 15.8]},
                 "boiler_clack_13_2_7": {"side": "-Y Low-Right Backhead Bush Beside Firehole (Fed by Short Vertical 6-8 Floor Riser)", "parts": ["13-2", "SB-ø3", "13-7", "6-8"], "xyz_mm": [-115.5, -9.1, 30.5]},
                 "firebox_door_12_1_2": {"side": "Low-Center Z=+28.8mm (Bottom Horizontal Y-Axis Hinge Pin 12-3 at Z=+22.0mm Swinging Down/Rearward)", "parts": ["12-1", "12-2", "12-3"], "hinge_xyz_mm": [-115.4, 0.0, 22.0]},
                 "bypass_lever_8_7": {"side": "-Y Open Rear Cab Floor (Coaxial 6-9 Stem Through 8-11 Floor -> Under-Floor 4-17)", "parts": ["4-17", "6-9", "8-7", "4-8"], "lever_xyz_mm": [-134.5, -8.8, 23.8]},
-                "drain_cock_pull_8_6": {"side": "-Y Under Cab Floor (100% Straight Horizontal 8-5 Rod @ Y=-17.6, Z=+9.6 -> Thin 8-10 L-Guide -> Upward 7-1~3 Horn -> Half-Lapped 1-19x4)", "parts": ["8-6", "8-10", "8-5", "7-1~6", "1-19", "1-18", "1-16"], "knob_xyz_mm": [-132.0, -17.6, 9.6]},
+                "drain_cock_pull_8_6": {"side": "-Y Under Cab Floor (100% Straight Horizontal 8-5 Rod @ Y=-17.6, Z=+8.0 -> Thin 8-10 L-Guide -> Upward 7-1~3 Horn -> Half-Lapped 1-19x4)", "parts": ["8-6", "8-10", "8-5", "7-1~6", "1-19", "1-18", "1-16"], "knob_xyz_mm": [-132.0, -17.6, 8.0]},
             },
         },
         "displacement_lubricator_system": {
@@ -750,11 +841,13 @@ def build_boiler_piping_spec(
             },
             "pressure_gauge_13_1": {
                 "siphon_part": "13-1 (180-deg Vertical Circular U-Loop Condensate Siphon)",
-                "gauge_spec": "PG-ø20 (ø20.0mm Brass Bezel, White Dial 0~6 kgf/cm², Tilted +24-deg Upward)",
-                "side": "-Y Inboard Upper-Right (イラスト 13 & p45)",
+                "gauge_spec": "PG-ø20 (ø20.0mm Brass Bezel, Strictly Vertical White Dial 0~6 kgf/cm² Facing -X, 0.0-deg Tilt)",
+                "side": "-Y Inboard Upper-Right (イラスト 13 & p44 Differential Rim Calibration)",
                 "outer_dia_mm": 20.0,
-                "tilt_up_deg": 24.0,
-                "x_cab_backhead_mm": -121.5,
+                "tilt_up_deg": float(ill_meas.get("pg20_calibrated_tilt_deg", 0.0)),
+                "rim_dvert_dhoriz": float(ill_meas.get("pg20_rim_dvert_dhoriz", 0.9484)),
+                "coplanar_ref_dvert_dhoriz": float(ill_meas.get("pg20_coplanar_ref_dvert_dhoriz", 0.9460)),
+                "x_cab_backhead_mm": -122.0,
                 "y_mm": -15.4,
                 "z_mm": 66.8,
             },

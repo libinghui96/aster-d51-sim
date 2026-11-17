@@ -31,7 +31,11 @@
       "illust12_lower_flue_od_est_mm": 8.06,
       "illust12_detected_flue_ellipses": 5,
       "illust23_detected_wick_cups": 3,
-      "illust23_wick_dia_mm": 10.0
+      "illust23_wick_dia_mm": 10.0,
+      "pg20_rim_dvert_dhoriz": 0.9461,
+      "pg20_coplanar_ref_dvert_dhoriz": 0.913,
+      "pg20_differential_cos_rel": 1.0,
+      "pg20_calibrated_tilt_deg": 0.0
     }
   },
   "dummy_parts_registry": {
@@ -658,14 +662,14 @@
         ]
       },
       "pressure_gauge_pg20": {
-        "side": "-Y Inboard Upper-Right (ø20mm Tilted +24 deg Up + 13-1 180-deg Vertical U-Loop Siphon)",
+        "side": "-Y Inboard Upper-Right (ø20mm Strictly Vertical Dial Facing -X, 0.0 deg Tilt + 13-1 180-deg Vertical U-Loop Siphon)",
         "parts": [
           "PG-ø20",
           "13-1",
           "13-12"
         ],
         "dial_xyz_mm": [
-          -121.8,
+          -122.5,
           -15.4,
           66.8
         ]
@@ -742,7 +746,7 @@
         ]
       },
       "drain_cock_pull_8_6": {
-        "side": "-Y Under Cab Floor (100% Straight Horizontal 8-5 Rod @ Y=-17.6, Z=+9.6 -> Thin 8-10 L-Guide -> Upward 7-1~3 Horn -> Half-Lapped 1-19x4)",
+        "side": "-Y Under Cab Floor (100% Straight Horizontal 8-5 Rod @ Y=-17.6, Z=+8.0 -> Thin 8-10 L-Guide -> Upward 7-1~3 Horn -> Half-Lapped 1-19x4)",
         "parts": [
           "8-6",
           "8-10",
@@ -755,7 +759,7 @@
         "knob_xyz_mm": [
           -132.0,
           -17.6,
-          9.6
+          8.0
         ]
       }
     }
@@ -919,11 +923,13 @@
     },
     "pressure_gauge_13_1": {
       "siphon_part": "13-1 (180-deg Vertical Circular U-Loop Condensate Siphon)",
-      "gauge_spec": "PG-ø20 (ø20.0mm Brass Bezel, White Dial 0~6 kgf/cm², Tilted +24-deg Upward)",
-      "side": "-Y Inboard Upper-Right (イラスト 13 & p45)",
+      "gauge_spec": "PG-ø20 (ø20.0mm Brass Bezel, Strictly Vertical White Dial 0~6 kgf/cm² Facing -X, 0.0-deg Tilt)",
+      "side": "-Y Inboard Upper-Right (イラスト 13 & p44 Differential Rim Calibration)",
       "outer_dia_mm": 20.0,
-      "tilt_up_deg": 24.0,
-      "x_cab_backhead_mm": -121.5,
+      "tilt_up_deg": 0.0,
+      "rim_dvert_dhoriz": 0.9461,
+      "coplanar_ref_dvert_dhoriz": 0.913,
+      "x_cab_backhead_mm": -122.0,
       "y_mm": -15.4,
       "z_mm": 66.8
     },

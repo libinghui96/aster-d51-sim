@@ -623,14 +623,13 @@ async function main() {
             const posAttr = rawGeom.getAttribute("position");
             aligned.setAttribute("aCadPos", posAttr.clone());
             if (meshKey === "cab_pg_dial") {
-              // 将 256×256 PG-ø20 白底刻度盘平面投影至 +24° 倾斜表盘面 (法向 [-cos24°, 0, +sin24°])
+              // 将 256×256 PG-ø20 白底刻度盘正交投影至严格垂直表盘面 (YZ 竖直平面，法向 [-1, 0, 0]，零仰角!)
               const uvArr = new Float32Array(posAttr.count * 2);
               for (let vi = 0; vi < posAttr.count; vi++) {
-                const px = posAttr.getX(vi);
                 const py = posAttr.getY(vi);
                 const pz = posAttr.getZ(vi);
                 const u = 0.5 - py / 0.0168;
-                const v = 0.5 + (0.406737 * px + 0.913545 * pz) / 0.0168;
+                const v = 0.5 + pz / 0.0168;
                 uvArr[2 * vi] = Math.max(0.02, Math.min(0.98, u));
                 uvArr[2 * vi + 1] = Math.max(0.02, Math.min(0.98, v));
               }

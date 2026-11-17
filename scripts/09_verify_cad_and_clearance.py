@@ -2057,7 +2057,7 @@ def verify_gate_16(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
 
     # 16.1 核验 ill_p45.jpg + イラスト 11/12/13 原厂背板真值布局:
     #   - 11-7 パイレックス水面計 + 1-1/1-2 一字槽ドレン栓在右侧外缘 (-Y ≈ -31.3mm);
-    #   - PG-ø20 上仰 24° 压力表在右内上 (-Y ≈ -15.4mm, Z ≈ +66.8mm);
+    #   - PG-ø20 严格垂直表盘 (0° 零仰角) 压力表在右内上 (-Y ≈ -15.4mm, Z ≈ +66.8mm);
     #   - 11-13 三辐通风手轮在左上内 (+Y ≈ +4.5mm), 11-3 汽笛拨柄在左上外 (+Y ≈ +14.5mm), 11-17 排水针阀螺杆在左床下 (+Y ≈ +18.5mm, Z ≈ +14.5mm)
     sg_loc = gpos_local("cab_sight_glass_tube_vis", lf_pos)
     sd_loc = gpos_local("cab_sight_drain_vis", lf_pos)
@@ -2084,7 +2084,7 @@ def verify_gate_16(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     else:
         msgs.append(
             f"PASS: Factory Cab backhead (ill_p45.jpg + イラスト 11/13): Right outboard 11-7 SG (Y={sg_loc[1]:.1f}mm) + 1-1/1-2 drain; "
-            f"Right-inboard PG-ø20 24° dial (Y={pg_loc[1]:.1f}, Z=+{pg_loc[2]:.1f}mm); Left 11-13 wheel (+{blw_loc[1]:.1f}mm), "
+            f"Right-inboard PG-ø20 vertical 0° dial (Y={pg_loc[1]:.1f}, Z=+{pg_loc[2]:.1f}mm); Left 11-13 wheel (+{blw_loc[1]:.1f}mm), "
             f"11-3 whistle (+{whi_loc[1]:.1f}mm), underfloor 11-17 blowdown (+{bd_loc[1]:.1f}, +{bd_loc[2]:.1f}mm)"
         )
 
@@ -2698,7 +2698,14 @@ def verify_gate_20(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
             f"4-2 oil Y=+{lub_front_y:.1f}mm into 7-9, front beam/coupler X_max=+{bs_xmax:.1f}mm, round chimney, deflector window clear)"
         )
 
-    # 20.3 核验驾驶室阀件朝向/高度、扁钢拱曲逆转拉杆与煤水车 33.2mm 煤壁 + 固定 35-5/35-6 多图纸真值:
+    # 20.3 核验驾驶室阀件朝向/高度、PG-ø20 严格垂直表盘 (0° 零仰角)、扁钢拱曲逆转拉杆与煤水车 33.2mm 煤壁 + 固定 35-5/35-6 多图纸真值:
+    pip_cfg = json.loads((PROJECT_ROOT / "configs" / "d51_boiler_piping.json").read_text(encoding="utf-8"))
+    pg_tilt_cfg = float(pip_cfg["pumps_and_valves_bom"]["pressure_gauge_13_1"]["tilt_up_deg"])
+    pg_dial_pts = stl_tris_mm["cab_pg_dial"].reshape(-1, 3)
+    pg_dial_xspan = float(pg_dial_pts[:, 0].max() - pg_dial_pts[:, 0].min())
+    pg_dial_zspan = float(pg_dial_pts[:, 2].max() - pg_dial_pts[:, 2].min())
+    jid_pg = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_pg_needle")
+    pg_axis = m.jnt_axis[jid_pg]
     jid_bd = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_blowdown")
     bd_axis = m.jnt_axis[jid_bd]
     aux_pts = stl_tris_mm["boiler_aux_valves"].reshape(-1, 3)
@@ -2717,7 +2724,12 @@ def verify_gate_20(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     no_fake_wlid = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, "j_tender_water_lid") < 0
 
     if not (
-        abs(float(bd_axis[1]) - 1.0) < 1e-4
+        abs(pg_tilt_cfg) < 1e-4
+        and pg_dial_xspan <= 1.0
+        and 16.5 <= pg_dial_zspan <= 17.1
+        and abs(float(pg_axis[0]) - 1.0) < 1e-4
+        and abs(float(pg_axis[2])) < 1e-4
+        and abs(float(bd_axis[1]) - 1.0) < 1e-4
         and len(clack_pts) >= 20
         and riser_zmax <= 28.5
         and rr_arch_zmax >= 44.0
@@ -2728,13 +2740,15 @@ def verify_gate_20(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     ):
         ok = False
         msgs.append(
-            f"FAIL: Cab/Reverser/Tender multi-drawing check failed: bd_axis={bd_axis.round(2)}, clack_pts={len(clack_pts)}, "
+            f"FAIL: Cab/Reverser/Tender multi-drawing check failed: pg_tilt={pg_tilt_cfg}, pg_xspan={pg_dial_xspan:.2f}mm, "
+            f"pg_axis={pg_axis.round(3)}, bd_axis={bd_axis.round(2)}, clack_pts={len(clack_pts)}, "
             f"6-8_zmax={riser_zmax:.1f}mm, 8-18_Zpeak={rr_arch_zmax:.1f}mm, 8-16_Z={rw_z_mm:.1f}mm, 36-1/2_W={cc_yspan:.1f}mm, "
             f"35-5_pts={len(fixed_355_pts)}, no_fake_wlid={no_fake_wlid}"
         )
     else:
         msgs.append(
-            f"PASS: Cab/Reverser/Tender multi-drawing truth verified (+Y 11-17 blowdown axis=({int(bd_axis[0])}, {int(bd_axis[1])}, {int(bd_axis[2])}), "
+            f"PASS: Cab/Reverser/Tender multi-drawing truth verified (vertical 0° PG-ø20 x_span={pg_dial_xspan:.2f}mm axis=(1,0,0), "
+            f"+Y 11-17 blowdown axis=({int(bd_axis[0])}, {int(bd_axis[1])}, {int(bd_axis[2])}), "
             f"low-right 13-2 clack + short 6-8 Z_max={riser_zmax:.1f}mm, arched flat-blade 8-18 Z_peak=+{rr_arch_zmax:.1f}mm, "
             f"window-height 8-16 crank Z=+{rw_z_mm:.1f}mm, 36-1/36-2 cover W={cc_yspan:.1f}mm between fixed 35-5x2 & static 35-6)"
         )

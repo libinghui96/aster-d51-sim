@@ -413,7 +413,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     mb_pos_R = np.array([tx_m, -y_vg_abs, tz_m])
     rev_stand_pos = np.array([-0.127500, +0.032500, 0.020000])
     sg_tube_pos = np.array([-0.118500, -0.031300, 0.046000])
-    pg_dial_pos = np.array([-0.122050, -0.015400, 0.067040])
+    pg_dial_pos = np.array([-0.122500, -0.015400, 0.066800])
 
     m_side_plate = (0.330 * 0.0035 * 0.016) * rho_iron
     I_side_plate = (m_side_plate / 12.0) * np.diag([0.0035**2 + 0.016**2, 0.330**2 + 0.016**2, 0.330**2 + 0.0035**2])
@@ -563,7 +563,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     ET.SubElement(
         frame, "geom", name="cab_pg_dial_vis", type="mesh",
         mesh="m_cab_pg_dial", material="mat_gauge_dial",
-        pos="-0.122050 -0.015400 0.067040", mass="0", contype="0", conaffinity="0"
+        pos="-0.122500 -0.015400 0.066800", mass="0", contype="0", conaffinity="0"
     )
     ET.SubElement(
         frame, "geom", name="cab_reverser_stand_vis", type="mesh",
@@ -930,11 +930,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_sight_drain", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
 
-    # PG-ø20 右上内 (-Y=-15.4mm, Z=+67.15mm) 上仰 24° 压力表指针 (顺时针随表压增大正偏转)
-    pg_ndl = ET.SubElement(frame, "body", name="cab_pressure_needle", pos="-0.122580 -0.015400 0.067150")
+    # PG-ø20 右上内 (-Y=-15.4mm, Z=+66.8mm) 严格垂直表盘 (0° 零仰角!) 压力表指针 (绕水平轴 axis="1 0 0" 顺时针随表压增大正偏转)
+    pg_ndl = ET.SubElement(frame, "body", name="cab_pressure_needle", pos="-0.123050 -0.015400 0.066800")
     attach_part_inertial(pg_ndl, parts_mp["cab_pressure_needle"])
     ET.SubElement(
-        pg_ndl, "joint", name="j_cab_pg_needle", type="hinge", axis="0.913545 0.000000 -0.406737",
+        pg_ndl, "joint", name="j_cab_pg_needle", type="hinge", axis="1 0 0",
         limited="true", range="-2.5 2.5", damping="0.0005"
     )
     ET.SubElement(

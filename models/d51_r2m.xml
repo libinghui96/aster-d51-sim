@@ -659,7 +659,7 @@
     </body>
     <body name="loco_frame" pos="-0.023250 -0.000608 0.026100">
       <freejoint name="loco_free"/>
-      <inertial pos="0.024442 0.000098 0.034989" mass="3.861776" fullinertia="3.653563391e-03 3.780328842e-02 3.710269025e-02 1.529107590e-05 1.636829911e-03 8.537446415e-06"/>
+      <inertial pos="0.024381 0.000092 0.035002" mass="3.863382" fullinertia="3.655731701e-03 3.783934119e-02 3.713742285e-02 1.162935526e-05 1.644534467e-03 9.345984421e-06"/>
       <geom name="main_chassis_L" type="box" pos="0.056 0.013500 0.004" size="0.122 0.00175 0.008" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="rear_chassis_L" type="box" pos="-0.103 0.013500 0.0092" size="0.043 0.00175 0.0040" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="motion_bracket_vis_L" type="mesh" mesh="m_motion_bracket_L" material="mat_black_iron" pos="0.046500 0.036000 0.015500" mass="0" contype="0" conaffinity="0"/>
@@ -682,7 +682,7 @@
       <geom name="cab_backhead_plate_vis" type="mesh" mesh="m_cab_backhead_plate" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="cab_deck_and_mounts_vis" type="mesh" mesh="m_cab_deck_and_mounts" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="cab_sight_glass_tube_vis" type="mesh" mesh="m_cab_sight_glass_tube" material="mat_pyrex_glass" pos="-0.118500 -0.031300 0.046000" mass="0" contype="0" conaffinity="0"/>
-      <geom name="cab_pg_dial_vis" type="mesh" mesh="m_cab_pg_dial" material="mat_gauge_dial" pos="-0.122050 -0.015400 0.067040" mass="0" contype="0" conaffinity="0"/>
+      <geom name="cab_pg_dial_vis" type="mesh" mesh="m_cab_pg_dial" material="mat_gauge_dial" pos="-0.122500 -0.015400 0.066800" mass="0" contype="0" conaffinity="0"/>
       <geom name="cab_reverser_stand_vis" type="mesh" mesh="m_cab_reverser_stand" material="mat_black_iron" pos="-0.127500 0.032500 0.020000" mass="0" contype="0" conaffinity="0"/>
       <geom name="boiler_Super_vis" type="mesh" mesh="m_boiler_superstructure" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <body name="axlebox_1" pos="0.093000 0 0">
@@ -969,9 +969,9 @@
         <joint name="j_cab_sight_drain" type="slide" axis="0 0 -1" limited="true" range="0.0 0.0018" stiffness="0.25" damping="0.008"/>
         <geom name="cab_sight_drain_vis" type="mesh" mesh="m_cab_sight_drain" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_pressure_needle" pos="-0.122580 -0.015400 0.067150">
-        <inertial pos="0.000115 -0.000000 0.000590" mass="0.000047" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 -3.638982078e-28 -5.117949718e-11 1.192779214e-30"/>
-        <joint name="j_cab_pg_needle" type="hinge" axis="0.913545 0.000000 -0.406737" limited="true" range="-2.5 2.5" damping="0.0005"/>
+      <body name="cab_pressure_needle" pos="-0.123050 -0.015400 0.066800">
+        <inertial pos="-0.000135 -0.000000 0.000586" mass="0.000047" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 1.203984611e-28 5.876322756e-12 -5.637746222e-28"/>
+        <joint name="j_cab_pg_needle" type="hinge" axis="1 0 0" limited="true" range="-2.5 2.5" damping="0.0005"/>
         <geom name="cab_pg_needle_vis" type="mesh" mesh="m_cab_pressure_needle" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
       </body>
       <body name="cab_blowdown_screw" pos="-0.115500 0.020600 0.015800">

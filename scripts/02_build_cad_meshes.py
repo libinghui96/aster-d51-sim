@@ -1086,18 +1086,17 @@ def build_cab_sight_drain():
 
 
 def build_cab_pg_dial():
-    """PG-ø20 右内上 (-121.8, -15.4, +66.8mm) 上仰 24° ø20mm 压力表白底刻度盘片 (p45 实测)。"""
-    return Rot(0, +24, 0) * Rot(0, 90, 0) * Cylinder(radius=8.4, height=0.8)
+    """PG-ø20 右内上 (-122.5, -15.4, +66.8mm) 严格垂直朝后 (-X, 0.0° 零仰角!) ø20mm 压力表白底刻度盘片 (イラスト 13 & p44 边缘差分标定)。"""
+    return Rot(0, 90, 0) * Cylinder(radius=8.4, height=0.8)
 
 
 def build_cab_pressure_needle():
-    """PG-ø20 压力表上仰 24° 黑色指针 (绕表盘法向 (cos24°, 0, -sin24°) 顺时针随表压正偏转)。"""
-    needle_flat = (
+    """PG-ø20 垂直表盘黑色指针 (绕水平法向 axis='1 0 0' 在垂直 YZ 平面内顺时针随表压正偏转)。"""
+    return (
         Rot(0, 90, 0) * Cylinder(radius=1.15, height=0.9)
         + Pos(-0.35, 0.0, 2.7) * Box(0.45, 0.65, 6.0)
         + Pos(-0.35, 0.0, -1.3) * Box(0.45, 1.05, 2.2)
     )
-    return Rot(0, +24, 0) * needle_flat
 
 
 def build_cab_blowdown_screw():
@@ -2312,12 +2311,12 @@ def build_boiler_aux_valves(cfg: Dict, pip_cfg: Dict):
         + make_hex_nut((-114.2, +5.1, 48.0), (1.0, 0.0, 0.0), hex_r=1.80, length=1.8)
     )
 
-    # 5. PG-ø20 上仰 24° 黄铜表圈 (-121.5, -15.4, +66.8) + 13-1 紧凑 180° 垂直大 U 弯虹吸管 (谷底 Z=+42.4mm)
+    # 5. PG-ø20 严格垂直朝后 (-X, 0.0° 零仰角!) 黄铜表壳 (-122.0, -15.4, +66.8) + 13-1 同轴正交底入 180° 垂直大 U 弯虹吸管
     yp, zp = -15.4, 66.8
     pg_bezel = (
-        Pos(-121.5, yp, zp) * Rot(0, +24, 0) * Rot(0, 90, 0) * Cylinder(radius=9.8, height=3.2)
-        + Pos(-121.5, yp, zp) * Rot(0, +24, 0) * Pos(0.0, 0.0, -9.8) * Cylinder(radius=2.05, height=3.8)
-        - Pos(-122.4, yp, zp + 0.40) * Rot(0, +24, 0) * Rot(0, 90, 0) * Cylinder(radius=8.45, height=2.2)
+        Pos(-122.0, yp, zp) * Rot(0, 90, 0) * Cylinder(radius=9.8, height=3.6)
+        + Pos(-122.0, yp, zp - 10.6) * Cylinder(radius=1.95, height=3.4)
+        - Pos(-123.6, yp, zp) * Rot(0, 90, 0) * Cylinder(radius=8.45, height=2.4)
     )
     siphon_13_1 = (
         make_banjo_eye((-118.2, -0.8, 65.4), (-1.0, 0.0, 0.0), r_eye=1.70, h_eye=1.6, hex_r=1.35)
@@ -2325,14 +2324,14 @@ def build_boiler_aux_valves(cfg: Dict, pip_cfg: Dict):
             [
                 (-118.2, -0.8, 65.4),
                 (-119.5, -0.8, 46.8),
-                (-122.0, -8.1, 42.4),
-                (-125.36, yp, 46.8),
-                (-125.36, yp, 58.6),
+                (-120.8, -8.1, 42.4),
+                (-122.0, yp, 46.8),
+                (-122.0, yp, 57.5),
             ],
             r_tube=0.98,
             bend_r=4.2,
         )
-        + make_hex_nut((-125.36, yp, 57.2), (0.0, 0.0, 1.0), hex_r=1.80, length=2.0)
+        + make_hex_nut((-122.0, yp, 55.2), (0.0, 0.0, 1.0), hex_r=1.80, length=2.0)
     )
 
     # 6. 13-2 逆止弁 + 13-7 六角顶盖: 校正至观火孔右下低位衬套 (-115.8, -9.1, +30.5)，底部 Z=+26.0 直承短立管 6-8！
