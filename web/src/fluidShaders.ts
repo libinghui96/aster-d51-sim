@@ -1,6 +1,6 @@
 // web/src/fluidShaders.ts
-// Aster Hobby JNR D51 — 五大零件级三维多相热流体实时可视化着色器系统
-// (1) 23-1 四头立式酒精燃烧器三维湍流反应火焰 (空燃比 φ 蓝紫↔亮橙渐变 + 烟室负压引风前倾)
+// Aster Hobby JNR D51 — 七大零件级三维多相热流体与共轭传热实时可视化着色器系统
+// (1) 23-1 直列 1×3 三头立式酒精燃烧器 + セラミックヤーン多孔陶瓷灯芯三维毛细汽化湍流反应火焰 (受三维内腔连通性物理约束!)
 // (2) 锅炉内胆三维晃动沸腾自由液面 + 4 层水温梯度体 + 180 颗核态沸腾上升汽泡 + 11-7 驾驶室水面计实况水柱
 // (3) RTX 5080 64×24 纵剖面实时三维热场云图切片 (DataTexture 硬件双线性插值)
 // (4) 左右主气缸前后腔动态伸缩蒸汽膨胀做功云、滑阀进排汽口脉冲、缸底冷凝水膜与 4-2 置换注油器油水分层内芯
@@ -1042,8 +1042,10 @@ export class FluidPartVisualizer {
       this.uniforms.uFlueTemps.value[i] = sp.flueGasProfileC[i] ?? out.boilerTempC;
     }
 
-    // 1. 更新 23-1 四头酒精火焰
-    const litVal = burnerLit && sp.airFuelPhi > 0.05 ? 1.0 : 0.0;
+    // 1. 更新 23-1 直列 1×3 三头酒精火焰 (严格受三维管路连通性与陶瓷灯芯毛细吸醇速率物理门控!)
+    const lumenOk = sp.burnerLumenConnected !== false;
+    const wickFlowOk = sp.wickCapillaryMlS === undefined || sp.wickCapillaryMlS > 0.002;
+    const litVal = burnerLit && lumenOk && wickFlowOk && sp.airFuelPhi > 0.05 ? 1.0 : 0.0;
     this.flameMat.uniforms.uTime.value = this.elapsed;
     this.flameMat.uniforms.uLit.value = litVal;
     this.flameMat.uniforms.uPhi.value = sp.airFuelPhi || 1.0;

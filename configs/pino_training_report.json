@@ -1,20 +1,21 @@
 {
   "gpu_device": "NVIDIA GeForce RTX 5080",
-  "arch_version": "d51_pino_v3_5op",
-  "total_training_time_sec": 42.64,
-  "total_parameters": 1394748,
+  "arch_version": "d51_pino_v4_6op",
+  "total_training_time_sec": 34.05,
+  "total_parameters": 1563148,
   "burner_params": 744102,
   "cylinder_params": 171851,
   "cab_manifold_params": 158652,
   "tender_hydraulic_params": 200415,
   "safety_valve_pop_params": 119728,
-  "weights_size_mb": 2.72,
+  "boiler_wick_cht_params": 168400,
+  "weights_size_mb": 3.05,
   "burner_validation": {
-    "val_field_loss": 0.00903,
-    "r2_smokebox_vacuum": 0.9995,
-    "r2_boiler_heat_w": 0.9945,
-    "r2_grate_air_gs": 0.9997,
-    "pde_residual": 0.01363
+    "val_field_loss": 0.00821,
+    "r2_smokebox_vacuum": 0.9998,
+    "r2_boiler_heat_w": 0.9972,
+    "r2_grate_air_gs": 0.9999,
+    "pde_residual": 0.01231
   },
   "cylinder_validation": {
     "val_cyl_loss": 0.00239,
@@ -40,46 +41,54 @@
     "r2_poppet_upward_force": 0.9992,
     "r2_relief_mass_flow": 1.0
   },
+  "boiler_wick_cht_validation": {
+    "val_wick_cht_loss": 0.00385,
+    "r2_wick_capillary_ml_s": 0.938,
+    "r2_casing_temp_c": 0.9998,
+    "r2_shell_heat_loss_w": 1.0,
+    "r2_boiler_efficiency_pct": 1.0
+  },
   "gate10_zero_if_emergence": {
     "gate10_emergence_pass": true,
     "gate17_cab_tender_emergence_pass": true,
     "gate21_safety_pop_emergence_pass": true,
-    "rtx5080_bf16_combined_infer_ms": 5.559,
+    "gate22_wick_cht_emergence_pass": true,
+    "rtx5080_bf16_combined_infer_ms": 7.282,
     "intact_5flue_airtight": {
-      "vacuum_pa": 43.09,
-      "grate_air_gs": 1.024,
-      "q_boiler_w": 527.02,
-      "q_sh_w": 13.73,
-      "mean_o2_fb": 0.1377
+      "vacuum_pa": 43.02,
+      "grate_air_gs": 1.025,
+      "q_boiler_w": 478.87,
+      "q_sh_w": 12.79,
+      "mean_o2_fb": 0.139
     },
     "firebox_door_12_1_open_secondary_air": {
-      "vacuum_pa": 43.33,
-      "grate_air_gs": 1.036,
-      "q_boiler_w": 408.87,
-      "q_sh_w": 11.06,
-      "mean_o2_fb": 0.1503
+      "vacuum_pa": 43.24,
+      "grate_air_gs": 1.029,
+      "q_boiler_w": 350.95,
+      "q_sh_w": 10.17,
+      "mean_o2_fb": 0.1511
     },
     "smokebox_door_breach_no_if_rule": {
-      "vacuum_pa": 4.67,
-      "grate_air_gs": 0.291,
-      "q_boiler_w": 171.59,
-      "q_sh_w": 3.1,
-      "mean_o2_fb": 0.1283
+      "vacuum_pa": 4.31,
+      "grate_air_gs": 0.281,
+      "q_boiler_w": 145.1,
+      "q_sh_w": 2.69,
+      "mean_o2_fb": 0.1292
     },
-    "vacuum_collapse_pct_on_breach": 89.2,
+    "vacuum_collapse_pct_on_breach": 90.0,
     "three_flues_plugged_no_if_rule": {
-      "vacuum_pa": 43.56,
-      "grate_air_gs": 0.723,
-      "q_boiler_w": 408.09,
-      "q_sh_w": 5.44,
-      "mean_o2_fb": 0.1369
+      "vacuum_pa": 43.44,
+      "grate_air_gs": 0.704,
+      "q_boiler_w": 361.12,
+      "q_sh_w": 4.75,
+      "mean_o2_fb": 0.1373
     },
     "all_five_flues_plugged_no_if_rule": {
-      "vacuum_pa": 44.11,
-      "grate_air_gs": 0.479,
-      "q_boiler_w": 296.93,
-      "q_sh_w": 0.4,
-      "mean_o2_fb": 0.1361
+      "vacuum_pa": 43.95,
+      "grate_air_gs": 0.463,
+      "q_boiler_w": 263.38,
+      "q_sh_w": 0.27,
+      "mean_o2_fb": 0.1357
     },
     "cab_sight_glass_static_vs_purge_pct": [
       54.96,
@@ -103,6 +112,26 @@
       1.6843,
       1.5842
     ],
-    "safety_valve_huddling_kgf_at_370": 1.913
+    "safety_valve_huddling_kgf_at_370": 1.913,
+    "wick_capillary_ml_s_open_vs_blocked": [
+      0.1275,
+      0.0
+    ],
+    "wick_tip_temp_c_wet_vs_dry_glow": [
+      84.5,
+      579.4
+    ],
+    "boiler_casing_temp_c_insulated_vs_bare": [
+      72.6,
+      136.8
+    ],
+    "boiler_shell_loss_w_insulated_vs_bare": [
+      35.66,
+      94.01
+    ],
+    "boiler_efficiency_pct_insulated_vs_bare": [
+      46.29,
+      43.78
+    ]
   }
 }

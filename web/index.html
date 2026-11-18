@@ -127,6 +127,7 @@
     <div class="gauge-row"><span>燃料 / 炭水車水 (戻水・水温)</span><span id="txt-tanks" class="val-mono">130ml | 272ml (25°C)</span></div>
     <div class="gauge-row"><span>左右ピストン有効推力</span><span id="txt-forces" class="val-mono">L: 0.0N | R: 0.0N</span></div>
     <div class="gauge-row"><span>乾き度 x / 当量比 φ / 油膜</span><span id="txt-fluid3d" class="val-mono">x=0.95 | φ=1.00 | 3.8μm</span></div>
+    <div class="gauge-row"><span>熱効率 η / 断熱放熱 / 灯芯毛細</span><span id="txt-cht" class="val-mono">η=46.5% | 29.1W (71°C) | 0.11ml/s</span></div>
     <div id="copilot-box" class="copilot-box">
       <div class="copilot-head"><span id="txt-copilot-model">L3 Bonsai-2:27B</span><span id="txt-copilot-lvl">NOMINAL</span></div>
       <div id="txt-copilot-body"></div>
@@ -187,12 +188,12 @@
     <div class="btn-row">
       <button id="btn-burner" class="active">23-1 点火</button>
       <button id="btn-fan">煙突通風機</button>
-      <button id="btn-drain" class="active">8-6 ドレン弁</button>
-      <button id="btn-whistle" title="押している間 11-2→13-3→11-8 車底真鍮汽笛吹鳴">11-2 汽笛</button>
-      <button id="btn-sightdrain" title="11-7 左側パイレックス水面計の下部 1-2 吹抜コック洗浄">1-2 水面計吹抜</button>
+      <button id="btn-drain" class="active" title="運転室右床面 8-7 室内ドレンレバー → 8-5 引き棒 → 1-19 シリンダ排液コック">8-7 室内ドレン弁</button>
+      <button id="btn-whistle" title="押している間 11-3 後方引き3穴レバー→11-1→13-3→11-8 車底真鍮汽笛吹鳴">11-3 汽笛</button>
+      <button id="btn-sightdrain" title="11-7 パイレックス水面計の下部 1-2 吹抜コック洗浄">1-2 水面計吹抜</button>
       <button id="btn-firedoor">12-1 火室扉</button>
       <button id="btn-blowdown">11-16 ブロー弁</button>
-      <button id="btn-roofhatch">21-28 天窓</button>
+      <button id="btn-domelid" title="29-12/29-13 カマボコ砂箱前部ワイヤヒンジ蓋 (21-15 屋根通風器は固定ボルト締結)">29-12 砂箱蓋</button>
       <button id="btn-handpump">31-5 手動給水(+5)</button>
       <button id="btn-tenderdrain" title="31-11 上引き排水スタンドパイプを開いて炭水車底 31-9 から放水">31-11 排水栓(放水)</button>
       <button id="btn-coalcover">36-1 炭庫蓋</button>

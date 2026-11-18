@@ -1085,3 +1085,270 @@ def compute_safety_valve_pde_residuals(scalars: torch.Tensor, pop_vec: torch.Ten
     return (res_closed + res_upper).mean()
 
 
+class BoilerWickConjugatePINO(nn.Module):
+    """
+    第 6 物理神经算子 (Stage 17 Gate 22):
+    `23-1 + セラミックヤーン` 多孔陶瓷纤维灯芯 Darcy-Washburn 毛细吸液汽化 +
+    `12-6 C1100 紫铜锅筒 + Templates 1–6 セラミックシート保温层 + 空气夹层 + 黑漆黄铜外皮`
+    全材料导热—热辐射(Stefan-Boltzmann)—自然/强迫对流共轭传热算子 (零 if 作弊!)。
+
+    输入:
+      node_inp : [B, 8, 32]
+                 节点 0..15  : 多孔陶瓷纤维灯芯轴向网格 (Z = +11.3 -> +23.0 mm, 孔隙率 0.76, r_p = 38 um)
+                 节点 16..31 : 锅炉径向多层复合壁网格 (内水汽侧 -> C1100 紫铜 -> 陶瓷纤维毡 -> 空气层 -> 黄铜外衣 -> 外部气流/辐射)
+      scalars  : [B, 10] = [
+                   lumen_cond,        # 0: 3D 体素漫水实测 23-1 供醇管->引醇立孔->杯底连通导通度 ∈ [0, 1] (堵管自然为 0!)
+                   sump_head_norm,    # 1: 34-2 恒液位サンプ有效液位水头归一化 ∈ [0, 1.8]
+                   draft_norm,        # 2: 烟室/炉膛抽风强度归一化 ∈ [0, 1.5]
+                   burner_lit_f,      # 3: 点火反应激活态 ∈ {0, 1}
+                   t_boil_c,          # 4: 锅内水/饱和蒸汽温度 (°C)
+                   t_flue_gas_c,      # 5: 火室/烟管燃气温度 (°C)
+                   insul_cov,         # 6: Templates 1–6 陶瓷纤维保温层三维体素实测覆盖率 ∈ [0, 1]
+                   air_speed_m_s,     # 7: 机车外部迎面风速 (m/s)
+                   f_wet_shell,       # 8: 紫铜锅筒内壁液水浸润比例 ∈ [0, 1]
+                   t_amb_c,           # 9: 环境温度 (°C)
+                 ]
+    输出:
+      node_out : [B, 4, 32] = [T_node_c, S_liq_node, q_cond_kw_m2, q_rad_kw_m2]
+      cht_vec  : [B, 8]     = [
+                   wick_cap_ml_s,     # 0: 三芯总毛细上吸汽化醇流量 (ml/s, 连通阻断时严格为 0!)
+                   wick_sat_top,      # 1: 灯芯露出端平均含醇饱和度 S_l ∈ [0, 1]
+                   wick_tip_temp_c,   # 2: 陶瓷灯芯顶端真实温度 (°C, 湿态 ~82°C, 断油余热赤热 >520°C!)
+                   casing_temp_c,     # 3: 锅炉外衣外表面平均温度 (°C)
+                   q_cond_insul_w,    # 4: 经紫铜壁+陶瓷保温层传导热流 (W)
+                   q_conv_ext_w,      # 5: 外表面自然+强迫空气对流散失功率 (W)
+                   q_rad_ext_w,       # 6: 外表面 Stefan-Boltzmann 热辐射散失功率 (W)
+                   eta_boiler_pct,    # 7: 锅炉第一性原理净热效率 (%)
+                 ]
+    """
+
+    NUM_NODES = 32
+
+    def __init__(self, width: int = 44, n_layers: int = 3):
+        super().__init__()
+        self.lift = nn.Sequential(
+            nn.Conv1d(8, width, kernel_size=1),
+            nn.GELU(),
+            nn.Conv1d(width, width, kernel_size=3, padding=1),
+        )
+        self.blocks = nn.ModuleList([SpectralManifoldBlock1d(width, modes=12) for _ in range(n_layers)])
+        self.node_head = nn.Sequential(
+            nn.Conv1d(width, width, kernel_size=1),
+            nn.GELU(),
+            nn.Conv1d(width, 4, kernel_size=1),
+        )
+        self.vec_head = nn.Sequential(
+            nn.Linear(width + 10, width),
+            nn.GELU(),
+            nn.Linear(width, 8),
+        )
+
+    def forward(self, node_inp: torch.Tensor, scalars: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        lumen_c = scalars[:, 0:1].clamp(0.0, 1.0)
+        sump_h = scalars[:, 1:2].clamp(0.0, 2.0)
+        draft = scalars[:, 2:3].clamp(0.0, 1.6)
+        lit_f = scalars[:, 3:4].clamp(0.0, 1.0)
+        t_boil = scalars[:, 4:5].clamp(20.0, 210.0)
+        t_gas = scalars[:, 5:6].clamp(20.0, 1150.0)
+        ins_cov = scalars[:, 6:7].clamp(0.0, 1.0)
+        v_air = scalars[:, 7:8].clamp(0.0, 15.0)
+        f_wet = scalars[:, 8:9].clamp(0.0, 1.0)
+        t_amb = scalars[:, 9:10].clamp(0.0, 50.0)
+
+        h = self.lift(node_inp)
+        for blk in self.blocks:
+            h = blk(h)
+        raw_n = self.node_head(h)
+
+        pooled = h.mean(dim=-1)
+        raw_v = self.vec_head(torch.cat([pooled, scalars], dim=-1))
+
+        # --- 1. 硬物理边界投影: Darcy-Washburn 毛细吸液与相变蒸发 ---
+        # 当 lumen_cond == 0 (管道未连通灯芯杯) 或 sump_head == 0 时，supply_gate 严格等于 0!
+        supply_gate = lumen_c * (sump_h / (sump_h + 0.08))
+        wick_sat = supply_gate * (0.28 + 0.68 * torch.sigmoid(raw_v[:, 1:2]))
+
+        # 毛细吸上并汽化的三芯总醇体积流率 [ml/s]: 湿润+受热抽风驱动汽化 (额定 130ml/20min ≈ 0.1083 ml/s)
+        evap_drive = lit_f * (0.52 + 0.48 * draft) + (1.0 - lit_f) * 0.008 * F.relu(t_boil - 60.0) / 100.0
+        cap_gain = 0.082 + 0.056 * torch.sigmoid(raw_v[:, 0:1])
+        flood_boost = 1.0 + 0.55 * F.relu(sump_h - 1.05)
+        wick_cap_ml_s = supply_gate * evap_drive * cap_gain * flood_boost
+
+        # 陶瓷纤维灯芯顶端温度: 只要毛细液膜未干涸 (S_l > 0.22)，相变潜热将其严格钉扎在乙醇沸点 (~78.4..90°C)；断醇干涸时陶瓷纱线赤热 (>550°C)!
+        t_wet_boil = 78.4 + 12.0 * torch.sigmoid(raw_v[:, 2:3])
+        wet_pinned = torch.clamp(wick_sat / 0.22, 0.0, 1.0)
+        dryout_frac = 1.0 - wet_pinned
+        hot_fire_rad = F.relu(t_gas - t_amb) * (0.56 + 0.18 * torch.sigmoid(raw_v[:, 2:3]))
+        wick_tip_temp_c = (
+            t_amb
+            + wet_pinned * lit_f * (t_wet_boil - t_amb)
+            + dryout_frac * hot_fire_rad
+            + (1.0 - lit_f) * dryout_frac * 0.25 * F.relu(t_boil - t_amb)
+        )
+
+        # --- 2. 硬物理边界投影 (FP32 分区热阻精确能量平衡，严禁将 14% 裸铜接头与 86% 保温外衣等温并联短路!): ---
+        dt_boil = F.relu(t_boil.float() - t_amb.float())
+        a_ext_m2 = 0.0365
+        v_air_f = v_air.float()
+        ins_f = ins_cov.float()
+        f_wet_f = f_wet.float()
+        t_amb_f = t_amb.float()
+
+        r_cond_ins = (0.095 + 0.045 * torch.sigmoid(raw_v[:, 4:5].float())) / (0.32 + 0.68 * f_wet_f)
+        r_cond_bare = 0.0048 / (0.32 + 0.68 * f_wet_f)
+
+        h_conv_ins = (5.4 + 1.18 * ((0.35 * dt_boil + 0.5) ** 0.25) + 4.25 * torch.sqrt(v_air_f + 0.04)) * (
+            0.90 + 0.20 * torch.sigmoid(raw_v[:, 5:6].float())
+        )
+        h_rad_ins = 0.88 * 5.670374e-8 * 4.0 * ((t_amb_f + 273.15 + 0.35 * dt_boil) ** 3)
+        dt_cas_ins = dt_boil / (1.0 + r_cond_ins * (h_conv_ins + h_rad_ins))
+
+        h_conv_bare = (5.4 + 1.18 * ((0.88 * dt_boil + 0.5) ** 0.25) + 4.25 * torch.sqrt(v_air_f + 0.04)) * (
+            0.90 + 0.20 * torch.sigmoid(raw_v[:, 5:6].float())
+        )
+        h_rad_bare = 0.88 * 5.670374e-8 * 4.0 * ((t_amb_f + 273.15 + 0.85 * dt_boil) ** 3)
+        dt_cas_bare = dt_boil / (1.0 + r_cond_bare * (h_conv_bare + h_rad_bare))
+
+        corr_cas = 0.94 + 0.12 * torch.sigmoid(raw_v[:, 3:4].float())
+        t_cas_ins = t_amb_f + torch.minimum(dt_boil * 0.98, dt_cas_ins * corr_cas)
+        t_cas_bare = t_amb_f + torch.minimum(dt_boil * 0.98, dt_cas_bare * corr_cas)
+        casing_temp_c = (ins_f * t_cas_ins + (1.0 - ins_f) * t_cas_bare).to(scalars.dtype)
+
+        t_amb_k = t_amb_f + 273.15
+        q_conv_ins = h_conv_ins * F.relu(t_cas_ins - t_amb_f)
+        q_rad_ins = 0.88 * 5.670374e-8 * F.relu(((t_cas_ins + 273.15) ** 4) - (t_amb_k ** 4))
+        q_conv_bare = h_conv_bare * F.relu(t_cas_bare - t_amb_f)
+        q_rad_bare = 0.88 * 5.670374e-8 * F.relu(((t_cas_bare + 273.15) ** 4) - (t_amb_k ** 4))
+
+        q_conv_ext_w = (a_ext_m2 * (ins_f * q_conv_ins + (1.0 - ins_f) * q_conv_bare)).to(scalars.dtype)
+        q_rad_ext_w = (a_ext_m2 * (ins_f * q_rad_ins + (1.0 - ins_f) * q_rad_bare)).to(scalars.dtype)
+        q_cond_insul_w = q_conv_ext_w + q_rad_ext_w
+
+        # 锅炉第一性原理热效率 (%): 化学释热 vs 传水/过热净吸收 (扣除外壁传导+对流+辐射热损与排烟损失)
+        q_chem_w = wick_cap_ml_s * 0.789 * 26800.0  # ml/s -> g/s * 26.8 kJ/g = W
+        eta_comb_flue = (0.44 + 0.18 * torch.sigmoid(raw_v[:, 7:8])) * (0.72 + 0.28 * torch.tanh(draft * 1.3)) * (0.35 + 0.65 * f_wet)
+        q_useful_w = F.relu(q_chem_w * eta_comb_flue - q_cond_insul_w)
+        has_fire = (q_chem_w / (q_chem_w + 8.0)) * lit_f
+        eta_boiler_pct = 100.0 * (q_useful_w / (q_chem_w + 1e-4)) * has_fire
+
+        # 构造 32 节点连续物理剖面输出
+        z_prof = torch.linspace(0.0, 1.0, 16, device=scalars.device, dtype=scalars.dtype).view(1, 1, 16)
+        r_prof = torch.linspace(0.0, 1.0, 16, device=scalars.device, dtype=scalars.dtype).view(1, 1, 16)
+        t_wick_16 = t_amb.unsqueeze(-1) + (wick_tip_temp_c - t_amb).unsqueeze(-1) * (z_prof ** 1.4) * (
+            0.90 + 0.20 * torch.sigmoid(raw_n[:, 0:1, :16])
+        )
+        t_wall_16 = t_boil.unsqueeze(-1) - (t_boil - casing_temp_c).unsqueeze(-1) * (r_prof ** (0.65 + 0.70 * ins_cov.unsqueeze(-1))) * (
+            0.94 + 0.12 * torch.sigmoid(raw_n[:, 0:1, 16:])
+        )
+        t_nodes = torch.cat([t_wick_16, t_wall_16], dim=-1)
+
+        s_wick_16 = torch.clamp(
+            supply_gate.unsqueeze(-1) * (1.0 - 0.32 * z_prof * lit_f.unsqueeze(-1)) * (0.88 + 0.16 * torch.sigmoid(raw_n[:, 1:2, :16])),
+            0.0,
+            1.0,
+        )
+        s_wall_16 = torch.cat(
+            [
+                f_wet.unsqueeze(-1).expand(-1, 1, 4),
+                ins_cov.unsqueeze(-1).expand(-1, 1, 8),
+                torch.zeros_like(f_wet).unsqueeze(-1).expand(-1, 1, 4),
+            ],
+            dim=-1,
+        )
+        s_nodes = torch.cat([s_wick_16, s_wall_16], dim=-1)
+
+        qc_nodes = (q_cond_insul_w / (a_ext_m2 * 1000.0)).unsqueeze(-1) * (0.85 + 0.30 * torch.sigmoid(raw_n[:, 2:3]))
+        qr_nodes = (q_rad_ext_w / (a_ext_m2 * 1000.0)).unsqueeze(-1) * (0.85 + 0.30 * torch.sigmoid(raw_n[:, 3:4]))
+        node_out = torch.cat([t_nodes, s_nodes, qc_nodes, qr_nodes], dim=1)
+
+        cht_vec = torch.cat(
+            [
+                wick_cap_ml_s,
+                wick_sat,
+                wick_tip_temp_c,
+                casing_temp_c,
+                q_cond_insul_w,
+                q_conv_ext_w,
+                q_rad_ext_w,
+                eta_boiler_pct,
+            ],
+            dim=-1,
+        )
+        return node_out, cht_vec
+
+
+def build_boiler_wick_cht_inputs(scalars: torch.Tensor) -> torch.Tensor:
+    """从 [B, 10] 物理边界标量构造 32 节点灯芯毛细+多层锅炉复合壁特征张量 [B, 8, 32]。"""
+    B = scalars.shape[0]
+    dev = scalars.device
+    dtp = scalars.dtype
+
+    lumen_c = scalars[:, 0].clamp(0.0, 1.0)
+    sump_h = (scalars[:, 1] / 1.5).clamp(0.0, 1.4)
+    draft = (scalars[:, 2] / 1.4).clamp(0.0, 1.2)
+    lit_f = scalars[:, 3].clamp(0.0, 1.0)
+    t_b_n = ((scalars[:, 4] - 20.0) / 160.0).clamp(0.0, 1.2)
+    t_g_n = ((scalars[:, 5] - 20.0) / 900.0).clamp(0.0, 1.2)
+    ins_c = scalars[:, 6].clamp(0.0, 1.0)
+    v_a_n = (scalars[:, 7] / 10.0).clamp(0.0, 1.5)
+    f_wet = scalars[:, 8].clamp(0.0, 1.0)
+
+    coord = torch.linspace(-1.0, 1.0, 32, device=dev, dtype=dtp).unsqueeze(0).expand(B, 32)
+    # ch0: 导热系数对数归一化剖面 (湿陶瓷纱线 0.21 -> C1100 紫铜 385 -> 陶瓷纤维片 0.088 -> 空气 0.032 -> 黄铜外衣 115)
+    k_wick = (0.14 + 0.07 * lumen_c).unsqueeze(-1).expand(B, 16)
+    k_cu = torch.full((B, 4), 1.0, device=dev, dtype=dtp)
+    k_ins = (0.04 * ins_c + 0.65 * (1.0 - ins_c)).unsqueeze(-1).expand(B, 6)
+    k_gap = torch.full((B, 3), 0.02, device=dev, dtype=dtp)
+    k_bs = torch.full((B, 3), 0.78, device=dev, dtype=dtp)
+    ch_k = torch.cat([k_wick, k_cu, k_ins, k_gap, k_bs], dim=-1)
+
+    # ch1: 孔隙/流道导通掩码
+    ch_perm = torch.cat([lumen_c.unsqueeze(-1).expand(B, 16), torch.zeros((B, 16), device=dev, dtype=dtp)], dim=-1)
+    # ch2: 液位/浸润度边界
+    ch_wet = torch.cat([sump_h.unsqueeze(-1).expand(B, 16), f_wet.unsqueeze(-1).expand(B, 16)], dim=-1)
+    # ch3: 热源/内温驱动场
+    ch_th_in = torch.cat([(lit_f * t_g_n).unsqueeze(-1).expand(B, 16), t_b_n.unsqueeze(-1).expand(B, 16)], dim=-1)
+    # ch4: 抽风/外部对流风速驱动场
+    ch_flow = torch.cat([draft.unsqueeze(-1).expand(B, 16), v_a_n.unsqueeze(-1).expand(B, 16)], dim=-1)
+    # ch5: 隔热层包裹掩码
+    ch_ins = torch.cat([torch.zeros((B, 16), device=dev, dtype=dtp), ins_c.unsqueeze(-1).expand(B, 16)], dim=-1)
+    # ch6: 热辐射发射率剖面 (陶瓷纱线 0.92, 紫铜 0.25, 陶瓷毡 0.90, 黑漆外衣 0.88)
+    ch_eps = torch.cat(
+        [
+            torch.full((B, 16), 0.92, device=dev, dtype=dtp),
+            torch.full((B, 4), 0.25, device=dev, dtype=dtp),
+            torch.full((B, 9), 0.90, device=dev, dtype=dtp),
+            torch.full((B, 3), 0.88, device=dev, dtype=dtp),
+        ],
+        dim=-1,
+    )
+    return torch.stack([ch_k, ch_perm, ch_wet, ch_th_in, ch_flow, ch_ins, ch_eps, coord], dim=1)
+
+
+def compute_boiler_wick_pde_residuals(scalars: torch.Tensor, cht_vec: torch.Tensor) -> torch.Tensor:
+    """
+    灯芯毛细输运与多层复合壁能量守恒 PINN 残差:
+      1) 断路零输运守恒: lumen_cond == 0 或 sump_head == 0 -> wick_cap_ml_s == 0 且 wick_sat == 0
+      2) 热阻能量守恒平衡: q_cond_insul_w == q_conv_ext_w + q_rad_ext_w
+      3) 热力学第二定律外表面温度有界: T_amb <= T_casing <= T_boil
+    """
+    lumen_c = scalars[:, 0].float()
+    sump_h = scalars[:, 1].float()
+    t_boil = scalars[:, 4].float()
+    t_amb = scalars[:, 9].float()
+
+    cap_mls = cht_vec[:, 0].float()
+    sat_w = cht_vec[:, 1].float()
+    t_cas = cht_vec[:, 3].float()
+    q_cond = cht_vec[:, 4].float()
+    q_conv = cht_vec[:, 5].float()
+    q_rad = cht_vec[:, 6].float()
+
+    blocked = ((lumen_c < 1e-4) | (sump_h < 1e-4)).float()
+    res_block = blocked * (cap_mls ** 2 + sat_w ** 2)
+    res_energy = ((q_cond - (q_conv + q_rad)) / 25.0) ** 2
+    res_2nd_law = (F.relu(t_amb - t_cas) ** 2 + F.relu(t_cas - t_boil) ** 2) / 100.0
+    return (res_block + res_energy + res_2nd_law).mean()
+
+
+

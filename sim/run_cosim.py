@@ -269,7 +269,7 @@ class CoSimRunner:
             "j_cab_blowdown",
             "j_cab_fire_door",
             "j_cab_bypass",
-            "j_cab_roof_hatch",
+            "j_dome_lid",
             "j_safety_poppet_1",
             "j_safety_poppet_2",
             "j_tender_hp_link",
@@ -353,13 +353,13 @@ class CoSimRunner:
         targets = {
             "j_cab_regulator": 1.15 * self.ctrl.regulator,
             "j_cab_blower": 3.14 * self.ctrl.blower_valve,
-            "j_cab_whistle": -0.38 * self.ctrl.whistle_valve,
+            "j_cab_whistle": +0.38 * self.ctrl.whistle_valve,
             "j_cab_sight_drain": 0.0016 if bool(getattr(self.ctrl, "sight_drain_valve", False)) else 0.0,
             "j_cab_pg_needle": -2.10 + p_norm * 4.20,
             "j_cab_blowdown": 3.14 * float(getattr(self.ctrl, "blowdown_valve", 0.0)),
             "j_cab_fire_door": +1.40 * self.ctrl.firebox_door,
             "j_cab_bypass": -1.35 * self.ctrl.bypass_valve,
-            "j_cab_roof_hatch": 2.10 if bool(getattr(self.ctrl, "cab_roof_open", False)) else 0.0,
+            "j_dome_lid": 1.15 if (bool(getattr(self.ctrl, "dome_lid_open", False)) or bool(getattr(self.ctrl, "cab_roof_open", False))) else 0.0,
             "j_safety_poppet_1": sv_lift_m,
             "j_safety_poppet_2": sv_lift_m * 0.94,
             "j_tender_drain_plug": 0.0050 if bool(getattr(self.ctrl, "tender_drain_open", False)) else 0.0,
@@ -437,7 +437,7 @@ class CoSimRunner:
         self.data.qfrc_applied[self.qvel_valR] = tel.valve_friction_R
         self.data.qfrc_applied[self.qvel_pump] = F_pump
         if self.qvel_drain >= 0:
-            self.data.qfrc_applied[self.qvel_drain] = 0.022 if self.ctrl.drain_cock else 0.0
+            self.data.qfrc_applied[self.qvel_drain] = 0.032 if self.ctrl.drain_cock else 0.0
         if self.is_roller_mode:
             self.data.qfrc_applied[self.qvel_w3] = -0.0022 * omega_3 - 0.00012 * omega_3 * abs(omega_3)
         else:

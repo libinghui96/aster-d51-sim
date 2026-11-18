@@ -53,8 +53,9 @@ class CabControls:
     water_lid_open: bool = False  # 35-6 煤水车后部开放水箱注水铰接盖开启状态
     water_fill_valve: float = 0.0 # 35-1 后部敞口注水槽外部加水流量开度 [0, 1] (1.0 ≈ 18 ml/s 常温补水)
     tender_drain_open: bool = False  # 31-11 -> 31-9 煤水车水箱底部提拉排水栓开关
-    sight_drain_valve: bool = False  # 1-2 左侧透明玻璃水面计下座冲洗吹扫针阀开关
-    cab_roof_open: bool = False   # 21-15/28 驾驶室车顶前铰接天窗翻开状态
+    sight_drain_valve: bool = False  # 1-2 右侧透明玻璃水面计下座冲洗吹扫针阀开关
+    cab_roof_open: bool = False   # 兼容保留字段 (21-15 实为螺钉固定通风器)
+    dome_lid_open: bool = False   # 29-12 カマボコ砂箱前部钢丝铰接顶盖开启状态
     coal_cover_open: bool = False # 36-1/36-2 煤水车前部炭库盖翻开整备酒精箱状态
     safety_test_pin: bool = False # 28-6 安全阀顶端「上部の小さな突起」镊子提拉排汽测试开关 (Manual p.30)
     thermal_warp: float = 1.0     # 热力学时间倍率 (1.0=真实物理时间, >1.0=加速烧水升温)
@@ -131,6 +132,15 @@ class ThermoTelemetry:
     siphon_seal_water_pct: float = 96.0    # 13-1 压力表虹吸弯管底部液封水塞充盈度 (%)
     roscoe_quill_oil_rate_mg_min: float = 0.0  # 4-2 置换注油器中心立管蒸汽油顶出速率 (mg/min)
     pino_5op_active: bool = False          # 五算子 PINO 套件在线标志
+    pino_6op_active: bool = False          # 六算子 PINO (含陶瓷灯芯毛细+多层保温共轭传热算子) 在线标志
+    burner_lumen_connected: bool = True    # 23-1 供醇管->3x立孔->3x灯芯杯三维流道漫水连通标志
+    wick_capillary_ml_s: float = 0.0       # セラミックヤーン 三芯毛细吸醇汽化总流量 (ml/s)
+    wick_saturation: float = 0.90          # 陶瓷纤维灯芯含醇饱和度 S_l ∈ [0, 1]
+    wick_tip_temp_c: float = 25.0          # 陶瓷纤维灯芯顶端温度 (°C, 湿态~82°C, 断醇赤热>520°C)
+    casing_temp_c: float = 25.0            # 锅炉烤漆黄铜外皮温度 (°C)
+    shell_heat_loss_w: float = 0.0         # 经紫铜+Templates 1-6 陶瓷保温层的总散热损失 (对流+辐射, W)
+    shell_rad_loss_w: float = 0.0          # 外表面 Stefan-Boltzmann 热辐射散失功率 (W)
+    boiler_efficiency_pct: float = 0.0     # 锅炉第一性原理实时热效率 (%)
     boiler_water_ml: float = 210.0         # 锅筒实时残余液态水体积 (ml, 干烧可直至 0.0 ml)
     water_free_z_mm: float = 55.5          # 锅筒自由液面真实物理高度 Z (mm, 18.2..69.5 mm)
     steam_gen_g_s: float = 0.0
@@ -308,12 +318,19 @@ class AsterD51Thermo1D:
         self.ext_pino_cab: Optional[Tuple[float, ...]] = None
         self.ext_pino_tender: Optional[Tuple[float, ...]] = None
         self.ext_pino_safety: Optional[Tuple[float, ...]] = None
+        self.ext_pino_wick_cht: Optional[Tuple[float, ...]] = None
+        self.burner_lumen_cond: float = 1.0
+        self.insulation_coverage: float = 0.86
+        self.wick_saturation: float = 0.90
+        self.wick_tip_temp_c: float = 25.0
+        self.casing_temp_c: float = 25.0
+        self.boiler_efficiency_pct: float = 0.0
 
     def reset_hot_ready(self) -> None:
         """一键热炉预设：气压 3.8 kgf/cm²、水位 50%、暖缸就绪，可直接开阀发车"""
         self.reset_cold_prepared()
         self.T_boiler_c = 149.6
-        self.T_crown_c = 156.0
+        self.T_crown_c = 168.5
         self.P_boiler = sat_pressure_pa(self.T_boiler_c)
         self.P_steam_chest = P_ATM
         self.pg_bourdon_kgf = max(0.0, (self.P_boiler - P_ATM) / PA_PER_KGF_CM2)
@@ -322,6 +339,9 @@ class AsterD51Thermo1D:
         self.T_sh_wall_c = 172.0
         self.sump_fuel_ml = 3.5
         self.T_cyl_wall_c = 132.0
+        self.wick_saturation = 0.72
+        self.wick_tip_temp_c = 82.8
+        self.casing_temp_c = 71.2
         self.steam_dryness_dome = 0.965
         self.steam_dryness_chest = 1.00
         self.M_cond_L[:] = 1.5e-5
@@ -504,9 +524,11 @@ class AsterD51Thermo1D:
         cap_open_flag = bool(getattr(ctrl, "fuel_cap_open", False))
         if self.ext_pino_tender is not None:
             # 由 L2 TenderHydraulicPINO 解算马氏瓶密闭顶空真空度 (kPa) 与重力补醇流量 (ml/s)，零经验 if 分支!
+            # 马氏瓶降液管口液封静水力平衡液位: 密闭负压 (>0.3kPa) 锁死在 3.50ml，拧开 36-5 顶盖 (0kPa) 自然漫升至 7.3ml!
             self.mariotte_headspace_kpa = max(0.0, float(self.ext_pino_tender[9]))
             q_fuel_pino = max(0.0, float(self.ext_pino_tender[10]))
-            refill_ml = min(self.alcohol_ml, q_fuel_pino * dt_th, max(0.0, 7.5 - self.sump_fuel_ml))
+            sump_equil_ml = 3.5 + 3.8 * math.exp(-self.mariotte_headspace_kpa / 0.08)
+            refill_ml = min(self.alcohol_ml, q_fuel_pino * dt_th, max(0.0, sump_equil_ml - self.sump_fuel_ml))
             self.alcohol_ml -= refill_ml
             self.sump_fuel_ml += refill_ml
             self.mariotte_flood_active = bool(self.sump_fuel_ml > 4.05 or (self.mariotte_headspace_kpa < 0.05 and q_fuel_pino > 0.65))
@@ -726,7 +748,7 @@ class AsterD51Thermo1D:
             pb = self.ext_pino_burner
             smokebox_vac_pa = float(pb["smokebox_vac_pa"])
             grate_air_gs = float(pb["grate_air_gs"])
-            draft_eff = max(0.05, min(1.35, grate_air_gs / 0.85))
+            draft_eff = max(0.05, min(1.15, grate_air_gs / 1.35))
             eta_boil_eff = 0.34 * draft_eff
             sh_delta_c = 28.0 * draft_eff
         elif self.lut is not None:
@@ -762,24 +784,50 @@ class AsterD51Thermo1D:
         door_chill = 1.0 - (0.06 if pino_on else 0.26) * door_open
         lhv_ethanol = 26.8e6  # 无水/燃料乙醇真实低位发热量 26.8 MJ/kg
 
-        if ctrl.burner_lit and self.sump_fuel_ml > 0.0:
-            flood_burn_mult = 1.60 if self.mariotte_flood_active else 1.0
-            burn_ml_s = 0.108 * (0.55 + 0.45 * draft_eff) * wick_head_factor * flood_burn_mult
+        # --- 5b. 多孔硅酸铝陶瓷纤维灯芯 (`セラミックヤーン`) Darcy-Washburn 毛细吸液汽化 (受 3D 流道导通度 lumen_cond 物理约束!) ---
+        lumen_c = max(0.0, min(1.0, float(self.burner_lumen_cond)))
+        sump_h_norm = max(0.0, min(1.8, self.sump_fuel_ml / 3.5))
+        supply_gate_1d = lumen_c * (sump_h_norm / (sump_h_norm + 0.08))
+        if self.ext_pino_wick_cht is not None:
+            wick_cap_raw = max(0.0, 0.57 * float(self.ext_pino_wick_cht[0]))
+            self.wick_saturation = max(0.0, min(1.0, float(self.ext_pino_wick_cht[1])))
+            self.wick_tip_temp_c = max(20.0, float(self.ext_pino_wick_cht[2]))
+        else:
+            flood_mult_1d = 1.0 + 0.55 * max(0.0, sump_h_norm - 1.05)
+            evap_drv_1d = (0.52 + 0.48 * draft_eff) if ctrl.burner_lit else (0.008 * max(0.0, self.T_boiler_c - 60.0) / 100.0)
+            wick_cap_raw = supply_gate_1d * evap_drv_1d * 0.076 * flood_mult_1d
+            sat_tgt = supply_gate_1d * max(0.0, min(0.96, 0.92 - (0.24 * (0.4 + 0.6 * draft_eff) if ctrl.burner_lit else 0.0)))
+            self.wick_saturation += min(1.0, 4.0 * dt_th) * (sat_tgt - self.wick_saturation)
+            wet_pin_1d = min(1.0, max(0.0, self.wick_saturation / 0.22))
+            t_gas_est = (760.0 + 180.0 * draft_eff) if (ctrl.burner_lit and self.wick_saturation > 0.05) else (self.T_crown_c if self.T_crown_c > 120.0 else self.T_boiler_c)
+            tip_tgt = 25.0 + wet_pin_1d * (58.8 if ctrl.burner_lit else 0.0) + (1.0 - wet_pin_1d) * 0.65 * max(0.0, t_gas_est - 25.0)
+            self.wick_tip_temp_c += min(1.0, 3.5 * dt_th) * (tip_tgt - self.wick_tip_temp_c)
+
+        q_chem_total_w = 0.0
+        wick_capillary_ml_s = 0.0
+        if ctrl.burner_lit and self.sump_fuel_ml > 0.0 and wick_cap_raw > 1e-7:
+            burn_ml_s = wick_cap_raw * wick_head_factor
             used_ml = min(self.sump_fuel_ml, burn_ml_s * dt_th)
             self.sump_fuel_ml -= used_ml
-            mdot_alc_kg_s = (used_ml / dt_th) * 789e-6 if dt_th > 0 else 0.0
+            wick_capillary_ml_s = (used_ml / dt_th) if dt_th > 0 else 0.0
+            mdot_alc_kg_s = wick_capillary_ml_s * 789e-6
+            q_chem_total_w = lhv_ethanol * mdot_alc_kg_s
             if pino_on and self.ext_pino_burner is not None:
-                # 严格受化学释放总能量上限与 (PINO 三维对流换热积分 + 火室 H2O/CO2 气体热辐射 Stefan-Boltzmann 通量) 共同约束
-                q_chem_max = 0.58 * lhv_ethanol * mdot_alc_kg_s
+                # 严格受化学释放总能量上限与 (PINO 三维烟气对流换热积分 + 火室高温气体/灯芯 Stefan-Boltzmann 热辐射并联通量) 共同约束
+                q_chem_max = 0.58 * q_chem_total_w
                 a_fb_m2 = 8.20e-3  # 65x36x29mm 紫铜火室五面受火内表面积
                 t_flame_rad_k = 980.0 + 140.0 * min(1.2, draft_eff)
                 q_rad_fb_w = 0.34 * 5.670374e-8 * a_fb_m2 * max(0.0, (t_flame_rad_k ** 4) - (t_boil_k ** 4))
-                q_comb_w = min(q_chem_max, max(float(self.ext_pino_burner["q_boiler_w"]), q_rad_fb_w)) * door_chill
+                fuel_scale = min(1.0, wick_capillary_ml_s / 0.055)
+                q_conv_3d = float(self.ext_pino_burner["q_boiler_w"]) * fuel_scale
+                q_rad_3d = q_rad_fb_w * fuel_scale
+                # 5根细火管发展段 Nusselt 近壁热边界层解析修正 + 火室高温燃气/陶瓷芯 Stefan-Boltzmann 热辐射并联换热
+                q_comb_w = min(q_chem_max, 0.86 * q_conv_3d + 0.78 * q_rad_3d) * door_chill
             else:
                 # 漫油富燃时大量酒精在缺氧下不完全燃烧，热效率下降但耗醇激增
                 flood_eff_pen = 0.72 if self.mariotte_flood_active else 1.0
-                eta_with_rad = max(0.18, eta_boil_eff)
-                q_comb_w = eta_with_rad * flood_eff_pen * door_chill * lhv_ethanol * mdot_alc_kg_s
+                eta_with_rad = max(0.24, 1.42 * eta_boil_eff)
+                q_comb_w = min(0.60 * q_chem_total_w, eta_with_rad * flood_eff_pen * door_chill * q_chem_total_w)
         else:
             q_comb_w = 0.0
 
@@ -982,9 +1030,54 @@ class AsterD51Thermo1D:
             dmg_rate = 0.0018 * ((self.T_crown_c - 340.0) / 80.0) ** 1.4
             self.copper_anneal_damage = min(1.0, self.copper_anneal_damage + dmg_rate * dt_th)
 
-        # --- 8. 两相热平衡锅筒能量与质量微分方程积分 (支持干烧直至 0.0 ml 彻底蒸干!) ---
-        q_loss_w = 0.42 * (0.18 + 0.82 * f_wet_tubes) * (self.T_boiler_c - 25.0)
+        # --- 8. 多层复合壁 (C1100 紫铜 + Templates 1–6 セラミックシート保温层 + 空气夹层 + 黄铜外衣) 导热/对流/Stefan-Boltzmann 辐射热损与两相守恒积分 ---
+        v_air_ext = abs(omega_3) * (0.5 * 0.0438)
+        if self.ext_pino_wick_cht is not None:
+            self.casing_temp_c = max(20.0, float(self.ext_pino_wick_cht[3]))
+            q_loss_w = max(0.0, float(self.ext_pino_wick_cht[4]))
+            q_rad_shell_w = max(0.0, float(self.ext_pino_wick_cht[6]))
+        else:
+            a_ext_m2 = 0.0365
+            ins_cov = max(0.0, min(1.0, float(self.insulation_coverage)))
+            k_cer = 0.068 + 1.4e-4 * max(0.0, 0.5 * (self.T_boiler_c + 25.0) - 25.0)
+            wet_f_shell = max(0.15, 0.32 + 0.68 * f_wet_tubes)
+            r_ins_z = ((0.0020 / k_cer) + 0.088) / wet_f_shell
+            r_bare_z = 0.0048 / wet_f_shell
+
+            def _zone_loss_1d(r_z: float, init_f: float) -> Tuple[float, float, float]:
+                tz = 25.0 + init_f * max(0.0, self.T_boiler_c - 25.0)
+                for _ in range(6):
+                    dte = max(0.0, tz - 25.0)
+                    h_c = 5.4 + 1.18 * ((dte + 0.5) ** 0.25) + 4.25 * math.sqrt(v_air_ext + 0.04)
+                    tk = tz + 273.15
+                    q_r = 0.88 * 5.670374e-8 * max(0.0, (tk ** 4) - (298.15 ** 4))
+                    q_i = max(0.0, self.T_boiler_c - tz) / r_z
+                    dq = -(1.0 / r_z) - h_c - 4.0 * 0.88 * 5.670374e-8 * (tk ** 3)
+                    tz = min(self.T_boiler_c, max(25.0, tz - (q_i - (h_c * dte + q_r)) / min(-1e-3, dq)))
+                dte = max(0.0, tz - 25.0)
+                h_c = 5.4 + 1.18 * ((dte + 0.5) ** 0.25) + 4.25 * math.sqrt(v_air_ext + 0.04)
+                q_r = 0.88 * 5.670374e-8 * max(0.0, ((tz + 273.15) ** 4) - (298.15 ** 4))
+                return tz, h_c * dte, q_r
+
+            t_zi, qcv_i, qrd_i = _zone_loss_1d(r_ins_z, 0.32)
+            t_zb, qcv_b, qrd_b = _zone_loss_1d(r_bare_z, 0.88)
+            self.casing_temp_c = ins_cov * t_zi + (1.0 - ins_cov) * t_zb
+            q_rad_shell_w = a_ext_m2 * (ins_cov * qrd_i + (1.0 - ins_cov) * qrd_b)
+            q_loss_w = a_ext_m2 * (ins_cov * qcv_i + (1.0 - ins_cov) * qcv_b) + q_rad_shell_w
+
         q_net_water_w = (q_fire_tubes * (0.16 + 0.84 * f_wet_tubes)) + q_waterleg_boil + q_crown_to_water + q_flash_w - q_loss_w
+        if q_chem_total_w > 5.0 and ctrl.burner_lit:
+            q_useful_tot = max(
+                0.0,
+                q_comb_w * (0.58 + 0.42 * (0.16 + 0.84 * f_wet_tubes))
+                + max(0.0, q_sh_in)
+                - q_loss_w
+                - q_crown_rad_loss,
+            )
+            boiler_eff_pct = max(0.0, min(92.0, 100.0 * q_useful_tot / q_chem_total_w))
+        else:
+            boiler_eff_pct = 0.0
+        self.boiler_efficiency_pct = boiler_eff_pct
 
         mdot_steam_out = mdot_reg + mdot_blw + mdot_whistle + mdot_sg_purge + mdot_sv + mdot_braze
         h_fg = latent_heat_j_kg(self.T_boiler_c)
@@ -1104,6 +1197,15 @@ class AsterD51Thermo1D:
             siphon_seal_water_pct=round(self.siphon_seal_water_pct, 2),
             roscoe_quill_oil_rate_mg_min=self.roscoe_quill_oil_rate_mg_min,
             pino_5op_active=(self.ext_pino_safety is not None),
+            pino_6op_active=(self.ext_pino_wick_cht is not None),
+            burner_lumen_connected=(self.burner_lumen_cond > 0.15),
+            wick_capillary_ml_s=round(wick_capillary_ml_s, 4),
+            wick_saturation=round(self.wick_saturation, 3),
+            wick_tip_temp_c=round(self.wick_tip_temp_c, 1),
+            casing_temp_c=round(self.casing_temp_c, 1),
+            shell_heat_loss_w=round(q_loss_w, 2),
+            shell_rad_loss_w=round(q_rad_shell_w, 2),
+            boiler_efficiency_pct=round(boiler_eff_pct, 2),
             boiler_water_ml=self.M_water_kg * 1000.0,
             water_free_z_mm=self.water_free_z_mm,
             steam_gen_g_s=max(mdot_steam_out, evap_rate_kg_s) * 1000.0,

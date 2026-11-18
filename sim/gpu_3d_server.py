@@ -188,6 +188,7 @@ def pack_frame_payload(
             "tenderDrainOpen": bool(getattr(runner.ctrl, "tender_drain_open", False)),
             "sightDrainValve": bool(getattr(runner.ctrl, "sight_drain_valve", False)),
             "cabRoofOpen": bool(getattr(runner.ctrl, "cab_roof_open", False)),
+            "domeLidOpen": bool(getattr(runner.ctrl, "dome_lid_open", False)),
             "coalCoverOpen": bool(getattr(runner.ctrl, "coal_cover_open", False)),
             "gradeDeg": round(runner.ctrl.grade_deg, 2),
             "thermalWarp": round(runner.ctrl.thermal_warp, 1),
@@ -242,6 +243,14 @@ def pack_frame_payload(
             "steamDrynessDome": round(tel.steam_dryness_dome, 4),
             "steamDrynessChest": round(tel.steam_dryness_chest, 4),
             "heatInputW": round(tel.heat_input_w, 1),
+            "boilerEfficiencyPct": round(float(getattr(tel, "boiler_efficiency_pct", 0.0)), 2),
+            "shellHeatLossW": round(float(getattr(tel, "shell_heat_loss_w", 0.0)), 2),
+            "shellRadLossW": round(float(getattr(tel, "shell_rad_loss_w", 0.0)), 2),
+            "casingTempC": round(float(getattr(tel, "casing_temp_c", 25.0)), 1),
+            "wickCapillaryMlS": round(float(getattr(tel, "wick_capillary_ml_s", 0.0)), 4),
+            "wickSaturation": round(float(getattr(tel, "wick_saturation", 0.90)), 3),
+            "wickTipTempC": round(float(getattr(tel, "wick_tip_temp_c", 25.0)), 1),
+            "burnerLumenConnected": bool(getattr(tel, "burner_lumen_connected", True)),
             "feedwaterGS": round(tel.feedwater_g_s, 3),
             "steamGenGS": round(tel.steam_gen_g_s, 3),
             "forceL": round(tel.force_L, 2),
@@ -283,6 +292,16 @@ def pack_frame_payload(
             "checkBall5LiftsMm": getattr(sp, "check_ball_5_lifts_mm", sp.check_ball_lifts_mm),
             "lubeWaterFrac": float(sp.lube_water_frac),
             "pino4OpActive": bool(getattr(sp, "pino_4op_active", False)),
+            "pino6OpActive": bool(getattr(sp, "pino_6op_active", False)),
+            "burnerLumenConnected": bool(getattr(sp, "burner_lumen_connected", True)),
+            "wickCapillaryMlS": float(getattr(sp, "wick_capillary_ml_s", 0.0)),
+            "wickSaturation": float(getattr(sp, "wick_saturation", 0.90)),
+            "wickTipTempC": float(getattr(sp, "wick_tip_temp_c", 25.0)),
+            "casingTempC": float(getattr(sp, "casing_temp_c", 25.0)),
+            "shellHeatLossW": float(getattr(sp, "shell_heat_loss_w", 0.0)),
+            "shellRadLossW": float(getattr(sp, "shell_rad_loss_w", 0.0)),
+            "boilerEfficiencyPct": float(getattr(sp, "boiler_efficiency_pct", 0.0)),
+            "insulationCoverage": float(getattr(sp, "insulation_coverage", 0.86)),
             "tenderBayTempC": float(getattr(sp, "tender_bay_temp_c", 25.0)),
             "tenderWaveRmsMm": float(getattr(sp, "tender_wave_rms_mm", 0.0)),
             "tenderWaveB64": b64_wave,
@@ -400,6 +419,8 @@ class GPU3DRealtimeBridge:
                 c.sight_drain_valve = bool(cd["sightDrainValve"])
             if "cabRoofOpen" in cd:
                 c.cab_roof_open = bool(cd["cabRoofOpen"])
+            if "domeLidOpen" in cd:
+                c.dome_lid_open = bool(cd["domeLidOpen"])
             if "coalCoverOpen" in cd:
                 c.coal_cover_open = bool(cd["coalCoverOpen"])
             if "gradeDeg" in cd:

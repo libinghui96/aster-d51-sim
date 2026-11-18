@@ -41,7 +41,7 @@ from sim.hw_guard import (
 apply_cpu_thread_and_nice_caps(max_threads=8, nice_delta=5)
 
 from sim.run_cosim import CoSimRunner
-from sim.thermo_1d import sat_temp_c
+from sim.thermo_1d import sat_pressure_pa, sat_temp_c
 
 
 # ==============================================================================
@@ -1864,7 +1864,8 @@ def verify_gate_14() -> Tuple[bool, List[str]]:
         "j_cab_blowdown",
         "j_cab_fire_door",
         "j_cab_bypass",
-        "j_cab_roof_hatch",
+        "j_cab_drain",
+        "j_dome_lid",
         "j_tender_hp_link",
         "j_tender_handpump",
         "j_tender_hp_ram",
@@ -2118,7 +2119,10 @@ def verify_gate_16(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         "cab_backhead_plate",
         "cab_deck_and_mounts",
         "cab_reverser_nut",
-        "cab_roof_hatch",
+        "cab_drain_lever",
+        "dome_lid_29_12",
+        "boiler_insulation",
+        "burner_wick",
         "cab_firebox_door",
         "boiler_aux_valves",
         "exhaust_blast_pipe",
@@ -2451,6 +2455,7 @@ def verify_gate_18(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
 
     seat_byp_floor = pair_min_mm("cab_bypass_vis", "cab_deck_and_mounts_vis")
     seat_byp_valve = pair_min_mm("cab_bypass_vis", "feedwater_piping_vis")
+    seat_drn_floor = pair_min_mm("cab_drain_lever_vis", "cab_deck_and_mounts_vis")
     seat_rev_floor = pair_min_mm("cab_reverser_stand_vis", "cab_deck_and_mounts_vis")
     seat_sg_drain = pair_min_mm("cab_sight_drain_vis", "boiler_aux_valves_vis")
     seat_tdr_drain = pair_min_mm("tender_drain_plug_vis", "tender_internals_vis")
@@ -2464,14 +2469,19 @@ def verify_gate_18(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         "cab_blowdown_vis",
         "cab_fire_door_vis",
         "cab_bypass_vis",
+        "cab_drain_lever_vis",
         "cab_reverser_wheel_vis",
         "drain_pull_rod_vis",
     ]
+    mating_skip = {
+        ("cab_drain_lever_vis", "drain_pull_rod_vis"),
+        ("drain_pull_rod_vis", "cab_drain_lever_vis"),
+    }
     sweep_poses = [
-        {"j_cab_regulator": 0.0, "j_cab_whistle": 0.0, "j_cab_fire_door": 0.0, "j_cab_bypass": 0.0, "j_reverser": 0.0},
-        {"j_cab_regulator": 1.12, "j_cab_whistle": -0.38, "j_cab_fire_door": 1.40, "j_cab_bypass": -1.35, "j_reverser": 0.45},
-        {"j_cab_regulator": 0.56, "j_cab_whistle": -0.38, "j_cab_fire_door": 0.75, "j_cab_bypass": -0.70, "j_reverser": -0.45},
-        {"j_cab_regulator": 1.12, "j_cab_whistle": 0.0, "j_cab_fire_door": 1.40, "j_cab_bypass": 0.0, "j_reverser": -0.45},
+        {"j_cab_regulator": 0.0, "j_cab_whistle": 0.0, "j_cab_fire_door": 0.0, "j_cab_bypass": 0.0, "j_cab_drain": 0.35, "j_reverser": 0.0},
+        {"j_cab_regulator": 1.12, "j_cab_whistle": +0.36, "j_cab_fire_door": 1.40, "j_cab_bypass": -1.35, "j_cab_drain": -0.35, "j_reverser": 0.45},
+        {"j_cab_regulator": 0.56, "j_cab_whistle": +0.36, "j_cab_fire_door": 0.75, "j_cab_bypass": -0.70, "j_cab_drain": 0.35, "j_reverser": -0.45},
+        {"j_cab_regulator": 1.12, "j_cab_whistle": 0.0, "j_cab_fire_door": 1.40, "j_cab_bypass": 0.0, "j_cab_drain": -0.35, "j_reverser": -0.45},
     ]
     min_cab_clear_mm = 999.0
     worst_cab_pair = ("", "")
@@ -2490,13 +2500,15 @@ def verify_gate_18(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         for i in range(len(cab_nonmating_geoms)):
             for j in range(i + 1, len(cab_nonmating_geoms)):
                 ga, gb = cab_nonmating_geoms[i], cab_nonmating_geoms[j]
+                if (ga, gb) in mating_skip:
+                    continue
                 dists, _ = trees_map[ga].query(pts_map[gb], workers=1)
                 dm = float(np.min(dists)) * 1000.0
                 if dm < min_cab_clear_mm:
                     min_cab_clear_mm = dm
                     worst_cab_pair = (ga, gb)
 
-    max_seat_mm = max(seat_byp_floor, seat_byp_valve, seat_rev_floor, seat_sg_drain, seat_tdr_drain)
+    max_seat_mm = max(seat_byp_floor, seat_byp_valve, seat_drn_floor, seat_rev_floor, seat_sg_drain, seat_tdr_drain)
     if max_seat_mm > 0.45 or min_cab_clear_mm < 0.45:
         ok = False
         msgs.append(
@@ -2737,10 +2749,11 @@ def verify_gate_20(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     clack_pts = aux_pts[(aux_pts[:, 0] <= -111.0) & (aux_pts[:, 1] >= -15.0) & (aux_pts[:, 1] <= -8.5) & (aux_pts[:, 2] >= 43.0) & (aux_pts[:, 2] <= 53.5)]
     fw_pts = stl_tris_mm["feedwater_piping"].reshape(-1, 3)
     riser_zmax = float(fw_pts[(fw_pts[:, 0] >= -120.0) & (fw_pts[:, 0] <= -110.0)][:, 2].max()) if len(fw_pts) else 99.0
-    rr_pts = stl_tris_mm["cab_reach_rod"].reshape(-1, 3)
-    rr_arch_zmax = float(rr_pts[:, 2].max()) + 33.5  # 世界系 Z_peak >= +44.0mm > +42.2mm 走台隆起桥!
-    bid_rw = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cab_reverser_wheel")
     lf_pos = d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "loco_frame")]
+    bid_rr = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cab_reach_rod")
+    rr_pts = stl_tris_mm["cab_reach_rod"].reshape(-1, 3)
+    rr_arch_zmax = float(rr_pts[:, 2].max()) + float((d.xpos[bid_rr, 2] - lf_pos[2]) * 1000.0)
+    bid_rw = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cab_reverser_wheel")
     rw_z_mm = float((d.xpos[bid_rw, 2] - lf_pos[2]) * 1000.0)
     cc_pts = stl_tris_mm["tender_coal_cover"].reshape(-1, 3)
     cc_yspan = float(cc_pts[:, 1].max() - cc_pts[:, 1].min())
@@ -2867,8 +2880,8 @@ def verify_gate_21(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
             front_shoes_ok = False
 
     bs_pts = stl_tris_mm["boiler_superstructure"].reshape(-1, 3)
-    comp_L = int(np.sum((bs_pts[:, 0] >= -76.0) & (bs_pts[:, 0] <= -52.0) & (bs_pts[:, 1] >= 24.0) & (bs_pts[:, 2] >= 28.0) & (bs_pts[:, 2] <= 55.0)))
-    fwh_R = int(np.sum((bs_pts[:, 0] >= -76.0) & (bs_pts[:, 0] <= -52.0) & (bs_pts[:, 1] <= -24.0) & (bs_pts[:, 2] >= 28.0) & (bs_pts[:, 2] <= 55.0)))
+    comp_L = int(np.sum((bs_pts[:, 0] >= -96.0) & (bs_pts[:, 0] <= -66.0) & (bs_pts[:, 1] >= 22.0) & (bs_pts[:, 2] >= 28.0) & (bs_pts[:, 2] <= 56.0)))
+    fwh_R = int(np.sum((bs_pts[:, 0] >= -96.0) & (bs_pts[:, 0] <= -66.0) & (bs_pts[:, 1] <= -22.0) & (bs_pts[:, 2] >= 28.0) & (bs_pts[:, 2] <= 56.0)))
     sil_R = int(np.sum((bs_pts[:, 0] >= -108.0) & (bs_pts[:, 0] <= -88.0) & (bs_pts[:, 1] <= -10.0) & (bs_pts[:, 2] >= 65.0)))
     dwh_L = int(np.sum((bs_pts[:, 0] >= -108.0) & (bs_pts[:, 0] <= -88.0) & (bs_pts[:, 1] >= 10.0) & (bs_pts[:, 2] >= 65.0)))
 
@@ -2971,6 +2984,331 @@ def verify_gate_21(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
 
 
 # ==============================================================================
+# Gate 22: Stage 17 STEP-First B-Rep 全流道贯通、陶瓷灯芯毛细燃烧、多层保温共轭传热与全车细节纠偏门禁
+# ==============================================================================
+
+def verify_gate_22(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
+    ok = True
+    msgs: List[str] = []
+
+    # 22.1 核验 101 件全量 STEP-First 编译溯源与 OpenCascade BRepClass3d_SolidClassifier (或轻量 CI 射线奇偶校验) 内腔精确贯通
+    mp = json.loads((PROJECT_ROOT / "configs" / "d51_mass_props.json").read_text(encoding="utf-8"))
+    parts_mp = mp.get("parts", {})
+    not_step = [k for k, v in parts_mp.items() if not v.get("compiled_from_step", False)]
+
+    step_dir = PROJECT_ROOT / "models" / "step"
+    brep_lumen_specs = {
+        "alcohol_burner": [
+            ((-158.0, 0.0, 8.8), (1.0, 0.0, 0.0), 0.55),
+            ((-110.0, 0.0, 6.2), (1.0, 0.0, 0.0), 0.55),
+            ((-93.0, 0.0, 9.5), (0.0, 0.0, 1.0), 0.65),
+            ((-93.0, 0.0, 14.5), (0.0, 0.0, 1.0), 3.20),
+            ((-77.0, 0.0, 9.5), (0.0, 0.0, 1.0), 0.65),
+            ((-77.0, 0.0, 14.5), (0.0, 0.0, 1.0), 3.20),
+            ((-61.0, 0.0, 9.5), (0.0, 0.0, 1.0), 0.65),
+            ((-61.0, 0.0, 14.5), (0.0, 0.0, 1.0), 3.20),
+        ],
+        "superheater_piping": [
+            ((25.0, 11.5, 48.5), (1.0, 0.0, 0.0), 0.55),
+            ((25.0, -11.5, 44.5), (1.0, 0.0, 0.0), 0.55),
+            ((123.5, 0.0, 18.5), (0.0, 1.0, 0.0), 0.55),
+        ],
+        "feedwater_piping": [
+            ((-80.0, -9.5, 11.8), (1.0, 0.0, 0.0), 0.40),
+            ((-115.8, -11.8, 35.0), (0.0, 0.0, 1.0), 0.35),
+        ],
+        "displacement_lubricator": [
+            ((128.0, 7.5, 18.5), (1.0, 0.0, 0.0), 0.35),
+        ],
+        "tender_internals": [
+            ((-95.0, -18.5, 9.2), (1.0, 0.0, 0.0), 0.55),
+            ((-82.0, 21.5, 35.0), (0.0, 0.0, 1.0), 0.55),
+        ],
+    }
+
+    def _stl_cross_section_open(tris_mm: np.ndarray, center_mm: Tuple[float, float, float], tangent_xyz: Tuple[float, float, float], r_probe_mm: float) -> Tuple[bool, int]:
+        tx, ty, tz = tangent_xyz
+        tn = math.sqrt(tx * tx + ty * ty + tz * tz) or 1.0
+        tx, ty, tz = tx / tn, ty / tn, tz / tn
+        ux, uy, uz = (0.0, tz, -ty) if abs(tx) < 0.85 else (-tz, 0.0, tx)
+        un = math.sqrt(ux * ux + uy * uy + uz * uz)
+        ux, uy, uz = ux / un, uy / un, uz / un
+        vx, vy, vz = ty * uz - tz * uy, tz * ux - tx * uz, tx * uy - ty * ux
+        cx, cy, cz = center_mm
+        probes = [
+            (cx, cy, cz),
+            (cx + r_probe_mm * ux, cy + r_probe_mm * uy, cz + r_probe_mm * uz),
+            (cx - r_probe_mm * ux, cy - r_probe_mm * uy, cz - r_probe_mm * uz),
+            (cx + r_probe_mm * vx, cy + r_probe_mm * vy, cz + r_probe_mm * vz),
+            (cx - r_probe_mm * vx, cy - r_probe_mm * vy, cz - r_probe_mm * vz),
+        ]
+        # Irrational direction +Z tilted ray parity against watertight manifold triangles
+        d_ray = np.array([0.1371, 0.2193, 0.9659], dtype=np.float64)
+        d_ray /= np.linalg.norm(d_ray)
+        v0, e1, e2 = tris_mm[:, 0], tris_mm[:, 1] - tris_mm[:, 0], tris_mm[:, 2] - tris_mm[:, 0]
+        h = np.cross(d_ray, e2)
+        a = np.einsum("ij,ij->i", e1, h)
+        valid = np.abs(a) > 1e-11
+        v0, e1, e2, h, inv_a = v0[valid], e1[valid], e2[valid], h[valid], 1.0 / a[valid]
+        n_open = 0
+        for px, py, pz in probes:
+            s = np.array([px, py, pz], dtype=np.float64) - v0
+            u = inv_a * np.einsum("ij,ij->i", s, h)
+            m1 = (u >= 0.0) & (u <= 1.0)
+            if not np.any(m1):
+                n_open += 1
+                continue
+            q = np.cross(s[m1], e1[m1])
+            v_b = inv_a[m1] * (q @ d_ray)
+            m2 = (v_b >= 0.0) & (u[m1] + v_b <= 1.0)
+            if not np.any(m2):
+                n_open += 1
+                continue
+            t_hit = inv_a[m1][m2] * np.einsum("ij,ij->i", e2[m1][m2], q[m2])
+            if int(np.sum(t_hit > 1e-6)) % 2 == 0:
+                n_open += 1
+        return (n_open == 5), n_open
+
+    brep_failures = []
+    total_sections = 0
+    try:
+        from scripts.step_pipeline import load_step_shape, verify_step_cross_section_open
+        lumen_backend = "BRepClass3d"
+        for stem, sec_list in brep_lumen_specs.items():
+            sh = load_step_shape(step_dir / f"{stem}.step")
+            for c_mm, t_xyz, r_p in sec_list:
+                total_sections += 1
+                sec_ok, n_open = verify_step_cross_section_open(sh, c_mm, t_xyz, r_p)
+                if not sec_ok:
+                    brep_failures.append((stem, c_mm, n_open))
+    except ImportError:
+        lumen_backend = "RayParityCI"
+        for stem, sec_list in brep_lumen_specs.items():
+            for c_mm, t_xyz, r_p in sec_list:
+                total_sections += 1
+                sec_ok, n_open = _stl_cross_section_open(stl_tris_mm[stem], c_mm, t_xyz, r_p)
+                if not sec_ok:
+                    brep_failures.append((stem, c_mm, n_open))
+
+    if len(parts_mp) < 101 or not_step or brep_failures:
+        ok = False
+        msgs.append(
+            f"FAIL: STEP-First compilation or B-Rep lumen openness failed: n_parts={len(parts_mp)}, "
+            f"not_step={not_step}, brep_failures={brep_failures}"
+        )
+    else:
+        msgs.append(
+            f"PASS: STEP-First CAD verified ({len(parts_mp)}/101 parts compiled_from_step=True; "
+            f"{total_sections}/{total_sections} {lumen_backend} 5-point fluid cross-sections 100% open across 23-1/17-5/6-6/4-2/34-6/31-14)"
+        )
+
+    # 22.2 & 22.3 核验 6 算子 PINO 报告、三维入口漫水酒精管路连通性、陶瓷灯芯毛细燃烧与 Templates 1-6 陶瓷保温热效率涌现
+    rep = json.loads((PROJECT_ROOT / "configs" / "pino_training_report.json").read_text(encoding="utf-8"))
+    wc_val = rep.get("boiler_wick_cht_validation", {})
+    em = rep.get("gate10_zero_if_emergence", {})
+    if not (
+        em.get("gate22_wick_cht_emergence_pass", False)
+        and float(wc_val.get("r2_wick_capillary_ml_s", 0.0)) >= 0.90
+        and float(wc_val.get("r2_casing_temp_c", 0.0)) >= 0.98
+        and float(wc_val.get("r2_shell_heat_loss_w", 0.0)) >= 0.98
+    ):
+        ok = False
+        msgs.append(f"FAIL: 6th Operator BoilerWickConjugatePINO report invalid: {wc_val}")
+    else:
+        msgs.append(
+            f"PASS: 6th Operator BoilerWickConjugatePINO verified (R2_wick={wc_val['r2_wick_capillary_ml_s']}, "
+            f"R2_Tcas={wc_val['r2_casing_temp_c']}, R2_Qloss={wc_val['r2_shell_heat_loss_w']}, R2_eta={wc_val['r2_boiler_efficiency_pct']})"
+        )
+
+    import torch
+    from sim.thermo_1d import CabControls
+    from sim.thermo_3d_gpu import AsterD51Thermo3DGPU
+
+    has_cuda = torch.cuda.is_available()
+    runner = CoSimRunner(PROJECT_ROOT / "models" / "d51_full.xml", preset="hot", use_gpu_3d=has_cuda)
+    eng3d = runner.thermo if has_cuda else AsterD51Thermo3DGPU(runner.calib)
+    if not has_cuda:
+        eng3d.reset_hot_ready()
+    ctrl_steaming = CabControls(
+        fuel_valve=1.0,
+        burner_lit=True,
+        chimney_fan=True,
+        blower_valve=0.45,
+        regulator=0.35,
+        reverser=0.75,
+        bypass_valve=0.40,
+    )
+    for _ in range(64):
+        _, _, _, tel_ins = eng3d.step(
+            0.0005,
+            runner.calib.q_fdc_L - 0.01,
+            0.0,
+            runner.calib.q_valve_center_L,
+            runner.calib.q_fdc_R - 0.01,
+            0.0,
+            runner.calib.q_valve_center_R,
+            12.0,
+            0.0,
+            ctrl_steaming,
+        )
+    open_cups_ok = int(eng3d.d7_open_cups)
+    wick_open_mls = float(tel_ins.wick_capillary_ml_s)
+    tip_wet_c = float(tel_ins.wick_tip_temp_c)
+    ins_cov_val = float(eng3d.insulation_coverage)
+    cas_ins_c = float(tel_ins.casing_temp_c)
+    loss_ins_w = float(tel_ins.shell_heat_loss_w)
+    rad_ins_w = float(tel_ins.shell_rad_loss_w)
+    eta_ins_pct = float(tel_ins.boiler_efficiency_pct)
+
+    # 剥离 Templates 1-6 陶瓷保温层三维体素 (零 if 规则!) -> 验证外壳升温、辐射/对流热损翻倍且锅炉热效率下降
+    eng3d.rebuild_insulation_geometry(torch.zeros_like(eng3d.s_ins_raw))
+    eng3d.core1d.T_boiler_c = 149.6
+    eng3d.core1d.P_boiler = sat_pressure_pa(149.6)
+    for _ in range(32):
+        _, _, _, tel_bare = eng3d.step(
+            0.0005,
+            runner.calib.q_fdc_L - 0.01,
+            0.0,
+            runner.calib.q_valve_center_L,
+            runner.calib.q_fdc_R - 0.01,
+            0.0,
+            runner.calib.q_valve_center_R,
+            12.0,
+            0.0,
+            ctrl_steaming,
+        )
+    cas_bare_c = float(tel_bare.casing_temp_c)
+    loss_bare_w = float(tel_bare.shell_heat_loss_w)
+    rad_bare_w = float(tel_bare.shell_rad_loss_w)
+    eta_bare_pct = float(tel_bare.boiler_efficiency_pct)
+    eng3d.rebuild_insulation_geometry(eng3d.s_ins_raw)
+
+    # 在三维固体掩码上封堵 23-1 供醇主管 (零 if 规则!) -> 验证入口漫水自动检测 0/3 杯连通且灯芯毛细流量物理归零
+    s_plug = eng3d.s7_brn_raw.clone()
+    s_plug[30:40, :, :] = 1.0
+    eng3d.rebuild_d7_stl_geometry(s_plug)
+    for _ in range(32):
+        _, _, _, tel_blk = eng3d.step(
+            0.0005,
+            runner.calib.q_fdc_L - 0.01,
+            0.0,
+            runner.calib.q_valve_center_L,
+            runner.calib.q_fdc_R - 0.01,
+            0.0,
+            runner.calib.q_valve_center_R,
+            12.0,
+            0.0,
+            ctrl_steaming,
+        )
+    cups_blk = int(eng3d.d7_open_cups)
+    wick_blk_mls = float(tel_blk.wick_capillary_ml_s)
+    lumen_blk_flag = bool(tel_blk.burner_lumen_connected)
+
+    if not (
+        eng3d.pino_6op_loaded
+        and open_cups_ok == 3
+        and 0.060 <= wick_open_mls <= 0.145
+        and 75.0 <= tip_wet_c <= 105.0
+        and cups_blk == 0
+        and wick_blk_mls == 0.0
+        and not lumen_blk_flag
+        and ins_cov_val >= 0.80
+        and cas_ins_c <= 88.0
+        and cas_bare_c >= 122.0
+        and loss_bare_w >= 2.4 * loss_ins_w
+        and rad_bare_w >= 2.4 * rad_ins_w
+        and 30.0 <= eta_ins_pct <= 56.0
+        and eta_bare_pct < eta_ins_pct - 2.0
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Live 3D burner flood-fill / ceramic wick / Templates 1-6 CHT failed: 6op={eng3d.pino_6op_loaded}, "
+            f"cups={open_cups_ok}->{cups_blk}, wick={wick_open_mls:.4f}->{wick_blk_mls:.4f}ml/s (tip={tip_wet_c:.1f}C), "
+            f"ins_cov={ins_cov_val:.2f}, cas={cas_ins_c:.1f}->{cas_bare_c:.1f}C, "
+            f"loss={loss_ins_w:.1f}->{loss_bare_w:.1f}W, rad={rad_ins_w:.1f}->{rad_bare_w:.1f}W, eta={eta_ins_pct:.2f}->{eta_bare_pct:.2f}%"
+        )
+    else:
+        msgs.append(
+            f"PASS: Zero-if 3D flood-fill & Ceramic Wick + Templates 1-6 CHT verified: "
+            f"23-1 open {open_cups_ok}/3 cups (wick={wick_open_mls:.3f}ml/s, wet tip={tip_wet_c:.1f}°C) -> plugged {cups_blk}/3 cups (0.000ml/s); "
+            f"Insulated cov={ins_cov_val:.2f} (T_cas={cas_ins_c:.1f}°C, Q_loss={loss_ins_w:.1f}W [rad={rad_ins_w:.1f}W], η={eta_ins_pct:.1f}%) "
+            f"-> Bare (T_cas={cas_bare_c:.1f}°C, Q_loss={loss_bare_w:.1f}W [rad={rad_bare_w:.1f}W], η={eta_bare_pct:.1f}%)"
+        )
+
+    # 22.4 核验全部用户指出与主动排查的图纸细节纠偏 (11-3 后拉汽笛柄、8-7 室内立式排液柄、固定 21-15 通风器 + 29-12 砂箱铰链盖、前修齐侧裙、85.8mm 蒲鉾砂箱、后80%平直 8-18 拉杆)
+    m_mj = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / "models" / "d51_full.xml"))
+    d_mj = mujoco.MjData(m_mj)
+    mujoco.mj_forward(m_mj, d_mj)
+
+    wh_pts = stl_tris_mm["cab_whistle_lever"].reshape(-1, 3)
+    wh_yspan = float(wh_pts[:, 1].max() - wh_pts[:, 1].min())
+    wh_xmin = float(wh_pts[:, 0].min())
+    wh_ax = m_mj.jnt_axis[mujoco.mj_name2id(m_mj, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_whistle")]
+
+    dr_pts = stl_tris_mm["cab_drain_lever"].reshape(-1, 3)
+    bid_dr = mujoco.mj_name2id(m_mj, mujoco.mjtObj.mjOBJ_BODY, "cab_drain_lever")
+    lf_pos = d_mj.xpos[mujoco.mj_name2id(m_mj, mujoco.mjtObj.mjOBJ_BODY, "loco_frame")]
+    dr_loc_mm = (d_mj.xpos[bid_dr] - lf_pos) * 1000.0
+    dr_top_z_mm = dr_loc_mm[2] + float(dr_pts[:, 2].max())
+    dpr_xmin = float(stl_tris_mm["drain_pull_rod"].reshape(-1, 3)[:, 0].min()) + float(
+        (d_mj.xpos[mujoco.mj_name2id(m_mj, mujoco.mjtObj.mjOBJ_BODY, "drain_pull_rod"), 0] - lf_pos[0]) * 1000.0
+    )
+
+    no_roof_hatch_jnt = mujoco.mj_name2id(m_mj, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_roof_hatch") < 0
+    has_dome_lid_jnt = mujoco.mj_name2id(m_mj, mujoco.mjtObj.mjOBJ_JOINT, "j_dome_lid") >= 0
+
+    bs_pts = stl_tris_mm["boiler_superstructure"].reshape(-1, 3)
+    front_sill = bs_pts[(bs_pts[:, 0] >= -128.0) & (bs_pts[:, 0] <= -112.0) & (np.abs(bs_pts[:, 1]) >= 38.0)]
+    front_sill_zmin = float(front_sill[:, 2].min()) if len(front_sill) else 0.0
+
+    dome_pts = bs_pts[(bs_pts[:, 0] >= -18.0) & (bs_pts[:, 0] <= 74.0) & (np.abs(bs_pts[:, 1]) <= 16.5) & (bs_pts[:, 2] >= 75.0)]
+    dome_xspan = float(dome_pts[:, 0].max() - dome_pts[:, 0].min()) if len(dome_pts) else 0.0
+    dome_zmax = float(dome_pts[:, 2].max()) if len(dome_pts) else 0.0
+
+    rr_pts = sample_triangle_surface(stl_tris_mm["cab_reach_rod"], max_spacing_m=0.8)
+    rr_rear_means = [
+        float(rr_pts[(rr_pts[:, 0] >= x0) & (rr_pts[:, 0] < x0 + 25.0), 2].mean())
+        for x0 in (-145.0, -120.0, -95.0, -70.0)
+    ]
+    rr_rear_z_ptp = max(rr_rear_means) - min(rr_rear_means)
+    rr_front_zmean = float(rr_pts[rr_pts[:, 0] >= -5.0, 2].mean())
+    rr_drop_mm = float(np.mean(rr_rear_means)) - rr_front_zmean
+
+    if not (
+        wh_yspan <= 3.8
+        and wh_xmin <= -10.5
+        and abs(float(wh_ax[1]) + 1.0) < 1e-4
+        and -140.0 <= dr_loc_mm[0] <= -128.0
+        and -25.0 <= dr_loc_mm[1] <= -18.0
+        and dr_top_z_mm >= 35.0
+        and dpr_xmin >= -136.5
+        and no_roof_hatch_jnt
+        and has_dome_lid_jnt
+        and front_sill_zmin >= 29.8
+        and dome_xspan >= 82.0
+        and 91.2 <= dome_zmax <= 92.6
+        and rr_rear_z_ptp <= 0.35
+        and rr_drop_mm >= 8.5
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Stage 17 part geometry fixes failed: wh(yspan={wh_yspan:.2f}, xmin={wh_xmin:.1f}, ax={wh_ax.round(2)}), "
+            f"dr87(loc={dr_loc_mm.round(1)}, topZ={dr_top_z_mm:.1f}, dpr_xmin={dpr_xmin:.1f}), "
+            f"no_roof_jnt={no_roof_hatch_jnt}, dome_jnt={has_dome_lid_jnt}, sill_zmin={front_sill_zmin:.2f}, "
+            f"dome(span={dome_xspan:.1f}, zmax={dome_zmax:.2f}), rr(rear_ptp={rr_rear_z_ptp:.2f}, drop={rr_drop_mm:.2f})"
+        )
+    else:
+        msgs.append(
+            f"PASS: Stage 17 blueprint fixes verified: XZ-plane 11-3 whistle (x_min={wh_xmin:.1f}mm, y_span={wh_yspan:.1f}mm), "
+            f"interior right-floor 8-7 drain lever (Z_top=+{dr_top_z_mm:.1f}mm, zero under-cab overhang), "
+            f"bolted 21-15 roof vent + hinged 29-12 dome lid, trimmed cab sill (Z_min=+{front_sill_zmin:.1f}mm), "
+            f"Kamaboko 29-11 (L={dome_xspan:.1f}mm@Z>=75, Z_crown=+{dome_zmax:.1f}mm), straight-80% 8-18 reach rod (centerline ptp={rr_rear_z_ptp:.2f}mm, front drop={rr_drop_mm:.1f}mm)"
+        )
+
+    return ok, msgs
+
+
+# ==============================================================================
 # 主入口
 # ==============================================================================
 
@@ -2990,7 +3328,7 @@ def main() -> int:
     all_ok &= g1_ok
 
     g2_ok, g2_msgs, stl_tris_mm = verify_gate_2()
-    print(f"\n[Gate 2] 98-Mesh Watertightness, Smooth Hollow Budget & Symmetry -> {'PASS' if g2_ok else 'FAIL'}")
+    print(f"\n[Gate 2] 101-Mesh Watertightness, Smooth Hollow Budget & Symmetry -> {'PASS' if g2_ok else 'FAIL'}")
     for m in g2_msgs:
         print(f"  - {m}")
     all_ok &= g2_ok
@@ -3017,7 +3355,7 @@ def main() -> int:
     all_ok &= g8_ok
 
     g9_ok, g9_msgs = verify_gate_9(stl_tris_mm)
-    print(f"\n[Gate 9] 1D-3D Single-Solid Continuity & 34-Port Cross-Body Mating -> {'PASS' if g9_ok else 'FAIL'}")
+    print(f"\n[Gate 9] 1D-3D Single-Solid Continuity & 40-Port Cross-Body Mating -> {'PASS' if g9_ok else 'FAIL'}")
     for m in g9_msgs:
         print(f"  - {m}")
     all_ok &= g9_ok
@@ -3099,11 +3437,18 @@ def main() -> int:
         print(f"  - {m}")
     all_ok &= g21_ok
 
+    hw_guard.cooldown_if_needed()
+    g22_ok, g22_msgs = verify_gate_22(stl_tris_mm)
+    print(f"\n[Gate 22] Stage 17 STEP-First B-Rep Lumens, Ceramic Wick Capillary, Templates 1-6 CHT & Blueprint Fixes -> {'PASS' if g22_ok else 'FAIL'}")
+    for m in g22_msgs:
+        print(f"  - {m}")
+    all_ok &= g22_ok
+
     snap = hw_guard.read_metrics()
     print(f"\n[Thermal/Power Guard] Post-run telemetry: CPU={snap['cpu_c']:.1f}°C | GPU={snap['gpu_c']:.1f}°C | GPU_Power={snap['gpu_w']:.1f}W")
     print("=" * 88)
     if all_ok:
-        print(" [ALL GATES 1-21 PASSED] STAGE 16 (STEP + HOLLOW 3D LUMEN + POP SAFETY VALVE + FORENSICS) VERIFIED 100%")
+        print(" [ALL GATES 1-22 PASSED] STAGE 17 (STEP-FIRST + 3D FLOOD-FILL LUMEN + WICK/INSULATION CHT + 6-PINO) VERIFIED 100%")
         print("=" * 88)
         return 0
     else:

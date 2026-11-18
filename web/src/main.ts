@@ -39,13 +39,14 @@ const INTERACTIVE_PART_META: Record<string, { label: string; kind: InteractivePa
   cab_regulator_vis: { label: "11-11 加減弁ハンドル (上下ドラッグで蒸気開度 11-10 二耳グランド)", kind: "drag" },
   cab_reverser_wheel_vis: { label: "8-16 左運転台・ねじ式逆転機双柄クランク (ドラッグで前後進カットオフ)", kind: "drag" },
   cab_blower_vis: { label: "11-13 左上3本スポーク通風弁手輪 → 13-8 炉内ステー管 → 17-3 (ドラッグで強制ドラフト)", kind: "drag" },
-  cab_whistle_vis: { label: "11-3 左上外汽笛レバー → 13-3 直立管 → 11-8 火室左頬下汽笛 (押下ホールドで吹鳴)", kind: "momentary" },
+  cab_whistle_vis: { label: "11-3 左上外・後方引き3穴汽笛レバー → 11-1 → 13-3 → 11-8 車底汽笛 (押下ホールドで吹鳴)", kind: "momentary" },
   cab_sight_drain_vis: { label: "13-5#3/1-1 右外縁(-Y) 11-7 水面計下部同軸ドレン栓 (クリックでフラッシュ洗浄)", kind: "toggle" },
   cab_blowdown_vis: { label: "11-16/11-17 左床下横向き(+Y)マイナス溝排水弁 (ドラッグで缶底排泥ブロー)", kind: "drag" },
   cab_fire_door_vis: { label: "12-1 低位中央・底ヒンジバタフライ火室扉 (ドラッグで開閉・二次空気流入)", kind: "drag" },
-  cab_bypass_vis: { label: "6-9/8-7 右後床面・同軸給水バイパス弁コック (ドラッグで 31-14 戻水量調整)", kind: "drag" },
-  cab_roof_hatch_vis: { label: "21-15/21-28 運転室屋根ベンチレーター天窓 (クリックで前ヒンジ開閉)", kind: "toggle" },
-  drain_pull_rod_vis: { label: "8-6/8-5 右床下ドレン弁水平引き棒 (クリックで8段排液リンク開閉)", kind: "toggle" },
+  cab_bypass_vis: { label: "6-9/8-7 左運転台(+Y)床面・給水バイパス弁レバー (ドラッグで 31-14 戻水量調整)", kind: "drag" },
+  cab_drain_lever_vis: { label: "8-7 右床面・室内立式ドレンレバー → 8-5 → 1-19 (クリックでシリンダ排液開閉)", kind: "toggle" },
+  dome_lid_vis: { label: "29-12/29-13 カマボコ砂箱前部ワイヤヒンジ蓋 (クリックで開閉)", kind: "toggle" },
+  drain_pull_rod_vis: { label: "8-5 右床下ドレン弁水平引き棒 (クリックで8段排液リンク開閉)", kind: "toggle" },
   tender_handpump_vis: { label: "31-3/31-5 炭水車水槽内・4節リンク手動ポンプ立柱 (クリックで圧送)", kind: "pump" },
   tender_drain_plug_vis: { label: "31-11/31-9 水槽内・上引き排水スタンドパイプ栓 (クリックで炭水車底から放水)", kind: "toggle" },
   tender_coal_cover_vis: { label: "36-1/36-2 着脱式角丸給水口蓋＋中央石炭仕切板 (クリックで着脱)", kind: "toggle" },
@@ -215,10 +216,12 @@ async function main() {
   let geomMeshes: THREE.Mesh[] = [];
   let cylHousingMeshes: THREE.Mesh[] = [];
   let boilerOuterMeshes: THREE.Mesh[] = [];
+  let insulationMeshes: THREE.Mesh[] = [];
   let copperCoreMeshes: THREE.Mesh[] = [];
   let lubeShellMeshes: THREE.Mesh[] = [];
   let tenderOuterMeshes: THREE.Mesh[] = [];
   let boilerShellMats: THREE.MeshStandardMaterial[] = [];
+  let ceramicWickMats: THREE.MeshStandardMaterial[] = [];
   let copperCoreMats: THREE.MeshStandardMaterial[] = [];
   let interactiveParts: InteractivePartEntry[] = [];
   let visJointMap: Record<string, [number, number]> = {};
@@ -245,6 +248,7 @@ async function main() {
     tenderDrainOpen: false,
     sightDrainValve: false,
     cabRoofOpen: false,
+    domeLidOpen: false,
     coalCoverOpen: false,
     thermalWarp: 1.0,
     gradeDeg: 0.0,
@@ -402,10 +406,12 @@ async function main() {
     geomMeshes = [];
     cylHousingMeshes = [];
     boilerOuterMeshes = [];
+    insulationMeshes = [];
     copperCoreMeshes = [];
     lubeShellMeshes = [];
     tenderOuterMeshes = [];
     boilerShellMats = [];
+    ceramicWickMats = [];
     copperCoreMats = [];
     interactiveParts = [];
     visJointMap = {};
@@ -461,7 +467,8 @@ async function main() {
       "j_cab_blowdown",
       "j_cab_fire_door",
       "j_cab_bypass",
-      "j_cab_roof_hatch",
+      "j_cab_drain",
+      "j_dome_lid",
       "j_safety_poppet_1",
       "j_safety_poppet_2",
       "j_tender_hp_link",
@@ -551,6 +558,16 @@ async function main() {
       metalness: 0.04,
       roughness: 0.32,
     });
+    const matCeramicWick = new THREE.MeshStandardMaterial({
+      color: 0xeae3d2,
+      metalness: 0.02,
+      roughness: 0.94,
+    });
+    const matCeramicInsulation = new THREE.MeshStandardMaterial({
+      color: 0xf4f1ea,
+      metalness: 0.02,
+      roughness: 0.95,
+    });
 
     // 挂载零件级沿程相变与给水脉冲 PBR 着色器实例
     const matSuperheater = matSteel.clone();
@@ -569,6 +586,8 @@ async function main() {
       mat_viton_hose: matVitonHose,
       mat_pyrex_glass: matPyrexGlass,
       mat_gauge_dial: matGaugeDial,
+      mat_ceramic_wick: matCeramicWick,
+      mat_ceramic_insulation: matCeramicInsulation,
     };
 
     const xmlDoc = new DOMParser().parseFromString(
@@ -677,6 +696,12 @@ async function main() {
           const bMat = baseMat.clone();
           boilerShellMats.push(bMat);
           mat = bMat;
+        } else if (meshKey === "boiler_insulation") {
+          mat = baseMat.clone();
+        } else if (meshKey === "burner_wick") {
+          const wMat = baseMat.clone();
+          ceramicWickMats.push(wMat);
+          mat = wMat;
         } else if (meshKey === "cylinder_block_L" || meshKey === "cylinder_block_R" || meshKey === "tender_body") {
           mat = baseMat.clone();
         } else {
@@ -711,6 +736,8 @@ async function main() {
           cylHousingMeshes.push(mesh);
         } else if (meshKey === "boiler_superstructure") {
           boilerOuterMeshes.push(mesh);
+        } else if (meshKey === "boiler_insulation") {
+          insulationMeshes.push(mesh);
         } else if (meshKey === "boiler_firebox_flues") {
           copperCoreMeshes.push(mesh);
         } else if (meshKey === "displacement_lubricator") {
@@ -754,7 +781,7 @@ async function main() {
   const btnSightDrain = document.getElementById("btn-sightdrain")!;
   const btnFireDoor = document.getElementById("btn-firedoor")!;
   const btnBlowdown = document.getElementById("btn-blowdown")!;
-  const btnRoofHatch = document.getElementById("btn-roofhatch")!;
+  const btnDomeLid = document.getElementById("btn-domelid")!;
   const btnTenderDrain = document.getElementById("btn-tenderdrain")!;
   const btnCoalCover = document.getElementById("btn-coalcover")!;
   const btnWaterLid = document.getElementById("btn-waterlid")!;
@@ -786,7 +813,7 @@ async function main() {
     btnSightDrain.classList.toggle("active", ctrl.sightDrainValve);
     btnFireDoor.classList.toggle("active", ctrl.fireboxDoor > 0.1);
     btnBlowdown.classList.toggle("active", ctrl.blowdownValve > 0.1);
-    btnRoofHatch.classList.toggle("active", ctrl.cabRoofOpen);
+    btnDomeLid.classList.toggle("active", !!ctrl.domeLidOpen);
     btnTenderDrain.classList.toggle("active", ctrl.tenderDrainOpen);
     btnCoalCover.classList.toggle("active", ctrl.coalCoverOpen);
     btnWaterLid.classList.toggle("active", ctrl.waterLidOpen);
@@ -873,8 +900,8 @@ async function main() {
     syncDomFromControls();
     pushControlsToWs();
   });
-  btnRoofHatch.addEventListener("click", () => {
-    ctrl.cabRoofOpen = !ctrl.cabRoofOpen;
+  btnDomeLid.addEventListener("click", () => {
+    ctrl.domeLidOpen = !ctrl.domeLidOpen;
     syncDomFromControls();
     pushControlsToWs();
   });
@@ -941,6 +968,7 @@ async function main() {
       tenderDrainOpen: false,
       sightDrainValve: false,
       cabRoofOpen: false,
+      domeLidOpen: false,
       coalCoverOpen: false,
       thermalWarp: 1.0,
     });
@@ -973,6 +1001,7 @@ async function main() {
       tenderDrainOpen: false,
       sightDrainValve: false,
       cabRoofOpen: false,
+      domeLidOpen: false,
       coalCoverOpen: false,
       thermalWarp: 1.0,
     });
@@ -1004,7 +1033,8 @@ async function main() {
       case "cab_blowdown_vis": return `${Math.round(ctrl.blowdownValve * 100)}%`;
       case "cab_fire_door_vis": return `${Math.round(ctrl.fireboxDoor * 100)}% 開`;
       case "cab_bypass_vis": return `${Math.round(ctrl.bypassValve * 100)}%`;
-      case "cab_roof_hatch_vis": return ctrl.cabRoofOpen ? "開" : "閉";
+      case "cab_drain_lever_vis": return ctrl.drainCock ? "開 (排液)" : "閉";
+      case "dome_lid_vis": return ctrl.domeLidOpen ? "開" : "閉";
       case "drain_pull_rod_vis": return ctrl.drainCock ? "開 (排液)" : "閉";
       case "tender_handpump_vis": return "クリック圧送";
       case "tender_drain_plug_vis": return ctrl.tenderDrainOpen ? "放水中" : "閉";
@@ -1093,13 +1123,13 @@ async function main() {
     } else if (hit.kind === "pump") {
       triggerHandPumpBoth(2);
     } else if (hit.kind === "toggle") {
-      if (gn === "drain_pull_rod_vis") {
+      if (gn === "drain_pull_rod_vis" || gn === "cab_drain_lever_vis") {
         if (aiMode !== "off") setAiModeLocal("off", false);
         ctrl.drainCock = !ctrl.drainCock;
       } else if (gn === "cab_sight_drain_vis") {
         ctrl.sightDrainValve = !ctrl.sightDrainValve;
-      } else if (gn === "cab_roof_hatch_vis") {
-        ctrl.cabRoofOpen = !ctrl.cabRoofOpen;
+      } else if (gn === "dome_lid_vis") {
+        ctrl.domeLidOpen = !ctrl.domeLidOpen;
       } else if (gn === "tender_drain_plug_vis") {
         ctrl.tenderDrainOpen = !ctrl.tenderDrainOpen;
       } else if (gn === "tender_coal_cover_vis") {
@@ -1142,6 +1172,7 @@ async function main() {
     const xray = selCam.value === "xray";
     setXrayMatGroup(cylHousingMeshes, xray, 0.22, 2);
     setXrayMatGroup(boilerOuterMeshes, xray, 0.14, 2);
+    setXrayMatGroup(insulationMeshes, xray, 0.24, 2);
     setXrayMatGroup(copperCoreMeshes, xray, 0.34, 1);
     setXrayMatGroup(lubeShellMeshes, xray, 0.30, 2);
     setXrayMatGroup(tenderOuterMeshes, xray, 0.22, 2);
@@ -1227,13 +1258,14 @@ async function main() {
       j_reverser_wheel: 12.56 * ctrl.reverser,
       j_cab_regulator: 1.15 * ctrl.regulator,
       j_cab_blower: 3.14 * ctrl.blowerValve,
-      j_cab_whistle: -0.38 * ctrl.whistleValve,
+      j_cab_whistle: +0.38 * ctrl.whistleValve,
       j_cab_sight_drain: ctrl.sightDrainValve ? 0.0016 : 0.0,
       j_cab_pg_needle: -2.10 + pNorm * 4.20,
       j_cab_blowdown: 3.14 * ctrl.blowdownValve,
       j_cab_fire_door: +1.40 * ctrl.fireboxDoor,
       j_cab_bypass: -1.35 * ctrl.bypassValve,
-      j_cab_roof_hatch: ctrl.cabRoofOpen ? 2.10 : 0.0,
+      j_cab_drain: ctrl.drainCock ? 0.35 : -0.35,
+      j_dome_lid: ctrl.domeLidOpen ? 1.15 : 0.0,
       j_safety_poppet_1: svLiftWasm,
       j_safety_poppet_2: svLiftWasm * 0.94,
       j_tender_drain_plug: ctrl.tenderDrainOpen ? 0.0050 : 0.0,
@@ -1319,6 +1351,14 @@ async function main() {
       blowerGS: blwMassGS,
       safetyGS: t.safetyGS ?? 0.0,
       boilerWaterMl: t.boilerWaterMl,
+      wickCapillaryMlS: t.wickCapillaryMlS ?? sp.wickCapillaryMlS ?? 0.0,
+      wickSaturation: t.wickSaturation ?? sp.wickSaturation ?? 0.90,
+      wickTipTempC: t.wickTipTempC ?? sp.wickTipTempC ?? 25.0,
+      casingTempC: t.casingTempC ?? sp.casingTempC ?? 25.0,
+      shellHeatLossW: t.shellHeatLossW ?? sp.shellHeatLossW ?? 0.0,
+      shellRadLossW: t.shellRadLossW ?? sp.shellRadLossW ?? 0.0,
+      boilerEfficiencyPct: t.boilerEfficiencyPct ?? sp.boilerEfficiencyPct ?? 0.0,
+      burnerLumenConnected: t.burnerLumenConnected ?? sp.burnerLumenConnected ?? true,
       lubricatorOilPct: t.lubricatorOilPct,
       wheelRpm: t.wheelRpm,
       scaleSpeedKmh: t.scaleSpeedKmh,
@@ -1506,16 +1546,27 @@ async function main() {
       for (const bMat of boilerShellMats) {
         bMat.emissive.setRGB(0.28 * hotRatio, 0.04 * hotRatio, 0.01 * hotRatio);
       }
+      // セラミックヤーン多孔陶瓷灯芯湿润浸醇色泽与断醇干烧 (>380°C) 赤热辐射光
+      const wickSat = out.wickSaturation ?? sp.wickSaturation ?? 0.85;
+      const wickTipC = out.wickTipTempC ?? sp.wickTipTempC ?? 82.0;
+      const wickDryGlow = Math.max(0.0, Math.min(1.0, (wickTipC - 380.0) / 260.0));
+      for (const wMat of ceramicWickMats) {
+        const wetTint = 0.92 - 0.14 * wickSat;
+        wMat.color.setRGB(wetTint, wetTint * 0.97, wetTint * 0.90);
+        wMat.emissive.setRGB(0.95 * wickDryGlow, 0.24 * wickDryGlow, 0.03 * wickDryGlow);
+      }
 
       const badgeEl = document.getElementById("badge-cfd")!;
       if (sp.gpuActive) {
         const mVox = (sp.totalVoxels / 1e6).toFixed(2);
-        badgeEl.textContent = sp.pino4OpActive
-          ? `RTX 5080 4-PINO+6D · ${mVox}M`
-          : sp.pinoActive
-            ? `RTX 5080 PINO+IAPWS · ${mVox}M`
-            : `RTX 5080 LIVE 3D · ${mVox}M VOX`;
-        badgeEl.title = "已连接本地 RTX 5080 实时 5.71M 体素 + 四算子 PINO 物理推流服务";
+        badgeEl.textContent = sp.pino6OpActive
+          ? `RTX 5080 6-PINO+7D · ${mVox}M`
+          : sp.pino4OpActive
+            ? `RTX 5080 4-PINO+6D · ${mVox}M`
+            : sp.pinoActive
+              ? `RTX 5080 PINO+IAPWS · ${mVox}M`
+              : `RTX 5080 LIVE 3D · ${mVox}M VOX`;
+        badgeEl.title = "已连接本地 RTX 5080 实时 5.78M 体素 + 六算子 PINO (含三维流道漫水连通、陶瓷灯芯毛细与保温层共轭传热) 物理推流服务";
         badgeEl.classList.add("live-3d");
       } else {
         badgeEl.textContent = out.lutActive ? "OFFLINE · CFD LUT" : "1D ANALYTIC";
@@ -1567,6 +1618,18 @@ async function main() {
       const shExitDry = sp.shProfileDryness[sp.shProfileDryness.length - 1] ?? sp.steamDrynessDome;
       document.getElementById("txt-fluid3d")!.textContent =
         `x=${sp.steamDrynessDome.toFixed(2)}→${shExitDry.toFixed(2)} | φ=${sp.airFuelPhi.toFixed(2)} | ${sp.oilFilmUm.toFixed(1)}μm`;
+      const etaPct = out.boilerEfficiencyPct ?? sp.boilerEfficiencyPct ?? 0.0;
+      const lossW = out.shellHeatLossW ?? sp.shellHeatLossW ?? 0.0;
+      const casC = out.casingTempC ?? sp.casingTempC ?? 25.0;
+      const wickMlS = out.wickCapillaryMlS ?? sp.wickCapillaryMlS ?? 0.0;
+      const chtEl = document.getElementById("txt-cht");
+      if (chtEl) {
+        chtEl.textContent =
+          out.burnerLumenConnected === false || sp.burnerLumenConnected === false
+            ? `管路不通 0.00ml/s | ${lossW.toFixed(1)}W (${casC.toFixed(0)}°C)`
+            : `η=${etaPct.toFixed(1)}% | ${lossW.toFixed(1)}W (${casC.toFixed(0)}°C) | ${wickMlS.toFixed(2)}ml/s`;
+        chtEl.classList.toggle("val-hot", casC >= 110.0 || wickTipC >= 420.0);
+      }
 
       if (aiMode !== "off" && aiStatusText) {
         elAiStatus.style.display = "block";
@@ -1592,8 +1655,10 @@ async function main() {
       }
 
       let alarmMsg = "";
-      if (out.hydrolockL || out.hydrolockR) {
-        alarmMsg = "HYDROLOCK! 冷気筒水撃ロック発生 — 直ちに8-6ドレン弁を開放せよ!";
+      if (out.burnerLumenConnected === false || sp.burnerLumenConnected === false) {
+        alarmMsg = "BURNER LUMEN BLOCKED! 23-1 燃料管〜バーナー芯カップの3D流路遮断 — 毛細吸液不能!";
+      } else if (out.hydrolockL || out.hydrolockR) {
+        alarmMsg = "HYDROLOCK! 冷気筒水撃ロック発生 — 直ちに8-7室内ドレンレバーを開放せよ!";
       } else if (out.mariotteFloodAlarm) {
         alarmMsg = "MARIOTTE FLOOD! 36-5気密蓋開放によりサンプ燃料溢流・過濃炎発生! 蓋を締めよ!";
       } else if (out.flashSteamSpike) {

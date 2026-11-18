@@ -27,6 +27,7 @@ export interface CabControls {
   tenderDrainOpen: boolean;
   sightDrainValve: boolean;
   cabRoofOpen: boolean;
+  domeLidOpen?: boolean;
   coalCoverOpen: boolean;
   thermalWarp: number;
   gradeDeg: number;
@@ -85,6 +86,16 @@ export interface SpatialFluidState {
   checkBall5LiftsMm?: number[];
   lubeWaterFrac: number;
   pino4OpActive?: boolean;
+  pino6OpActive?: boolean;
+  burnerLumenConnected?: boolean;
+  wickCapillaryMlS?: number;
+  wickSaturation?: number;
+  wickTipTempC?: number;
+  casingTempC?: number;
+  shellHeatLossW?: number;
+  shellRadLossW?: number;
+  boilerEfficiencyPct?: number;
+  insulationCoverage?: number;
   tenderBayTempC?: number;
   tenderWaveRmsMm?: number;
   tenderWaveB64?: string;
@@ -135,6 +146,14 @@ export interface StepOutput {
   blowerGS?: number;
   safetyGS?: number;
   boilerWaterMl?: number;
+  wickCapillaryMlS?: number;
+  wickSaturation?: number;
+  wickTipTempC?: number;
+  casingTempC?: number;
+  shellHeatLossW?: number;
+  shellRadLossW?: number;
+  boilerEfficiencyPct?: number;
+  burnerLumenConnected?: boolean;
   lubricatorOilPct: number;
   wheelRpm: number;
   scaleSpeedKmh: number;
@@ -316,8 +335,8 @@ export class AsterD51Thermo1D {
   resetHotReady(): void {
     this.resetColdPrepared();
     this.T_boilerC = 149.6;
-    this.T_crownC = 156.0;
-    this.crownZonesC = [157.5, 156.8, 156.2, 155.8, 155.2, 154.5];
+    this.T_crownC = 168.5;
+    this.crownZonesC = [169.5, 169.0, 168.6, 168.2, 167.8, 167.2];
     this.P_boiler = satPressurePa(this.T_boilerC);
     this.pgBourdonKgf = Math.max(0.0, (this.P_boiler - P_ATM) / PA_PER_KGF_CM2);
     this.T_superheatC = 165.0;
@@ -627,15 +646,23 @@ export class AsterD51Thermo1D {
     const floodMult = mariotteFloodAlarm || this.sumpFuelMl > 4.2 ? 1.38 : 1.0;
 
     let qComb = 0.0;
+    let wickCapillaryMlS = 0.0;
+    let qChemTotW = 0.0;
+    const sumpHNorm = Math.max(0.0, Math.min(1.8, this.sumpFuelMl / 3.5));
+    const wickSaturation = Math.max(0.0, Math.min(0.96, (sumpHNorm / (sumpHNorm + 0.08)) * (0.92 - (ctrl.burnerLit ? 0.20 * draftEff : 0.0))));
+    const wetPin = Math.min(1.0, Math.max(0.0, wickSaturation / 0.22));
+    const wickTipTempC = ctrl.burnerLit ? 25.0 + wetPin * 58.2 + (1.0 - wetPin) * 580.0 : Math.max(25.0, 0.35 * this.T_boilerC);
     if (ctrl.burnerLit && this.sumpFuelMl > 0) {
       const usedMl = Math.min(
         this.sumpFuelMl,
         0.106 * (0.58 + 0.42 * draftEff) * wickHeadFactor * floodMult * dtTh
       );
       this.sumpFuelMl -= usedMl;
+      wickCapillaryMlS = usedMl / dtTh;
+      qChemTotW = 26.8e6 * (wickCapillaryMlS * 789e-6);
       const effPenalty = floodMult > 1.05 ? 0.80 : 1.0;
       const etaWithRad = Math.max(0.18, etaBoilEff);
-      qComb = etaWithRad * effPenalty * 26.8e6 * ((usedMl / dtTh) * 789e-6);
+      qComb = etaWithRad * effPenalty * qChemTotW;
     }
 
     // 17-5 双 U 四程过热器 (上排 2 根 ø11.5mm 烟管内 504mm/47.5cm² SUS304 管壁对流热平衡)
@@ -762,7 +789,39 @@ export class AsterD51Thermo1D {
       this.copperAnnealDamage = Math.min(1.0, this.copperAnnealDamage + dmgRate * dtTh);
     }
 
-    const qLossW = 0.42 * (0.18 + 0.82 * fWetTubes) * (this.T_boilerC - 25.0);
+    // 多层复合壁 (C1100 紫铜 + Templates 1-6 セラミックシート保温层 + 黄铜外衣) 分区导热/自然+强迫对流/Stefan-Boltzmann 热辐射
+    const vAirExt = Math.abs(omega3) * 0.0219;
+    const insCov = 0.86;
+    const wetFShell = Math.max(0.15, 0.32 + 0.68 * fWetTubes);
+    const kCer = 0.068 + 1.4e-4 * Math.max(0.0, 0.5 * (this.T_boilerC + 25.0) - 25.0);
+    const rInsZ = (0.0020 / kCer + 0.088) / wetFShell;
+    const rBareZ = 0.0048 / wetFShell;
+    const solveZone = (rZ: number, f0: number): [number, number, number] => {
+      let tz = 25.0 + f0 * Math.max(0.0, this.T_boilerC - 25.0);
+      for (let it = 0; it < 5; it++) {
+        const dte = Math.max(0.0, tz - 25.0);
+        const hc = 5.4 + 1.18 * Math.pow(dte + 0.5, 0.25) + 4.25 * Math.sqrt(vAirExt + 0.04);
+        const tk = tz + 273.15;
+        const qr = 0.88 * 5.670374e-8 * Math.max(0.0, Math.pow(tk, 4) - Math.pow(298.15, 4));
+        const qi = Math.max(0.0, this.T_boilerC - tz) / rZ;
+        const dq = -1.0 / rZ - hc - 4.0 * 0.88 * 5.670374e-8 * Math.pow(tk, 3);
+        tz = Math.min(this.T_boilerC, Math.max(25.0, tz - (qi - (hc * dte + qr)) / Math.min(-1e-3, dq)));
+      }
+      const dte = Math.max(0.0, tz - 25.0);
+      const hc = 5.4 + 1.18 * Math.pow(dte + 0.5, 0.25) + 4.25 * Math.sqrt(vAirExt + 0.04);
+      const qr = 0.88 * 5.670374e-8 * Math.max(0.0, Math.pow(tz + 273.15, 4) - Math.pow(298.15, 4));
+      return [tz, hc * dte, qr];
+    };
+    const [tZi, qcvI, qrdI] = solveZone(rInsZ, 0.32);
+    const [tZb, qcvB, qrdB] = solveZone(rBareZ, 0.88);
+    const casingTempC = insCov * tZi + (1.0 - insCov) * tZb;
+    const shellRadLossW = 0.0365 * (insCov * qrdI + (1.0 - insCov) * qrdB);
+    const qLossW = 0.0365 * (insCov * qcvI + (1.0 - insCov) * qcvB) + shellRadLossW;
+    const qShInW = gGasToSh * (tFlueGasC - this.T_shWallC);
+    const boilerEfficiencyPct =
+      qChemTotW > 5.0 && ctrl.burnerLit
+        ? Math.max(0.0, Math.min(92.0, (100.0 * Math.max(0.0, qComb + Math.max(0.0, qShInW) - qLossW - qCrownRadLoss)) / qChemTotW))
+        : 0.0;
     const qNetWater = qFireTubes * (0.16 + 0.84 * fWetTubes) + qWaterlegBoil + qCrownToWater + qFlashW - qLossW;
     const mdotSteamOut = mdotReg + mdotBlw + mdotWhistle + mdotSightPurge + mdotSv + mdotBraze;
     const hFg = latentHeatJKg(this.T_boilerC);
@@ -960,6 +1019,14 @@ export class AsterD51Thermo1D {
       blowerGS: mdotBlw * 1000.0,
       safetyGS: mdotSv * 1000.0,
       boilerWaterMl: this.M_waterKg * 1000.0,
+      wickCapillaryMlS,
+      wickSaturation,
+      wickTipTempC,
+      casingTempC,
+      shellHeatLossW: qLossW,
+      shellRadLossW,
+      boilerEfficiencyPct,
+      burnerLumenConnected: true,
       lubricatorOilPct: this.lubricatorOilPct,
       wheelRpm: rpm,
       scaleSpeedKmh: speedKmh,
@@ -1004,6 +1071,15 @@ export class AsterD51Thermo1D {
         pumpChamberPKgf,
         checkBallLiftsMm,
         lubeWaterFrac,
+        burnerLumenConnected: true,
+        wickCapillaryMlS,
+        wickSaturation,
+        wickTipTempC,
+        casingTempC,
+        shellHeatLossW: qLossW,
+        shellRadLossW,
+        boilerEfficiencyPct,
+        insulationCoverage: insCov,
         midplaneTempB64: "",
       },
     };
