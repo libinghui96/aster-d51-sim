@@ -20,6 +20,8 @@ export interface CadShaderUniforms {
   uFeedStrength: { value: number };
   uCrownTemps: { value: number[] };
   uFlueTemps: { value: number[] };
+  uFlueBowMm: { value: number[] };
+  uCrownBulgeMm: { value: number };
 }
 
 export class FluidPartVisualizer {
@@ -91,6 +93,8 @@ export class FluidPartVisualizer {
       uFeedStrength: { value: 0.0 },
       uCrownTemps: { value: [156, 156, 156, 156, 156, 156] },
       uFlueTemps: { value: [420, 340, 280, 240, 210, 190, 178, 168] },
+      uFlueBowMm: { value: [0, 0, 0, 0, 0] },
+      uCrownBulgeMm: { value: 0.0 },
     };
 
     // -----------------------------------------------------------------------
@@ -1041,6 +1045,11 @@ export class FluidPartVisualizer {
     for (let i = 0; i < 8; i++) {
       this.uniforms.uFlueTemps.value[i] = sp.flueGasProfileC[i] ?? out.boilerTempC;
     }
+    const fbows = out.flueDeflectionMm ?? sp.flueDeflectionMm ?? [0, 0, 0, 0, 0];
+    for (let i = 0; i < 5; i++) {
+      this.uniforms.uFlueBowMm.value[i] = fbows[i] ?? 0.0;
+    }
+    this.uniforms.uCrownBulgeMm.value = out.crownBulgeMm ?? sp.crownBulgeMm ?? 0.0;
 
     // 1. 更新 23-1 直列 1×3 三头酒精火焰 (严格受三维管路连通性与陶瓷灯芯毛细吸醇速率物理门控!)
     const lumenOk = sp.burnerLumenConnected !== false;
@@ -1336,11 +1345,38 @@ export function attachCopperBoilerShader(mat: THREE.MeshStandardMaterial, u: Cad
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uCrownTemps = u.uCrownTemps;
     shader.uniforms.uFlueTemps = u.uFlueTemps;
+    shader.uniforms.uFlueBowMm = u.uFlueBowMm;
+    shader.uniforms.uCrownBulgeMm = u.uCrownBulgeMm;
     shader.uniforms.uXray = u.uXray;
 
     shader.vertexShader =
-      `attribute vec3 aCadPos;\nvarying vec3 vCadPos;\n` +
-      shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvCadPos = aCadPos;");
+      `attribute vec3 aCadPos;\nuniform float uFlueBowMm[5];\nuniform float uCrownBulgeMm;\nuniform float uXray;\nvarying vec3 vCadPos;\n` +
+      shader.vertexShader.replace(
+        "#include <begin_vertex>",
+        /* glsl */ `
+        #include <begin_vertex>
+        vCadPos = aCadPos;
+        // 5 根紫铜烟管与火室顶板在高温干烧+蒸汽外压下的真实热弹塑性挠曲/鼓曲三维顶点形变
+        float visAmp = mix(1.0, 2.5, uXray);
+        if (aCadPos.x > -0.047 && aCadPos.x < 0.092 && aCadPos.z > 0.028 && aCadPos.z < 0.053 && abs(aCadPos.y) < 0.018) {
+          float xi = clamp((aCadPos.x + 0.047) / 0.139, 0.0, 1.0);
+          float mode = pow(sin(3.14159265 * xi), 1.25);
+          float bowMm = uFlueBowMm[3];
+          if (aCadPos.z > 0.041) {
+            bowMm = aCadPos.y < 0.0 ? uFlueBowMm[0] : uFlueBowMm[1];
+          } else if (aCadPos.y < -0.006) {
+            bowMm = uFlueBowMm[2];
+          } else if (aCadPos.y > 0.006) {
+            bowMm = uFlueBowMm[4];
+          }
+          transformed.z -= 0.001 * bowMm * mode * visAmp;
+        } else if (aCadPos.x >= -0.106 && aCadPos.x <= -0.048 && aCadPos.z >= 0.045 && aCadPos.z <= 0.050 && abs(aCadPos.y) <= 0.018) {
+          float cx = 1.0 - pow((aCadPos.x + 0.077) / 0.029, 2.0);
+          float cy = 1.0 - pow(aCadPos.y / 0.018, 2.0);
+          transformed.z -= 0.001 * uCrownBulgeMm * max(0.0, cx * cy) * visAmp;
+        }
+        `
+      );
 
     shader.fragmentShader =
       `uniform float uCrownTemps[6];\nuniform float uFlueTemps[8];\nuniform float uXray;\nvarying vec3 vCadPos;\n` +

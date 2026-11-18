@@ -41,7 +41,7 @@
   3. **齿轮啮合与定比操纵副**：对气缸排液阀齿轮旋塞 (`1-16 / 1-17`) 及逆转长拉杆定比联动 (`8-12 / 8-18`)，允许采用零齿隙 `<equality><joint .../>` 多项式耦合约束。
   4. **1D-3D 拓扑—几何连续性与跨刚体全端口零断口门禁 (`Gate 9`)**：由于 1D 集总热流网络沿逻辑拓扑图积分，单独检查 `boundary_edges == 0` 无法捕获三维断管或悬空碎块；因此每次提交必须通过 `scripts/09_verify_cad_and_clearance.py` 的 **Gate 9**：① 全车所有 `.stl` 必须为单连通固体 (`connected_components == 1`)；② `configs/*_boiler_piping.json` 声明的全部跨刚体/跨网格流体与机械端口在直线及最小曲线半径 (`R2m`) 双姿态下表面局部 ROI 对接间隙必须 `<= 0.50 mm`（跨车柔性软管须随牵引杆铰接摆动，严禁悬空硬伸）。
   5. **「三层黄金分工」物理—算子—认知混合架构铁律 (`Gate 10 & Gate 17`)**：严禁在 3D 热流仿真中手写 `if not airtight: *= 0.05` 等经验漏气/分流系数，亦严禁让大语言模型参与高频 PDE 数值积分或用黑盒网络替代质量/能量守恒律！统一采用：① **L1 解析守恒底座（`2000 Hz`）**：IAPWS-IF97 水/水蒸气状态方程 $(v, u) \mapsto (P, T_{\text{sat}}, x)$ + 有限体积比焓相变与煤水车敞口槽二维浅水波严格守恒；② **L2 轻量级四算子 PINO 层（`250 Hz`, `BF16`）**：对燃烧—5烟管—烟室射流、滑阀—气缸窄缝流、驾驶室分汽包/水面计冲洗及煤水车双泵五止回球/马氏瓶耦合训练 `1.28M` 参数四算子套件（大气破口通过 $p|_{\Gamma_{\text{atm}}} = p_{\text{atm}}$ 硬投影自然涌现负压坍塌、回水切换与开盖漫油）；③ **L3 本地 LLM 慢速认知副驾（`0.5 Hz` 异步）**：由 Ollama `bonsai-2:27b` 异步提供故障根因诊断与操纵建议。
-  6. **STEP-First 101 件解析 B-Rep 建模、三维入口漫水全流道贯通、陶瓷灯芯毛细燃烧、多层保温共轭传热与六算子 PINO 铁律 (`Gate 16, Gate 18, Gate 19, Gate 20, Gate 21 & Gate 22`)**：严禁凭单张爆炸图空白处摆放位置误读左右（必须追踪长引出线落点！）、严禁忽略干式火室罩 `12-4` 无水空间或对单张带阴影实拍图直接做亮度阈值 `arccos(h/w)` 误推零件倾角！全车 **101 件** 刚体与管阀以 **ISO 10303-21 `.step` (`models/step/*.step`)** 为唯一几何真值源（`scripts/step_pipeline.py` 直接由 STEP 解析拓扑积分惯量、做 `BRepClass3d_SolidClassifier` 内腔贯通核验并编译 `models/meshes/*.stl`），所有功能管道、三通、阀座与 `23-1` 三杯燃烧器必须还原**真实贯通空心内腔（`ID`）与壁厚（`t`）**，由 GPU 三维入口种子漫水（Flood-Fill）+ **六算子 PINO 套件 (`1.56M` 参数)** 模拟水/汽/蒸汽油/酒精多相流动、`セラミックヤーン` 多孔陶瓷灯芯 Darcy-Washburn 毛细吸液汽化及 `C1100` 紫铜 + **`Templates 1–6` `セラミックシート` 保温层** 导热/对流/Stefan-Boltzmann 热辐射与锅炉真实热效率 $\eta_{\text{boiler}}$；`28-6 ×2` 纵列安全阀还原蓄压环腔突跳结构；主气缸与滑阀护套在 `Y = ±36.0 mm` 100% 直通同轴；驾驶室锁定中央四辐 `11-13` 通风轮、左侧 `Y` 轴向后伸 `11-10/11-11` 加减阀与 **XZ 竖直面朝后下凹三孔弧柄 `11-1/11-3` 汽笛阀**、并排下垂 `13-8`/`13-9`、右内中位 `13-2/13-7` 逆止阀、垂直 `0°` `PG-ø20 + 13-1` 虹吸弯、床下 `4-17` 旁通阀 + 左地板 `+Y` `8-7` 拨柄、**驾驶室右地板室内立式 `8-7` 排液手柄**（严禁悬出车外！）、左床下横向 `11-16/17` 排污阀、双圆孔 `8-13` 螺旋逆转机与 **后 80% 水平直拉前 20% 弯折的 `8-18` 逆转拉杆**、**固定螺栓锁死的 `21-15` 车顶通风器**（真铰链盖位于 `85.8 mm` 蒲鉾形砂箱前端 `29-12`）及前部修齐的驾驶室侧围裙边；走台后段平直延伸承载 `22-11` (`+Y`)/`22-18` (`-Y`)；热流层支持干烧直至 `0 ml` 彻底蒸干。
+  6. **STEP-First 104 件解析 B-Rep 建模、全流道管壁包络贯通、可压缩水泵/开口系气缸膨胀/黏温油醇、板簧均衡脱轨物理、烟管热弹塑性与七算子 PINO 铁律 (`Gate 16–Gate 23`)**：严禁凭单张爆炸图空白处摆放位置误读左右（必须追踪长引出线落点！）、严禁忽略干式火室罩 `12-4` 无水空间或对单张带阴影实拍图直接做亮度阈值 `arccos(h/w)` 误推零件倾角！全车 **104 件** 刚体与管阀以 **ISO 10303-21 `.step` (`models/step/*.step`)** 为唯一几何真值源（`scripts/step_pipeline.py` 直接由 STEP 解析拓扑积分惯量、做 `BRepClass3d_SolidClassifier` 管壁包络内腔核验并编译 `models/meshes/*.stl`），`6-5` 轴动泵保留实心盲底与 `(4-15)` 盲头螺栓、配 `6-1` 全长柱塞与双 `SB-ø3` 止回球并模拟抽吸负压真空与双向机械轴功；气缸采用开口系第一定律多变膨胀做功（验证华氏逆转机截止率节汽）与 `1-16×4` 两相闪蒸排液；蒸汽油/乙醇计入黏温 $\mu(T)$、蒸气压与坡道重力；走行部还原 `3-4×6` 铰接均衡梁、10 轴板簧/螺旋簧静挠度、四区零缝隙轮轨碰撞及脱轨枕木犁阻制停；由 `125 Hz` GPU 八域求解器 + **七算子 PINO 套件 (`1.60M` 参数)** 同步求解多相热流、陶瓷灯芯毛细燃烧、`Templates 1–6` 保温层共轭传热与紫铜 5 烟管干烧退火热弹塑性弯曲/扁化；驾驶室锁定 `12-1` 四孔铸造炉门、`23.0 mm` `11-15` 横置分汽包、XZ 竖直面 `11-3` 汽笛阀、`4-17 + 8-7` 夹箍旁通阀、**右地板室内斜向滚花圆柱 `8-6` 排液旋柄**（零向上假细杆且严禁悬出车底！）、固定螺栓 `21-15` 天窗 + `29-12` 蒲鉾砂箱真铰链盖与极坐标零凹陷撒砂管；`0.0 ml` 干锅严格锁死 `0.00 g/s` 零蒸发。
 
 ---
 
@@ -50,14 +50,14 @@
 - 交互式鼠标点选校准华氏连杆孔距：`python scripts/01_extract_pdf_dims.py --pdf data/raw_pdfs/d51_illustrations.pdf --interactive`
 - 重新提取锅炉 5 烟管/双水路/置换注油器/4 头燃烧器真值表：`python scripts/08_extract_boiler_valves_bom.py`
 - 重新构建全车 CAD 网格与材料惯量库：`python scripts/02_build_cad_meshes.py`
-- 重新编译全车 MJCF（滚轮台 / R2m 弯道）：`python scripts/03_generate_mjcf.py --mode roller` （或 `--mode curve_r2m --out models/d51_r2m.xml`）
-- 运行 CAD 拓扑完整性、对称性与 360° 运动包络净空门禁：`python scripts/09_verify_cad_and_clearance.py`
+- 重新编译全车 MJCF（滚轮台 / 直线轨道 / R2m 弯道）：`python scripts/03_generate_mjcf.py --mode roller` （或 `--mode track --out models/d51_track.xml` / `--mode curve_r2m --out models/d51_r2m.xml`）
+- 运行 CAD 拓扑完整性、对称性与 360° 运动包络净空门禁（Gates 1–23）：`python scripts/09_verify_cad_and_clearance.py`
 - R2m vs R3m 先导支点过弯脱线分析：`python scripts/04_analyze_r2m_derailment.py`
 - RTX 5080 烟室 3D CFD 标定查找表生成：`python scripts/06_gpu_smokebox_cfd.py`
 - RTX 5080 并行参数辨识与自动司炉寻优：`python scripts/07_gpu_fireman_opt.py`
-- RTX 5080 离线收敛 3D PDE 数据生成与轻量级 3D PINO 双算子训练：`python scripts/10_train_pino_surrogate.py`
+- RTX 5080 离线收敛 3D PDE 数据生成与轻量级七算子 PINO 套件训练：`python scripts/10_train_pino_surrogate.py`
 - 启动 3D 交互热机联调（热炉即发）：`python -m sim.run_cosim --xml models/d51_full.xml --preset hot`
-- 启动 RTX 5080 571万体素真 3D 零件级多相热流联调：`python -m sim.run_cosim --xml models/d51_full.xml --preset hot --gpu-3d`
+- 启动 RTX 5080 578万体素八域 `125 Hz` 多相热流+热弹塑性联调（含可选 GPU 监控）：`python -m sim.run_cosim --xml models/d51_full.xml --preset hot --gpu-3d --gpu-monitor`
 - 启动本地 RTX 5080 Live 3D WebSocket 推流桥（默认绑定 `0.0.0.0:8765`，自带旧进程接管与防伪终端断开 `_SafeTeeStream` 高可用保护，详见 `docs/LESSONS_LEARNED.md` 失误 21）：`python -m sim.gpu_3d_server --scene roller --preset hot`
 - 无 GUI 自动化全流程试车验收与绘图：`python -m sim.run_cosim --xml models/d51_full.xml --headless-demo --gpu-3d`
 - 同步资产并构建 Web 3D 实时交互前端：`python scripts/05_sync_web_assets.py && npm --prefix web run build`

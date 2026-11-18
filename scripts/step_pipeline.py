@@ -240,6 +240,45 @@ def verify_step_cross_section_open(
     return (n_open == 5), n_open
 
 
+def verify_step_wall_bounded_lumen(
+    step_shape: TopoDS_Shape,
+    center_mm: Tuple[float, float, float],
+    tangent_xyz: Tuple[float, float, float],
+    r_lumen_mm: float,
+    r_wall_mm: float,
+) -> Tuple[bool, int, int]:
+    """
+    Verify BOTH that the inner bore (5 points within r_lumen_mm) is 100% open (TopAbs_OUT)
+    AND that the surrounding pipe wall ring (4 points at r_wall_mm) is solid metal (not TopAbs_OUT),
+    preventing off-pipe probes in empty air from falsely passing lumen checks!
+    """
+    tx, ty, tz = tangent_xyz
+    t_norm = math.sqrt(tx * tx + ty * ty + tz * tz) or 1.0
+    tx, ty, tz = tx / t_norm, ty / t_norm, tz / t_norm
+    ux, uy, uz = (0.0, tz, -ty) if abs(tx) < 0.85 else (-tz, 0.0, tx)
+    u_norm = math.sqrt(ux * ux + uy * uy + uz * uz)
+    ux, uy, uz = ux / u_norm, uy / u_norm, uz / u_norm
+    vx, vy, vz = ty * uz - tz * uy, tz * ux - tx * uz, tx * uy - ty * ux
+
+    cx, cy, cz = center_mm
+    bore_pts = [
+        (cx, cy, cz),
+        (cx + r_lumen_mm * ux, cy + r_lumen_mm * uy, cz + r_lumen_mm * uz),
+        (cx - r_lumen_mm * ux, cy - r_lumen_mm * uy, cz - r_lumen_mm * uz),
+        (cx + r_lumen_mm * vx, cy + r_lumen_mm * vy, cz + r_lumen_mm * vz),
+        (cx - r_lumen_mm * vx, cy - r_lumen_mm * vy, cz - r_lumen_mm * vz),
+    ]
+    wall_pts = [
+        (cx + r_wall_mm * ux, cy + r_wall_mm * uy, cz + r_wall_mm * uz),
+        (cx - r_wall_mm * ux, cy - r_wall_mm * uy, cz - r_wall_mm * uz),
+        (cx + r_wall_mm * vx, cy + r_wall_mm * vy, cz + r_wall_mm * vz),
+        (cx - r_wall_mm * vx, cy - r_wall_mm * vy, cz - r_wall_mm * vz),
+    ]
+    bore_open = sum(1 for fl in classify_step_points_hollow(step_shape, bore_pts) if fl)
+    wall_solid = sum(1 for fl in classify_step_points_hollow(step_shape, wall_pts) if not fl)
+    return (bore_open == 5 and wall_solid >= 3), bore_open, wall_solid
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compile runtime STL meshes & B-Rep mass props directly from STEP masters")
     parser.add_argument("--step-dir", type=Path, default=Path("models/step"))

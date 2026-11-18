@@ -25,7 +25,7 @@ def main() -> None:
     hashes: dict[str, str] = {}
     manifest: dict = {"xmls": [], "meshes": [], "configs": [], "hashes": hashes, "build_hash": ""}
 
-    for xml_name in ("d51_full.xml", "d51_r2m.xml"):
+    for xml_name in ("d51_full.xml", "d51_track.xml", "d51_r2m.xml"):
         p = src_models / xml_name
         if p.exists():
             dst = dst_models / xml_name

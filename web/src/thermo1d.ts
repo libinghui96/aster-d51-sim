@@ -87,6 +87,7 @@ export interface SpatialFluidState {
   lubeWaterFrac: number;
   pino4OpActive?: boolean;
   pino6OpActive?: boolean;
+  pino7OpActive?: boolean;
   burnerLumenConnected?: boolean;
   wickCapillaryMlS?: number;
   wickSaturation?: number;
@@ -98,6 +99,12 @@ export interface SpatialFluidState {
   insulationCoverage?: number;
   tenderBayTempC?: number;
   tenderWaveRmsMm?: number;
+  flueDeflectionMm?: number[];
+  flueOvalizationMm?: number[];
+  crownBulgeMm?: number;
+  maxBoilerStressMpa?: number;
+  copperYieldMpa?: number;
+  gpuMonitor?: Record<string, any>;
   tenderWaveB64?: string;
   midplaneTempB64: string;
 }
@@ -154,6 +161,28 @@ export interface StepOutput {
   shellRadLossW?: number;
   boilerEfficiencyPct?: number;
   burnerLumenConnected?: boolean;
+  steamOutGS?: number;
+  cutoffPct?: number;
+  cylExpansionWorkW?: number;
+  specificSteamGKj?: number;
+  pumpChamberKgf?: number;
+  pumpSuctionVacKpa?: number;
+  pumpShaftPowerW?: number;
+  lubeOilTempC?: number;
+  lubeOilViscosityMpas?: number;
+  alcoholTempC?: number;
+  alcoholViscosityMpas?: number;
+  drainBlowdownGS?: number;
+  flueDeflectionMm?: number[];
+  flueOvalizationMm?: number[];
+  crownBulgeMm?: number;
+  maxBoilerStressMpa?: number;
+  copperYieldMpa?: number;
+  springDeflectMm?: number[];
+  derailed?: boolean;
+  derailReason?: string;
+  pino7OpActive?: boolean;
+  gpuMonitor?: Record<string, any>;
   lubricatorOilPct: number;
   wheelRpm: number;
   scaleSpeedKmh: number;
@@ -853,6 +882,11 @@ export class AsterD51Thermo1D {
       const dpVent = ((R_STEAM * tBoilK) / vGas) * mdotSteamOut * dtTh;
       this.P_boiler = Math.max(P_ATM, this.P_boiler - dpVent - 18000.0 * dtTh + this.flashOverpressurePa);
       this.M_waterKg = Math.max(0.0, Math.min(0.35, this.M_waterKg + mdotFw * dtTh));
+      evapRateKgS = 0.0;
+    }
+    if (this.M_waterKg <= 1.0e-6) {
+      this.M_waterKg = 0.0;
+      evapRateKgS = 0.0;
     }
 
     const rpm = (omega3 / (2.0 * Math.PI)) * 60.0;
@@ -975,6 +1009,17 @@ export class AsterD51Thermo1D {
       ? 0.0
       : Math.max(0.0, 0.789 * 9.81 * (0.032 * (this.alcoholMl / 130.0)) * 1e-3 * 1000.0);
 
+    const uRev = Math.min(1.0, Math.abs(ctrl.reverser));
+    const esMm = this.calib.steamLap * 1000.0;
+    const aLead = esMm + 0.28;
+    const bQuad = uRev * Math.sqrt(Math.max(0.0, 2.65 * 2.65 - aLead * aLead));
+    const rAmp = Math.hypot(aLead, bQuad);
+    const phiW = Math.atan2(aLead, Math.max(1e-9, bQuad));
+    const thCut = rAmp > esMm ? Math.max(0.0, Math.min(Math.PI, Math.PI - phiW - Math.asin(Math.min(1.0, esMm / rAmp)))) : 0.0;
+    const cutoffPct = 50.0 * (1.0 - Math.cos(thCut));
+    const pumpVacKpa = pumpSuctActive ? 18.0 * Math.min(1.0, Math.abs(vPumpRam) / 0.04) : 0.0;
+    const trueEvapGS = this.M_waterKg <= 1e-6 ? 0.0 : evapRateKgS * 1000.0;
+
     return {
       simTime: this.simTime,
       boilingProgressPct,
@@ -1000,7 +1045,12 @@ export class AsterD51Thermo1D {
       condensateG: this.condensateKg * 1000.0,
       smokeboxVacuumPa: smokeboxVacPa,
       lutActive: this.lut !== null,
-      steamGenGS: Math.max(mdotSteamOut, evapRateKgS) * 1000.0,
+      steamGenGS: trueEvapGS,
+      steamOutGS: mdotSteamOut * 1000.0,
+      cutoffPct,
+      pumpChamberKgf: pumpChamberPKgf,
+      pumpSuctionVacKpa: pumpVacKpa,
+      pumpShaftPowerW: Math.max(0.0, -forcePump * vPumpRam),
       feedwaterGS: mdotFw * 1000.0,
       alcoholMl: this.alcoholMl + this.sumpFuelMl,
       tenderWaterMl: this.tenderWaterMl,

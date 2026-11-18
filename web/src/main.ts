@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import { toCreasedNormals } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import loadMujoco from "mujoco-js";
 import {
   AsterD51Thermo1D,
@@ -43,8 +44,8 @@ const INTERACTIVE_PART_META: Record<string, { label: string; kind: InteractivePa
   cab_sight_drain_vis: { label: "13-5#3/1-1 右外縁(-Y) 11-7 水面計下部同軸ドレン栓 (クリックでフラッシュ洗浄)", kind: "toggle" },
   cab_blowdown_vis: { label: "11-16/11-17 左床下横向き(+Y)マイナス溝排水弁 (ドラッグで缶底排泥ブロー)", kind: "drag" },
   cab_fire_door_vis: { label: "12-1 低位中央・底ヒンジバタフライ火室扉 (ドラッグで開閉・二次空気流入)", kind: "drag" },
-  cab_bypass_vis: { label: "6-9/8-7 左運転台(+Y)床面・給水バイパス弁レバー (ドラッグで 31-14 戻水量調整)", kind: "drag" },
-  cab_drain_lever_vis: { label: "8-7 右床面・室内立式ドレンレバー → 8-5 → 1-19 (クリックでシリンダ排液開閉)", kind: "toggle" },
+  cab_bypass_vis: { label: "4-17/6-9/8-7 左運転台(+Y)床面・割クランプ給水バイパス弁レバー (ドラッグで 31-14 戻水量調整)", kind: "drag" },
+  cab_drain_lever_vis: { label: "8-6 右床面・室内斜めローレットドレンノブ → 8-5 → 1-19 (クリックでシリンダ二相排液開閉)", kind: "toggle" },
   dome_lid_vis: { label: "29-12/29-13 カマボコ砂箱前部ワイヤヒンジ蓋 (クリックで開閉)", kind: "toggle" },
   drain_pull_rod_vis: { label: "8-5 右床下ドレン弁水平引き棒 (クリックで8段排液リンク開閉)", kind: "toggle" },
   tender_handpump_vis: { label: "31-3/31-5 炭水車水槽内・4節リンク手動ポンプ立柱 (クリックで圧送)", kind: "pump" },
@@ -160,9 +161,9 @@ async function main() {
       chunk.map(async (stlName) => {
         const buf = await (await fetch(assetUrl(`meshes/${stlName}`))).arrayBuffer();
         mujoco.FS.writeFile(`/working/meshes/${stlName}`, new Uint8Array(buf));
-        const geom = stlLoader.parse(buf);
-        geom.scale(0.001, 0.001, 0.001);
-        geom.computeVertexNormals();
+        const rawStl = stlLoader.parse(buf);
+        rawStl.scale(0.001, 0.001, 0.001);
+        const geom = toCreasedNormals(rawStl, 0.72);
         stlGeomMap.set(stlName.replace(".stl", ""), geom);
         loadedCount++;
         loadingText.textContent = `正在挂载 CAD 零件网格 (${loadedCount}/${manifest.meshes.length}): ${stlName} ...`;
@@ -258,8 +259,12 @@ async function main() {
 
   let idxMap: Record<string, number> = {};
   let isRollerMode = true;
+  let currentXmlFile = "d51_full.xml";
+  let gpuMonitorEnabled = false;
   let tenderDryMass = 1.15;
   let prevFwdVel = 0.0;
+  const wsSceneKey = () =>
+    currentXmlFile === "d51_full.xml" ? "roller" : currentXmlFile === "d51_track.xml" ? "track" : "curve";
 
   // -------------------------------------------------------------------------
   // 本地 NVIDIA RTX 5080 (571万体素真 3D 求解器) WebSocket 自动发现与热桥接
@@ -325,7 +330,10 @@ async function main() {
         openedOnce = true;
         wsConnected = true;
         lastWsFrameMs = performance.now();
-        sendWsMessage({ type: "scene", scene: isRollerMode ? "roller" : "curve" });
+        sendWsMessage({ type: "scene", scene: wsSceneKey() });
+        if (gpuMonitorEnabled) {
+          sendWsMessage({ type: "action", name: "toggleGpuMonitor", enabled: true });
+        }
         pushControlsToWs();
       };
       sock.onmessage = (ev) => {
@@ -418,6 +426,7 @@ async function main() {
     prevFwdVel = 0.0;
 
     model = mujoco.MjModel.loadFromXML(`/working/${xmlFile}`);
+    currentXmlFile = xmlFile;
     isRollerMode = xmlFile === "d51_full.xml";
     if (isRollerMode) {
       injectRollerFlywheelInertia();
@@ -1197,9 +1206,18 @@ async function main() {
   const chaseTargetLocal = new THREE.Vector3(-0.04, 0.0, 0.055);
   const fireboxLocal = new THREE.Vector3(-0.085, 0.0, 0.038);
 
+  const btnGpuMon = document.getElementById("btn-gpu-mon");
+  if (btnGpuMon) {
+    btnGpuMon.addEventListener("click", () => {
+      gpuMonitorEnabled = !gpuMonitorEnabled;
+      btnGpuMon.classList.toggle("active", gpuMonitorEnabled);
+      sendWsMessage({ type: "action", name: "toggleGpuMonitor", enabled: gpuMonitorEnabled });
+    });
+  }
+
   selScene.addEventListener("change", () => {
     loadSimulationScene(selScene.value);
-    sendWsMessage({ type: "scene", scene: isRollerMode ? "roller" : "curve" });
+    sendWsMessage({ type: "scene", scene: wsSceneKey() });
     pushControlsToWs();
     prevLocoPos.set(0, 0, 0);
     if (isRollerMode) {
@@ -1359,6 +1377,28 @@ async function main() {
       shellRadLossW: t.shellRadLossW ?? sp.shellRadLossW ?? 0.0,
       boilerEfficiencyPct: t.boilerEfficiencyPct ?? sp.boilerEfficiencyPct ?? 0.0,
       burnerLumenConnected: t.burnerLumenConnected ?? sp.burnerLumenConnected ?? true,
+      steamOutGS: t.steamOutGS ?? t.steamGenGS,
+      cutoffPct: t.cutoffPct ?? 0.0,
+      cylExpansionWorkW: t.cylExpansionWorkW ?? 0.0,
+      specificSteamGKj: t.specificSteamGKj ?? 0.0,
+      pumpChamberKgf: t.pumpChamberKgf ?? sp.pumpChamberPKgf ?? 0.0,
+      pumpSuctionVacKpa: t.pumpSuctionVacKpa ?? 0.0,
+      pumpShaftPowerW: t.pumpShaftPowerW ?? 0.0,
+      lubeOilTempC: t.lubeOilTempC ?? 25.0,
+      lubeOilViscosityMpas: t.lubeOilViscosityMpas ?? 1850.0,
+      alcoholTempC: t.alcoholTempC ?? 25.0,
+      alcoholViscosityMpas: t.alcoholViscosityMpas ?? 1.08,
+      drainBlowdownGS: t.drainBlowdownGS ?? 0.0,
+      flueDeflectionMm: t.flueDeflectionMm ?? sp.flueDeflectionMm ?? [0, 0, 0, 0, 0],
+      flueOvalizationMm: t.flueOvalizationMm ?? sp.flueOvalizationMm ?? [0, 0, 0, 0, 0],
+      crownBulgeMm: t.crownBulgeMm ?? sp.crownBulgeMm ?? 0.0,
+      maxBoilerStressMpa: t.maxBoilerStressMpa ?? sp.maxBoilerStressMpa ?? 0.0,
+      copperYieldMpa: t.copperYieldMpa ?? sp.copperYieldMpa ?? 185.0,
+      springDeflectMm: t.springDeflectMm ?? [],
+      derailed: !!t.derailed,
+      derailReason: t.derailReason ?? "",
+      pino7OpActive: !!(t.pino7OpActive ?? sp.pino7OpActive),
+      gpuMonitor: t.gpuMonitor ?? sp.gpuMonitor ?? {},
       lubricatorOilPct: t.lubricatorOilPct,
       wheelRpm: t.wheelRpm,
       scaleSpeedKmh: t.scaleSpeedKmh,
@@ -1383,7 +1423,7 @@ async function main() {
     let out: StepOutput | null = null;
     const lb = idxMap.locoBody;
     const tb = idxMap.tenderBody;
-    const expectedScene = isRollerMode ? "roller" : "curve";
+    const expectedScene = wsSceneKey();
 
     const useLiveGpu =
       wsConnected &&
@@ -1559,14 +1599,16 @@ async function main() {
       const badgeEl = document.getElementById("badge-cfd")!;
       if (sp.gpuActive) {
         const mVox = (sp.totalVoxels / 1e6).toFixed(2);
-        badgeEl.textContent = sp.pino6OpActive
-          ? `RTX 5080 6-PINO+7D · ${mVox}M`
-          : sp.pino4OpActive
-            ? `RTX 5080 4-PINO+6D · ${mVox}M`
-            : sp.pinoActive
-              ? `RTX 5080 PINO+IAPWS · ${mVox}M`
-              : `RTX 5080 LIVE 3D · ${mVox}M VOX`;
-        badgeEl.title = "已连接本地 RTX 5080 实时 5.78M 体素 + 六算子 PINO (含三维流道漫水连通、陶瓷灯芯毛细与保温层共轭传热) 物理推流服务";
+        badgeEl.textContent = sp.pino7OpActive || out.pino7OpActive
+          ? `RTX 5080 7-PINO+8D · ${mVox}M`
+          : sp.pino6OpActive
+            ? `RTX 5080 6-PINO+7D · ${mVox}M`
+            : sp.pino4OpActive
+              ? `RTX 5080 4-PINO+6D · ${mVox}M`
+              : sp.pinoActive
+                ? `RTX 5080 PINO+IAPWS · ${mVox}M`
+                : `RTX 5080 LIVE 3D · ${mVox}M VOX`;
+        badgeEl.title = "已连接本地 RTX 5080 实时 5.78M 体素 + 七算子 PINO + 热弹塑性形变与轮轨接触物理推流服务";
         badgeEl.classList.add("live-3d");
       } else {
         badgeEl.textContent = out.lutActive ? "OFFLINE · CFD LUT" : "1D ANALYTIC";
@@ -1578,8 +1620,11 @@ async function main() {
       document.getElementById("txt-pressure")!.textContent = `${pgRead.toFixed(2)} / 4.00 kgf/cm²`;
       (document.getElementById("bar-pressure") as HTMLElement).style.width = `${Math.min(100, (pgRead / 4.5) * 100)}%`;
 
-      const boilTxt =
-        out.boilerPressureKgf > 0.02
+      const bWaterMl = out.boilerWaterMl;
+      const isDryZeroMl = bWaterMl !== undefined && bWaterMl < 0.25;
+      const boilTxt = isDryZeroMl
+        ? `${out.boilerTempC.toFixed(1)}°C | 完全蒸発・空焚き (0.00g/s)`
+        : out.boilerPressureKgf > 0.02
           ? `${out.boilerTempC.toFixed(1)}°C | 蒸発中 (${out.steamGenGS.toFixed(2)}g/s)`
           : `${out.boilerTempC.toFixed(1)}°C | 沸騰進捗 ${out.boilingProgressPct.toFixed(0)}%`;
       document.getElementById("txt-boil-prog")!.textContent = boilTxt;
@@ -1587,7 +1632,6 @@ async function main() {
 
       const sgShow = out.sightGlassLevelPct ?? out.waterLevelPct;
       const lvlDiff = Math.abs(sgShow - out.trueWaterLevelPct);
-      const bWaterMl = out.boilerWaterMl;
       document.getElementById("txt-water")!.textContent =
         bWaterMl !== undefined && bWaterMl < 139.5
           ? bWaterMl < 0.5
@@ -1613,7 +1657,38 @@ async function main() {
       if ((out.tenderDrainMlS ?? 0) > 0.05) flowTags.push(`排-${out.tenderDrainMlS.toFixed(1)}`);
       const retTag = flowTags.length > 0 ? `${flowTags.join("/")}ml/s` : `${out.tenderWaterTempC.toFixed(0)}°C`;
       document.getElementById("txt-tanks")!.textContent = `${out.alcoholMl.toFixed(0)}ml | ${out.tenderWaterMl.toFixed(0)}ml (${retTag})`;
-      document.getElementById("txt-forces")!.textContent = `L: ${out.forceL.toFixed(1)}N | R: ${out.forceR.toFixed(1)}N`;
+      const cutPct = out.cutoffPct ?? 0.0;
+      document.getElementById("txt-forces")!.textContent =
+        `L:${out.forceL.toFixed(1)}N R:${out.forceR.toFixed(1)}N | 締切${cutPct.toFixed(0)}%`;
+
+      const pmpEl = document.getElementById("txt-pump-elastic");
+      if (pmpEl) {
+        const vacKpa = out.pumpSuctionVacKpa ?? 0.0;
+        const pmpP = out.pumpChamberKgf ?? sp.pumpChamberPKgf ?? 0.0;
+        const pmpW = out.pumpShaftPowerW ?? 0.0;
+        const fBowArr = out.flueDeflectionMm ?? sp.flueDeflectionMm ?? [0];
+        const maxBow = Math.max(0, ...fBowArr);
+        const pmpStr = vacKpa > 0.2 ? `吸-${vacKpa.toFixed(1)}kPa` : `圧+${Math.max(0, pmpP).toFixed(2)}kgf`;
+        pmpEl.textContent = `${pmpStr} (${pmpW.toFixed(2)}W) | 煙管撓${maxBow.toFixed(3)}mm`;
+        pmpEl.classList.toggle("val-hot", maxBow > 0.08);
+      }
+
+      const gpuBox = document.getElementById("gpu-monitor-box") as HTMLElement | null;
+      if (gpuBox) {
+        const gm = out.gpuMonitor ?? sp.gpuMonitor;
+        if (gpuMonitorEnabled && gm && gm.enabled) {
+          gpuBox.style.display = "block";
+          gpuBox.innerHTML =
+            `<div>GPU: ${gm.device_name || sp.gpuName} (${gm.cfd_hz ?? 125}Hz)</div>` +
+            `<div>SM: ${gm.sm_util_pct ?? 0}% | MemBW: ${gm.mem_bw_util_pct ?? 0}% | VRAM: ${gm.vram_used_mb ?? 0}MB</div>` +
+            `<div>Temp/Pwr: ${gm.gpu_temp_c ?? 0}°C / ${gm.gpu_power_w ?? 0}W | PDE:${gm.gpu_3d_pde_ms ?? 0}ms PINO:${gm.gpu_pino_ms ?? 0}ms</div>`;
+        } else if (gpuMonitorEnabled && !sp.gpuActive) {
+          gpuBox.style.display = "block";
+          gpuBox.textContent = "GPU Monitor: 离线浏览器 WASM 模式 (请连接本地 8765 GPU 服务)";
+        } else {
+          gpuBox.style.display = "none";
+        }
+      }
 
       const shExitDry = sp.shProfileDryness[sp.shProfileDryness.length - 1] ?? sp.steamDrynessDome;
       document.getElementById("txt-fluid3d")!.textContent =
@@ -1655,7 +1730,9 @@ async function main() {
       }
 
       let alarmMsg = "";
-      if (out.burnerLumenConnected === false || sp.burnerLumenConnected === false) {
+      if (out.derailed) {
+        alarmMsg = `DERAILED! 輪軸脱線・枕木接地制動中 (${out.derailReason || "脱線検知"}) — 冷炉リセットまたは再配置せよ!`;
+      } else if (out.burnerLumenConnected === false || sp.burnerLumenConnected === false) {
         alarmMsg = "BURNER LUMEN BLOCKED! 23-1 燃料管〜バーナー芯カップの3D流路遮断 — 毛細吸液不能!";
       } else if (out.hydrolockL || out.hydrolockR) {
         alarmMsg = "HYDROLOCK! 冷気筒水撃ロック発生 — 直ちに8-7室内ドレンレバーを開放せよ!";

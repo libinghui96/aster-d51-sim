@@ -1,0 +1,1092 @@
+<?xml version="1.0" ?>
+<mujoco model="aster_d51_consist">
+  <compiler angle="radian" autolimits="true" meshdir="meshes"/>
+  <option timestep="0.0005" integrator="implicitfast" gravity="0 0 -9.81"/>
+  <default>
+    <geom condim="3" solref="0.0015 1.0" solimp="0.95 0.99 0.0001"/>
+    <joint solreflimit="0.002 1.0" solimplimit="0.98 0.995 0.0001"/>
+    <equality solref="0.00045 1.0" solimp="0.997 0.9997 0.000002"/>
+  </default>
+  <asset>
+    <mesh name="m_driving_wheel_L" file="driving_wheel_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_driving_wheel_R" file="driving_wheel_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_main_driving_wheel_L" file="main_driving_wheel_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_main_driving_wheel_R" file="main_driving_wheel_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_return_crank_L" file="return_crank_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_return_crank_R" file="return_crank_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_main_rod" file="main_rod.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_coupling_rod" file="coupling_rod.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_coupling_rod_front" file="coupling_rod_front.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_coupling_rod_rear" file="coupling_rod_rear.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_eccentric_rod_L" file="eccentric_rod_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_eccentric_rod_R" file="eccentric_rod_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_expansion_link_L" file="expansion_link_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_expansion_link_R" file="expansion_link_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_die_block_L" file="die_block_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_die_block_R" file="die_block_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_radius_rod_L" file="radius_rod_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_radius_rod_R" file="radius_rod_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_combination_lever" file="combination_lever.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_union_link_L" file="union_link_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_union_link_R" file="union_link_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_lift_link_L" file="lift_link_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_lift_link_R" file="lift_link_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_motion_bracket_L" file="motion_bracket_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_motion_bracket_R" file="motion_bracket_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_slide_bar_L" file="slide_bar_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_slide_bar_R" file="slide_bar_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_piston_tail_sheath_L" file="piston_tail_sheath_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_piston_tail_sheath_R" file="piston_tail_sheath_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_valve_spindle_sheath_L" file="valve_spindle_sheath_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_valve_spindle_sheath_R" file="valve_spindle_sheath_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_reach_rod" file="cab_reach_rod.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_drain_cock_linkage" file="drain_cock_linkage.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_drain_pull_rod" file="drain_pull_rod.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_backhead_plate" file="cab_backhead_plate.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_deck_and_mounts" file="cab_deck_and_mounts.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_reverser_stand" file="cab_reverser_stand.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_reverser_wheel" file="cab_reverser_wheel.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_reverser_nut" file="cab_reverser_nut.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_regulator_lever" file="cab_regulator_lever.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_blower_wheel" file="cab_blower_wheel.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_whistle_lever" file="cab_whistle_lever.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_sight_glass_tube" file="cab_sight_glass_tube.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_sight_drain" file="cab_sight_drain.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_pg_dial" file="cab_pg_dial.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_pressure_needle" file="cab_pressure_needle.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_blowdown_screw" file="cab_blowdown_screw.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_firebox_door" file="cab_firebox_door.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_bypass_lever" file="cab_bypass_lever.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cab_drain_lever" file="cab_drain_lever.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_dome_lid_29_12" file="dome_lid_29_12.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_safety_valve_poppet" file="safety_valve_poppet.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_hp_links" file="tender_hp_links.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_handpump_lever" file="tender_handpump_lever.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_handpump_ram" file="tender_handpump_ram.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_drain_plug" file="tender_drain_plug.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_coal_cover" file="tender_coal_cover.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_fuel_valve" file="tender_fuel_valve.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_fuel_cap" file="tender_fuel_cap.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_rear_ladder" file="tender_rear_ladder.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_umb_hose_fuel" file="umb_hose_fuel.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_umb_hose_fuel_r2m" file="umb_hose_fuel_r2m.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_umb_hose_feed" file="umb_hose_feed.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_umb_hose_feed_r2m" file="umb_hose_feed_r2m.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_umb_union_34_8" file="umb_union_34_8.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_umb_union_34_8_r2m" file="umb_union_34_8_r2m.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_umb_hose_return" file="umb_hose_return.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_umb_hose_return_r2m" file="umb_hose_return_r2m.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_chassis_equalizer_brakes" file="chassis_equalizer_brakes.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_equalizer_lever_3_4" file="equalizer_lever_3_4.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_axle_pump_eccentric" file="axle_pump_eccentric.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_axle_pump_ram" file="axle_pump_ram.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_pump_check_ball" file="pump_check_ball.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_leading_truck_frame" file="leading_truck_frame.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_trailing_truck_frame" file="trailing_truck_frame.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_piston_crosshead_L" file="piston_crosshead_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_piston_crosshead_R" file="piston_crosshead_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_slide_valve_L" file="slide_valve_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_slide_valve_R" file="slide_valve_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_reverser_shaft" file="reverser_shaft.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_driving_axlebox_L" file="driving_axlebox_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_driving_axlebox_R" file="driving_axlebox_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_axlebox_L" file="tender_axlebox_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_axlebox_R" file="tender_axlebox_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cylinder_block_L" file="cylinder_block_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_cylinder_block_R" file="cylinder_block_R.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_boiler_superstructure" file="boiler_superstructure.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_boiler_firebox_flues" file="boiler_firebox_flues.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_boiler_insulation" file="boiler_insulation.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_superheater_piping" file="superheater_piping.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_exhaust_blast_pipe" file="exhaust_blast_pipe.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_blower_nozzle_17_3" file="blower_nozzle_17_3.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_smokebox_petticoat" file="smokebox_petticoat.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tandem_safety_valves" file="tandem_safety_valves.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_feedwater_piping" file="feedwater_piping.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_displacement_lubricator" file="displacement_lubricator.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_boiler_aux_valves" file="boiler_aux_valves.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_alcohol_burner" file="alcohol_burner.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_burner_wick" file="burner_wick.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_body" file="tender_body.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_internals" file="tender_internals.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_tender_bogie_frame" file="tender_bogie_frame.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_truck_wheel_L" file="truck_wheel_L.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_truck_wheel_R" file="truck_wheel_R.stl" scale="0.001 0.001 0.001"/>
+    <material name="mat_black_iron" rgba="0.14 0.14 0.16 1" specular="0.6" shininess="0.5"/>
+    <material name="mat_machined_steel" rgba="0.78 0.80 0.84 1" specular="0.9" shininess="0.8"/>
+    <material name="mat_brass" rgba="0.82 0.62 0.24 1" specular="0.85" shininess="0.75"/>
+    <material name="mat_copper" rgba="0.78 0.43 0.27 1" specular="0.88" shininess="0.78"/>
+    <material name="mat_silicone_hose" rgba="0.92 0.94 0.96 0.68" specular="0.4" shininess="0.3"/>
+    <material name="mat_viton_hose" rgba="0.11 0.11 0.13 1" specular="0.25" shininess="0.2"/>
+    <material name="mat_pyrex_glass" rgba="0.82 0.95 0.99 0.36" specular="0.95" shininess="0.92"/>
+    <material name="mat_gauge_dial" rgba="0.96 0.96 0.94 1" specular="0.35" shininess="0.25"/>
+    <material name="mat_ceramic_wick" rgba="0.93 0.91 0.86 1" specular="0.15" shininess="0.10"/>
+    <material name="mat_ceramic_insulation" rgba="0.91 0.89 0.84 0.88" specular="0.12" shininess="0.08"/>
+  </asset>
+  <worldbody>
+    <light pos="0 -1.5 2.2" dir="0 0.4 -0.9" diffuse="0.92 0.92 0.92"/>
+    <geom name="ground" type="plane" size="6.5 6.5 0.05" rgba="0.16 0.18 0.20 1" contype="1" conaffinity="2" friction="0.88 0.010 0.002"/>
+    <geom name="rail_L" type="box" pos="1.8 0.023300 0.002" size="4.8 0.000800 0.002" contype="1" conaffinity="2" friction="0.46 0.002 0.0001" rgba="0.70 0.72 0.75 1"/>
+    <geom name="rail_R" type="box" pos="1.8 -0.023300 0.002" size="4.8 0.000800 0.002" contype="1" conaffinity="2" friction="0.46 0.002 0.0001" rgba="0.70 0.72 0.75 1"/>
+    <geom name="sleeper_trk_000" type="box" pos="-1.200000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_001" type="box" pos="-1.168000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_002" type="box" pos="-1.136000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_003" type="box" pos="-1.104000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_004" type="box" pos="-1.072000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_005" type="box" pos="-1.040000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_006" type="box" pos="-1.008000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_007" type="box" pos="-0.976000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_008" type="box" pos="-0.944000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_009" type="box" pos="-0.912000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_010" type="box" pos="-0.880000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_011" type="box" pos="-0.848000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_012" type="box" pos="-0.816000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_013" type="box" pos="-0.784000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_014" type="box" pos="-0.752000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_015" type="box" pos="-0.720000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_016" type="box" pos="-0.688000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_017" type="box" pos="-0.656000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_018" type="box" pos="-0.624000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_019" type="box" pos="-0.592000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_020" type="box" pos="-0.560000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_021" type="box" pos="-0.528000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_022" type="box" pos="-0.496000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_023" type="box" pos="-0.464000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_024" type="box" pos="-0.432000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_025" type="box" pos="-0.400000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_026" type="box" pos="-0.368000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_027" type="box" pos="-0.336000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_028" type="box" pos="-0.304000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_029" type="box" pos="-0.272000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_030" type="box" pos="-0.240000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_031" type="box" pos="-0.208000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_032" type="box" pos="-0.176000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_033" type="box" pos="-0.144000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_034" type="box" pos="-0.112000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_035" type="box" pos="-0.080000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_036" type="box" pos="-0.048000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_037" type="box" pos="-0.016000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_038" type="box" pos="0.016000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_039" type="box" pos="0.048000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_040" type="box" pos="0.080000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_041" type="box" pos="0.112000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_042" type="box" pos="0.144000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_043" type="box" pos="0.176000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_044" type="box" pos="0.208000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_045" type="box" pos="0.240000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_046" type="box" pos="0.272000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_047" type="box" pos="0.304000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_048" type="box" pos="0.336000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_049" type="box" pos="0.368000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_050" type="box" pos="0.400000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_051" type="box" pos="0.432000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_052" type="box" pos="0.464000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_053" type="box" pos="0.496000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_054" type="box" pos="0.528000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_055" type="box" pos="0.560000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_056" type="box" pos="0.592000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_057" type="box" pos="0.624000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_058" type="box" pos="0.656000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_059" type="box" pos="0.688000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_060" type="box" pos="0.720000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_061" type="box" pos="0.752000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_062" type="box" pos="0.784000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_063" type="box" pos="0.816000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_064" type="box" pos="0.848000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_065" type="box" pos="0.880000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_066" type="box" pos="0.912000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_067" type="box" pos="0.944000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_068" type="box" pos="0.976000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_069" type="box" pos="1.008000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_070" type="box" pos="1.040000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_071" type="box" pos="1.072000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_072" type="box" pos="1.104000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_073" type="box" pos="1.136000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_074" type="box" pos="1.168000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_075" type="box" pos="1.200000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_076" type="box" pos="1.232000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_077" type="box" pos="1.264000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_078" type="box" pos="1.296000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_079" type="box" pos="1.328000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_080" type="box" pos="1.360000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_081" type="box" pos="1.392000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_082" type="box" pos="1.424000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_083" type="box" pos="1.456000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_084" type="box" pos="1.488000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_085" type="box" pos="1.520000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_086" type="box" pos="1.552000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_087" type="box" pos="1.584000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_088" type="box" pos="1.616000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_089" type="box" pos="1.648000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_090" type="box" pos="1.680000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_091" type="box" pos="1.712000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_092" type="box" pos="1.744000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_093" type="box" pos="1.776000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_094" type="box" pos="1.808000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_095" type="box" pos="1.840000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_096" type="box" pos="1.872000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_097" type="box" pos="1.904000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_098" type="box" pos="1.936000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_099" type="box" pos="1.968000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_100" type="box" pos="2.000000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_101" type="box" pos="2.032000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_102" type="box" pos="2.064000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_103" type="box" pos="2.096000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_104" type="box" pos="2.128000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_105" type="box" pos="2.160000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_106" type="box" pos="2.192000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_107" type="box" pos="2.224000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_108" type="box" pos="2.256000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_109" type="box" pos="2.288000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_110" type="box" pos="2.320000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_111" type="box" pos="2.352000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_112" type="box" pos="2.384000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_113" type="box" pos="2.416000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_114" type="box" pos="2.448000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_115" type="box" pos="2.480000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_116" type="box" pos="2.512000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_117" type="box" pos="2.544000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_118" type="box" pos="2.576000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_119" type="box" pos="2.608000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_120" type="box" pos="2.640000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_121" type="box" pos="2.672000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_122" type="box" pos="2.704000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_123" type="box" pos="2.736000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_124" type="box" pos="2.768000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_125" type="box" pos="2.800000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_126" type="box" pos="2.832000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_127" type="box" pos="2.864000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_128" type="box" pos="2.896000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_129" type="box" pos="2.928000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_130" type="box" pos="2.960000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_131" type="box" pos="2.992000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_132" type="box" pos="3.024000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_133" type="box" pos="3.056000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_134" type="box" pos="3.088000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_135" type="box" pos="3.120000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_136" type="box" pos="3.152000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_137" type="box" pos="3.184000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_138" type="box" pos="3.216000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_139" type="box" pos="3.248000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_140" type="box" pos="3.280000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_141" type="box" pos="3.312000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_142" type="box" pos="3.344000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_143" type="box" pos="3.376000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_144" type="box" pos="3.408000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_145" type="box" pos="3.440000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_146" type="box" pos="3.472000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_147" type="box" pos="3.504000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_148" type="box" pos="3.536000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_149" type="box" pos="3.568000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_150" type="box" pos="3.600000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_151" type="box" pos="3.632000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_152" type="box" pos="3.664000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_153" type="box" pos="3.696000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_154" type="box" pos="3.728000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_155" type="box" pos="3.760000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_156" type="box" pos="3.792000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_157" type="box" pos="3.824000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_158" type="box" pos="3.856000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_159" type="box" pos="3.888000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_160" type="box" pos="3.920000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_161" type="box" pos="3.952000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_162" type="box" pos="3.984000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_163" type="box" pos="4.016000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_164" type="box" pos="4.048000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_165" type="box" pos="4.080000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_166" type="box" pos="4.112000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_167" type="box" pos="4.144000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_168" type="box" pos="4.176000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_169" type="box" pos="4.208000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_170" type="box" pos="4.240000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_171" type="box" pos="4.272000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_172" type="box" pos="4.304000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_173" type="box" pos="4.336000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_174" type="box" pos="4.368000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_175" type="box" pos="4.400000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_176" type="box" pos="4.432000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_177" type="box" pos="4.464000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_178" type="box" pos="4.496000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_179" type="box" pos="4.528000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_180" type="box" pos="4.560000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_181" type="box" pos="4.592000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_182" type="box" pos="4.624000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_183" type="box" pos="4.656000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_184" type="box" pos="4.688000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_185" type="box" pos="4.720000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_186" type="box" pos="4.752000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_187" type="box" pos="4.784000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_188" type="box" pos="4.816000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_189" type="box" pos="4.848000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_190" type="box" pos="4.880000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_191" type="box" pos="4.912000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_192" type="box" pos="4.944000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_193" type="box" pos="4.976000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_194" type="box" pos="5.008000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_195" type="box" pos="5.040000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_196" type="box" pos="5.072000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_197" type="box" pos="5.104000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_198" type="box" pos="5.136000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_199" type="box" pos="5.168000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_200" type="box" pos="5.200000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_201" type="box" pos="5.232000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_202" type="box" pos="5.264000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_203" type="box" pos="5.296000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_204" type="box" pos="5.328000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_205" type="box" pos="5.360000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_206" type="box" pos="5.392000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <body name="loco_frame" pos="0.000000 0.000000 0.026100">
+      <freejoint name="loco_free"/>
+      <inertial pos="0.022812 0.000053 0.036457" mass="3.949141" fullinertia="3.889870904e-03 3.772830350e-02 3.683541849e-02 1.408560830e-05 1.829928666e-03 9.447600943e-06"/>
+      <geom name="main_chassis_L" type="box" pos="0.056 0.013500 0.004" size="0.122 0.00175 0.008" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
+      <geom name="rear_chassis_L" type="box" pos="-0.103 0.013500 0.0092" size="0.043 0.00175 0.0040" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
+      <geom name="motion_bracket_vis_L" type="mesh" mesh="m_motion_bracket_L" material="mat_black_iron" pos="0.046500 0.036000 0.015500" mass="0" contype="0" conaffinity="0"/>
+      <geom name="main_chassis_R" type="box" pos="0.056 -0.013500 0.004" size="0.122 0.00175 0.008" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
+      <geom name="rear_chassis_R" type="box" pos="-0.103 -0.013500 0.0092" size="0.043 0.00175 0.0040" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
+      <geom name="motion_bracket_vis_R" type="mesh" mesh="m_motion_bracket_R" material="mat_black_iron" pos="0.046500 -0.036000 0.015500" mass="0" contype="0" conaffinity="0"/>
+      <geom name="loco_rear_dragbox" type="box" pos="-0.144000 0.000000 -0.002900" size="0.006200 0.015000 0.001600" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
+      <geom name="loco_drawbar_pin_vis" type="cylinder" fromto="-0.146000 0.000000 -0.009200  -0.146000 0.000000 -0.001200" size="0.001800" material="mat_brass" rgba="0.82 0.62 0.24 1" mass="0" contype="0" conaffinity="0"/>
+      <geom name="chassis_equalizer_brakes_vis" type="mesh" mesh="m_chassis_equalizer_brakes" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="boiler_copper_core_vis" type="mesh" mesh="m_boiler_firebox_flues" material="mat_copper" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="boiler_insulation_vis" type="mesh" mesh="m_boiler_insulation" material="mat_ceramic_insulation" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="superheater_piping_vis" type="mesh" mesh="m_superheater_piping" material="mat_machined_steel" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="exhaust_blast_pipe_vis" type="mesh" mesh="m_exhaust_blast_pipe" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="blower_nozzle_17_3_vis" type="mesh" mesh="m_blower_nozzle_17_3" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="smokebox_petticoat_vis" type="mesh" mesh="m_smokebox_petticoat" material="mat_machined_steel" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="tandem_safety_valves_vis" type="mesh" mesh="m_tandem_safety_valves" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="feedwater_piping_vis" type="mesh" mesh="m_feedwater_piping" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="displacement_lubricator_vis" type="mesh" mesh="m_displacement_lubricator" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="alcohol_burner_vis" type="mesh" mesh="m_alcohol_burner" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="burner_wick_vis_1" type="mesh" mesh="m_burner_wick" material="mat_ceramic_wick" pos="-0.093000 0.000000 0.000000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="burner_wick_vis_2" type="mesh" mesh="m_burner_wick" material="mat_ceramic_wick" pos="-0.077000 0.000000 0.000000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="burner_wick_vis_3" type="mesh" mesh="m_burner_wick" material="mat_ceramic_wick" pos="-0.061000 0.000000 0.000000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="boiler_aux_valves_vis" type="mesh" mesh="m_boiler_aux_valves" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="cab_backhead_plate_vis" type="mesh" mesh="m_cab_backhead_plate" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="cab_deck_and_mounts_vis" type="mesh" mesh="m_cab_deck_and_mounts" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="cab_sight_glass_tube_vis" type="mesh" mesh="m_cab_sight_glass_tube" material="mat_pyrex_glass" pos="-0.118500 -0.031300 0.046000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="cab_pg_dial_vis" type="mesh" mesh="m_cab_pg_dial" material="mat_gauge_dial" pos="-0.122500 -0.016500 0.066800" mass="0" contype="0" conaffinity="0"/>
+      <geom name="cab_reverser_stand_vis" type="mesh" mesh="m_cab_reverser_stand" material="mat_black_iron" pos="-0.127500 0.032500 0.020000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="boiler_Super_vis" type="mesh" mesh="m_boiler_superstructure" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <body name="axlebox_1" pos="0.093000 0 0">
+        <inertial pos="0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 4.120193964e-21 -1.750421357e-25 -9.044771781e-22"/>
+        <joint name="j_susp_z1" type="slide" axis="0 0 1" springref="-0.0017" limited="true" range="-0.0035 0.0035" stiffness="950" damping="14"/>
+        <joint name="j_lat_y1" type="slide" axis="0 1 0" limited="true" range="-0.001200 0.001200" stiffness="85" damping="3.5"/>
+        <geom name="abox_vis_1_L" type="mesh" mesh="m_driving_axlebox_L" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <geom name="abox_vis_1_R" type="mesh" mesh="m_driving_axlebox_R" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <body name="wheelset_1" pos="0 0 0">
+          <joint name="j_wheel_1" type="hinge" axis="0 1 0" damping="0.0012"/>
+          <inertial pos="-0.000460 -0.000000 0.000460" mass="0.075844" fullinertia="4.556984779e-05 1.745413362e-05 4.556984779e-05 7.932107547e-07 -1.603081488e-08 7.932107547e-07"/>
+          <geom type="cylinder" fromto="0 -0.022500 0  0 0.022500 0" size="0.0028" rgba="0.3 0.3 0.3 1" mass="0" contype="0" conaffinity="0"/>
+          <geom name="drv_1_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_1_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_1_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+          <geom name="drv_1_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+          <geom name="drv_1_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_1_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_1_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+          <geom name="drv_1_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+          <geom name="wheel_vis_1_L" type="mesh" mesh="m_driving_wheel_L" material="mat_black_iron" pos="0 0.023300 0" contype="0" conaffinity="0" mass="0"/>
+          <geom name="wheel_vis_1_R" type="mesh" mesh="m_driving_wheel_R" material="mat_black_iron" pos="0 -0.023300 0" contype="0" conaffinity="0" mass="0"/>
+          <site name="s_crank_pin_1_L" pos="0.010000 0.028000 0.000000" size="0.002"/>
+          <site name="s_crank_pin_1_R" pos="0.000000 -0.028000 -0.010000" size="0.002"/>
+        </body>
+      </body>
+      <body name="axlebox_2" pos="0.046500 0 0">
+        <inertial pos="0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 4.120193964e-21 -1.750421357e-25 -9.044771781e-22"/>
+        <joint name="j_susp_z2" type="slide" axis="0 0 1" springref="-0.0017" limited="true" range="-0.0035 0.0035" stiffness="950" damping="14"/>
+        <joint name="j_lat_y2" type="slide" axis="0 1 0" limited="true" range="-0.000300 0.000300" stiffness="85" damping="3.5"/>
+        <geom name="abox_vis_2_L" type="mesh" mesh="m_driving_axlebox_L" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <geom name="abox_vis_2_R" type="mesh" mesh="m_driving_axlebox_R" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <body name="wheelset_2" pos="0 0 0">
+          <joint name="j_wheel_2" type="hinge" axis="0 1 0" damping="0.0012"/>
+          <inertial pos="-0.000460 -0.000000 0.000460" mass="0.075844" fullinertia="4.556984779e-05 1.745413362e-05 4.556984779e-05 7.932107547e-07 -1.603081488e-08 7.932107547e-07"/>
+          <geom type="cylinder" fromto="0 -0.022500 0  0 0.022500 0" size="0.0028" rgba="0.3 0.3 0.3 1" mass="0" contype="0" conaffinity="0"/>
+          <geom name="drv_2_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_2_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_2_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+          <geom name="drv_2_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+          <geom name="drv_2_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_2_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_2_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+          <geom name="drv_2_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+          <geom name="wheel_vis_2_L" type="mesh" mesh="m_driving_wheel_L" material="mat_black_iron" pos="0 0.023300 0" contype="0" conaffinity="0" mass="0"/>
+          <geom name="wheel_vis_2_R" type="mesh" mesh="m_driving_wheel_R" material="mat_black_iron" pos="0 -0.023300 0" contype="0" conaffinity="0" mass="0"/>
+          <site name="s_crank_pin_2_L" pos="0.010000 0.028000 0.000000" size="0.002"/>
+          <site name="s_crank_pin_2_R" pos="0.000000 -0.028000 -0.010000" size="0.002"/>
+        </body>
+      </body>
+      <body name="axlebox_3" pos="0.000000 0 0">
+        <inertial pos="0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 4.120193964e-21 -1.750421357e-25 -9.044771781e-22"/>
+        <joint name="j_susp_z3" type="slide" axis="0 0 1" springref="-0.0017" limited="true" range="-0.0035 0.0035" stiffness="950" damping="14"/>
+        <joint name="j_lat_y3" type="slide" axis="0 1 0" limited="true" range="-0.000200 0.000200" stiffness="85" damping="3.5"/>
+        <geom name="abox_vis_3_L" type="mesh" mesh="m_driving_axlebox_L" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <geom name="abox_vis_3_R" type="mesh" mesh="m_driving_axlebox_R" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <body name="wheelset_3" pos="0 0 0">
+          <joint name="j_wheel_3" type="hinge" axis="0 1 0" damping="0.0012"/>
+          <inertial pos="-0.000360 -0.000000 0.000294" mass="0.085701" fullinertia="5.319289071e-05 1.904927750e-05 5.318914046e-05 4.534291234e-07 -9.069555116e-09 6.547762417e-07"/>
+          <geom type="cylinder" fromto="0 -0.022500 0  0 0.022500 0" size="0.0028" rgba="0.3 0.3 0.3 1" mass="0" contype="0" conaffinity="0"/>
+          <geom name="drv_3_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_3_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_3_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+          <geom name="drv_3_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+          <geom name="drv_3_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_3_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_3_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+          <geom name="drv_3_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+          <geom name="wheel_vis_3_L" type="mesh" mesh="m_main_driving_wheel_L" material="mat_black_iron" pos="0 0.023300 0" contype="0" conaffinity="0" mass="0"/>
+          <geom name="return_crank_vis_L" type="mesh" mesh="m_return_crank_L" material="mat_machined_steel" pos="0.010000 0.036000 0.000000" contype="0" conaffinity="0" mass="0"/>
+          <geom name="wheel_vis_3_R" type="mesh" mesh="m_main_driving_wheel_R" material="mat_black_iron" pos="0 -0.023300 0" contype="0" conaffinity="0" mass="0"/>
+          <geom name="return_crank_vis_R" type="mesh" mesh="m_return_crank_R" material="mat_machined_steel" pos="0.000000 -0.036000 -0.010000" contype="0" conaffinity="0" mass="0"/>
+          <body name="pump_eccentric_rod" pos="0.003500 0 0">
+            <inertial pos="-0.005442 0.000000 0.000000" mass="0.004393" fullinertia="4.122110610e-08 4.306103209e-07 3.986596689e-07 -1.026526737e-21 6.788099331e-22 -7.723669244e-24"/>
+            <joint name="j_pump_pin_play" type="slide" axis="0 1 0" limited="true" range="-0.000350 0.000350" damping="0.04"/>
+            <joint name="j_pump_ecc" type="hinge" axis="0 1 0"/>
+            <geom name="pump_ecc_vis" type="mesh" mesh="m_axle_pump_eccentric" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+            <site name="s_pump_rod_end" pos="-0.025500 0 0"/>
+          </body>
+          <site name="s_crank_pin_3_L" pos="0.010000 0.028000 0.000000" size="0.002"/>
+          <body name="coupling_rod_L" pos="0.010000 0.028000 0.000000">
+            <inertial pos="0.021867 0.000000 0.000073" mass="0.003025" fullinertia="8.301454830e-09 1.267842867e-06 1.261221264e-06 -3.370035187e-13 5.419512059e-11 -7.023239480e-15"/>
+            <joint name="j_coup3_L" type="hinge" axis="0 1 0"/>
+            <geom name="coupling_rod_vis_L" type="mesh" mesh="m_coupling_rod" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+            <body name="coup_bush_2_L" pos="0.046500 0 0">
+              <joint name="j_coup_lat_2_L" type="slide" axis="0 1 0" limited="true" range="-0.0016 0.0016" damping="0.25"/>
+              <geom type="cylinder" fromto="0 -0.001 0  0 0.001 0" size="0.002" density="8500" group="3" rgba="0 0 0 0" contype="0" conaffinity="0"/>
+              <site name="s_coup_hole_2_L" pos="0 0 0"/>
+            </body>
+            <body name="coupling_rod_front_L" pos="0.055000 0 0">
+              <inertial pos="0.020742 0.000000 0.000048" mass="0.001833" fullinertia="3.854478925e-09 3.589952476e-07 3.562302035e-07 -1.221309212e-13 -1.519802290e-09 -1.208516391e-14"/>
+              <joint name="j_coup_knuckle_f_L" type="hinge" axis="0 1 0" limited="true" range="-0.15 0.15" damping="0.0005"/>
+              <geom name="coupling_rod_f_vis_L" type="mesh" mesh="m_coupling_rod_front" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+              <body name="coup_bush_1_L" pos="0.038000 0 0">
+                <joint name="j_coup_lat_1_L" type="slide" axis="0 1 0" limited="true" range="-0.0016 0.0016" damping="0.25"/>
+                <geom type="cylinder" fromto="0 -0.001 0  0 0.001 0" size="0.002" density="8500" group="3" rgba="0 0 0 0" contype="0" conaffinity="0"/>
+                <site name="s_coup_hole_1_L" pos="0 0 0"/>
+              </body>
+            </body>
+            <body name="coupling_rod_rear_L" pos="-0.008500 0 0">
+              <inertial pos="-0.020741 -0.000000 0.000048" mass="0.001833" fullinertia="3.854164291e-09 3.589743925e-07 3.562096094e-07 -5.758648273e-14 1.517774726e-09 7.181691715e-15"/>
+              <joint name="j_coup_knuckle_r_L" type="hinge" axis="0 1 0" limited="true" range="-0.15 0.15" damping="0.0005"/>
+              <geom name="coupling_rod_r_vis_L" type="mesh" mesh="m_coupling_rod_rear" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+              <body name="coup_bush_4_L" pos="-0.038000 0 0">
+                <joint name="j_coup_lat_4_L" type="slide" axis="0 1 0" limited="true" range="-0.0016 0.0016" damping="0.25"/>
+                <geom type="cylinder" fromto="0 -0.001 0  0 0.001 0" size="0.002" density="8500" group="3" rgba="0 0 0 0" contype="0" conaffinity="0"/>
+                <site name="s_coup_hole_4_L" pos="0 0 0"/>
+              </body>
+            </body>
+          </body>
+          <body name="main_rod_L" pos="0.010000 0.032500 0.000000">
+            <inertial pos="0.038380 -0.000000 0.000051" mass="0.002906" fullinertia="5.717825680e-09 2.904309299e-06 2.899564164e-06 -6.110104895e-23 5.665060066e-09 4.324421333e-24"/>
+            <joint name="j_main_pin_play_L" type="slide" axis="0 1 0" limited="true" range="-0.000350 0.000350" damping="0.04"/>
+            <joint name="j_main_crank_L" type="hinge" axis="0 1 0"/>
+            <geom name="main_rod_vis_L" type="mesh" mesh="m_main_rod" material="mat_machined_steel" euler="0 -0.000000 0" contype="0" conaffinity="0" mass="0"/>
+            <site name="s_mainrod_small_L" pos="0.092000 0 0.000000"/>
+          </body>
+          <body name="eccentric_rod_L" pos="0.000000 0.036000 -0.007000" euler="0 -0.188944 0">
+            <inertial pos="0.023201 -0.000025 0.000018" mass="0.001053" fullinertia="1.168965218e-09 2.568522728e-07 2.566045457e-07 8.730878530e-09 4.511127927e-10 -9.243729108e-12"/>
+            <joint name="j_ecc_pin_play_L" type="slide" axis="0 1 0" limited="true" range="-0.000350 0.000350" damping="0.03"/>
+            <joint name="j_retcrank_L" type="hinge" axis="0 1 0"/>
+            <geom name="ecc_rod_vis_L" type="mesh" mesh="m_eccentric_rod_L" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+            <site name="s_ecc_front_L" pos="0.048000 0 0"/>
+          </body>
+          <site name="s_crank_pin_3_R" pos="0.000000 -0.028000 -0.010000" size="0.002"/>
+          <body name="coupling_rod_R" pos="0.000000 -0.028000 -0.010000">
+            <inertial pos="0.021867 0.000000 0.000073" mass="0.003025" fullinertia="8.301454830e-09 1.267842867e-06 1.261221264e-06 -3.370035187e-13 5.419512059e-11 -7.023239480e-15"/>
+            <joint name="j_coup3_R" type="hinge" axis="0 1 0"/>
+            <geom name="coupling_rod_vis_R" type="mesh" mesh="m_coupling_rod" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+            <body name="coup_bush_2_R" pos="0.046500 0 0">
+              <joint name="j_coup_lat_2_R" type="slide" axis="0 1 0" limited="true" range="-0.0016 0.0016" damping="0.25"/>
+              <geom type="cylinder" fromto="0 -0.001 0  0 0.001 0" size="0.002" density="8500" group="3" rgba="0 0 0 0" contype="0" conaffinity="0"/>
+              <site name="s_coup_hole_2_R" pos="0 0 0"/>
+            </body>
+            <body name="coupling_rod_front_R" pos="0.055000 0 0">
+              <inertial pos="0.020742 0.000000 0.000048" mass="0.001833" fullinertia="3.854478925e-09 3.589952476e-07 3.562302035e-07 -1.221309212e-13 -1.519802290e-09 -1.208516391e-14"/>
+              <joint name="j_coup_knuckle_f_R" type="hinge" axis="0 1 0" limited="true" range="-0.15 0.15" damping="0.0005"/>
+              <geom name="coupling_rod_f_vis_R" type="mesh" mesh="m_coupling_rod_front" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+              <body name="coup_bush_1_R" pos="0.038000 0 0">
+                <joint name="j_coup_lat_1_R" type="slide" axis="0 1 0" limited="true" range="-0.0016 0.0016" damping="0.25"/>
+                <geom type="cylinder" fromto="0 -0.001 0  0 0.001 0" size="0.002" density="8500" group="3" rgba="0 0 0 0" contype="0" conaffinity="0"/>
+                <site name="s_coup_hole_1_R" pos="0 0 0"/>
+              </body>
+            </body>
+            <body name="coupling_rod_rear_R" pos="-0.008500 0 0">
+              <inertial pos="-0.020741 -0.000000 0.000048" mass="0.001833" fullinertia="3.854164291e-09 3.589743925e-07 3.562096094e-07 -5.758648273e-14 1.517774726e-09 7.181691715e-15"/>
+              <joint name="j_coup_knuckle_r_R" type="hinge" axis="0 1 0" limited="true" range="-0.15 0.15" damping="0.0005"/>
+              <geom name="coupling_rod_r_vis_R" type="mesh" mesh="m_coupling_rod_rear" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+              <body name="coup_bush_4_R" pos="-0.038000 0 0">
+                <joint name="j_coup_lat_4_R" type="slide" axis="0 1 0" limited="true" range="-0.0016 0.0016" damping="0.25"/>
+                <geom type="cylinder" fromto="0 -0.001 0  0 0.001 0" size="0.002" density="8500" group="3" rgba="0 0 0 0" contype="0" conaffinity="0"/>
+                <site name="s_coup_hole_4_R" pos="0 0 0"/>
+              </body>
+            </body>
+          </body>
+          <body name="main_rod_R" pos="0.000000 -0.032500 -0.010000">
+            <inertial pos="0.038147 -0.000000 0.004222" mass="0.002906" fullinertia="3.868364361e-08 2.904309299e-06 2.866598346e-06 -6.120907562e-23 -3.071536411e-07 -2.342618902e-24"/>
+            <joint name="j_main_pin_play_R" type="slide" axis="0 1 0" limited="true" range="-0.000350 0.000350" damping="0.04"/>
+            <joint name="j_main_crank_R" type="hinge" axis="0 1 0"/>
+            <geom name="main_rod_vis_R" type="mesh" mesh="m_main_rod" material="mat_machined_steel" euler="0 -0.108911 0" contype="0" conaffinity="0" mass="0"/>
+            <site name="s_mainrod_small_R" pos="0.091455 0 0.010000"/>
+          </body>
+          <body name="eccentric_rod_R" pos="-0.007000 -0.036000 -0.000000" euler="0 -0.067133 0">
+            <inertial pos="0.023201 0.000025 0.000018" mass="0.001053" fullinertia="1.168965295e-09 2.568523050e-07 2.566045779e-07 -8.730879043e-09 4.511126452e-10 9.243725138e-12"/>
+            <joint name="j_ecc_pin_play_R" type="slide" axis="0 1 0" limited="true" range="-0.000350 0.000350" damping="0.03"/>
+            <joint name="j_retcrank_R" type="hinge" axis="0 1 0"/>
+            <geom name="ecc_rod_vis_R" type="mesh" mesh="m_eccentric_rod_R" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+            <site name="s_ecc_front_R" pos="0.048000 0 0"/>
+          </body>
+        </body>
+      </body>
+      <body name="axlebox_4" pos="-0.046500 0 0">
+        <inertial pos="0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 4.120193964e-21 -1.750421357e-25 -9.044771781e-22"/>
+        <joint name="j_susp_z4" type="slide" axis="0 0 1" springref="-0.0017" limited="true" range="-0.0035 0.0035" stiffness="950" damping="14"/>
+        <joint name="j_lat_y4" type="slide" axis="0 1 0" limited="true" range="-0.000400 0.000400" stiffness="85" damping="3.5"/>
+        <geom name="abox_vis_4_L" type="mesh" mesh="m_driving_axlebox_L" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <geom name="abox_vis_4_R" type="mesh" mesh="m_driving_axlebox_R" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <body name="wheelset_4" pos="0 0 0">
+          <joint name="j_wheel_4" type="hinge" axis="0 1 0" damping="0.0012"/>
+          <inertial pos="-0.000460 -0.000000 0.000460" mass="0.075844" fullinertia="4.556984779e-05 1.745413362e-05 4.556984779e-05 7.932107547e-07 -1.603081488e-08 7.932107547e-07"/>
+          <geom type="cylinder" fromto="0 -0.022500 0  0 0.022500 0" size="0.0028" rgba="0.3 0.3 0.3 1" mass="0" contype="0" conaffinity="0"/>
+          <geom name="drv_4_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_4_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_4_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+          <geom name="drv_4_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+          <geom name="drv_4_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_4_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_4_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+          <geom name="drv_4_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+          <geom name="wheel_vis_4_L" type="mesh" mesh="m_driving_wheel_L" material="mat_black_iron" pos="0 0.023300 0" contype="0" conaffinity="0" mass="0"/>
+          <geom name="wheel_vis_4_R" type="mesh" mesh="m_driving_wheel_R" material="mat_black_iron" pos="0 -0.023300 0" contype="0" conaffinity="0" mass="0"/>
+          <site name="s_crank_pin_4_L" pos="0.010000 0.028000 0.000000" size="0.002"/>
+          <site name="s_crank_pin_4_R" pos="0.000000 -0.028000 -0.010000" size="0.002"/>
+        </body>
+      </body>
+      <body name="equalizer_bay_1_L" pos="0.069750 0.010700 0.012100">
+        <inertial pos="-0.000000 -0.000000 -0.000033" mass="0.000794" fullinertia="1.000000000e-09 5.346630204e-08 5.305338153e-08 -3.091332779e-23 1.067189815e-22 7.354807362e-25"/>
+        <joint name="j_eq_bay_1_L" type="hinge" axis="0 1 0" limited="true" range="-0.16 0.16" armature="0.0025" damping="0.015"/>
+        <geom name="eq_lever_vis_1_L" type="mesh" mesh="m_equalizer_lever_3_4" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="equalizer_bay_1_R" pos="0.069750 -0.010700 0.012100">
+        <inertial pos="-0.000000 -0.000000 -0.000033" mass="0.000794" fullinertia="1.000000000e-09 5.346630204e-08 5.305338153e-08 -3.091332779e-23 1.067189815e-22 7.354807362e-25"/>
+        <joint name="j_eq_bay_1_R" type="hinge" axis="0 1 0" limited="true" range="-0.16 0.16" armature="0.0025" damping="0.015"/>
+        <geom name="eq_lever_vis_1_R" type="mesh" mesh="m_equalizer_lever_3_4" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="equalizer_bay_2_L" pos="0.023250 0.010700 0.012100">
+        <inertial pos="-0.000000 -0.000000 -0.000033" mass="0.000794" fullinertia="1.000000000e-09 5.346630204e-08 5.305338153e-08 -3.091332779e-23 1.067189815e-22 7.354807362e-25"/>
+        <joint name="j_eq_bay_2_L" type="hinge" axis="0 1 0" limited="true" range="-0.16 0.16" armature="0.0025" damping="0.015"/>
+        <geom name="eq_lever_vis_2_L" type="mesh" mesh="m_equalizer_lever_3_4" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="equalizer_bay_2_R" pos="0.023250 -0.010700 0.012100">
+        <inertial pos="-0.000000 -0.000000 -0.000033" mass="0.000794" fullinertia="1.000000000e-09 5.346630204e-08 5.305338153e-08 -3.091332779e-23 1.067189815e-22 7.354807362e-25"/>
+        <joint name="j_eq_bay_2_R" type="hinge" axis="0 1 0" limited="true" range="-0.16 0.16" armature="0.0025" damping="0.015"/>
+        <geom name="eq_lever_vis_2_R" type="mesh" mesh="m_equalizer_lever_3_4" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="equalizer_bay_3_L" pos="-0.023250 0.010700 0.012100">
+        <inertial pos="-0.000000 -0.000000 -0.000033" mass="0.000794" fullinertia="1.000000000e-09 5.346630204e-08 5.305338153e-08 -3.091332779e-23 1.067189815e-22 7.354807362e-25"/>
+        <joint name="j_eq_bay_3_L" type="hinge" axis="0 1 0" limited="true" range="-0.16 0.16" armature="0.0025" damping="0.015"/>
+        <geom name="eq_lever_vis_3_L" type="mesh" mesh="m_equalizer_lever_3_4" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="equalizer_bay_3_R" pos="-0.023250 -0.010700 0.012100">
+        <inertial pos="-0.000000 -0.000000 -0.000033" mass="0.000794" fullinertia="1.000000000e-09 5.346630204e-08 5.305338153e-08 -3.091332779e-23 1.067189815e-22 7.354807362e-25"/>
+        <joint name="j_eq_bay_3_R" type="hinge" axis="0 1 0" limited="true" range="-0.16 0.16" armature="0.0025" damping="0.015"/>
+        <geom name="eq_lever_vis_3_R" type="mesh" mesh="m_equalizer_lever_3_4" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="leading_truck_arm" pos="0.106000 0 -0.008500">
+        <joint name="j_leading_yaw" type="hinge" axis="0 0 1" limited="true" range="-0.30 0.30" stiffness="0.20" damping="0.16"/>
+        <inertial pos="0.039218 -0.000000 0.000311" mass="0.027729" fullinertia="2.930145161e-06 1.643547519e-05 1.918372518e-05 1.619263354e-16 -7.972004066e-08 3.088749426e-17"/>
+        <joint name="j_leading_susp" type="slide" axis="0 0 1" springref="-0.0069" limited="true" range="-0.0045 0.0045" stiffness="1050" damping="16"/>
+        <joint name="j_leading_roll" type="hinge" axis="1 0 0" limited="true" range="-0.045 0.045" armature="0.0006" stiffness="0.35" damping="0.04"/>
+        <joint name="j_leading_lat" type="slide" axis="0 1 0" limited="true" range="-0.00022 0.00022" armature="0.002" stiffness="650" damping="8.0"/>
+        <geom name="lead_frame_vis" type="mesh" mesh="m_leading_truck_frame" material="mat_black_iron" pos="0.062000 0 0" contype="0" conaffinity="0" mass="0"/>
+        <body name="leading_wheelset" pos="0.062000 0 0">
+          <joint name="j_leading_spin" type="hinge" axis="0 1 0" damping="0.0004"/>
+          <inertial pos="-0.000000 -0.000000 -0.000000" mass="0.012374" fullinertia="7.177224181e-06 1.484371856e-06 7.177224181e-06 1.252833312e-19 4.883267352e-20 7.421535502e-21"/>
+          <geom name="lead_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="lead_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="lead_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+          <geom name="lead_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+          <geom name="lead_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="lead_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="lead_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+          <geom name="lead_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+          <geom name="lead_axle_rod_vis" type="cylinder" fromto="0 -0.0245 0  0 0.0245 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+          <geom name="lead_vis_L" type="mesh" mesh="m_truck_wheel_L" material="mat_black_iron" pos="0 0.022880 0" contype="0" conaffinity="0" mass="0"/>
+          <geom name="lead_vis_R" type="mesh" mesh="m_truck_wheel_R" material="mat_black_iron" pos="0 -0.022880 0" contype="0" conaffinity="0" mass="0"/>
+        </body>
+      </body>
+      <body name="trailing_truck_arm" pos="-0.064000 0 -0.008500">
+        <joint name="j_trailing_yaw" type="hinge" axis="0 0 1" limited="true" range="-0.26 0.26" stiffness="0.40" damping="0.05"/>
+        <inertial pos="-0.032234 0.000000 0.000815" mass="0.028551" fullinertia="1.233315266e-05 9.641520254e-06 2.164809097e-05 -1.547000100e-18 3.155474936e-07 4.280101658e-19"/>
+        <joint name="j_trailing_susp" type="slide" axis="0 0 1" springref="-0.0055" limited="true" range="-0.004 0.004" stiffness="1050" damping="16"/>
+        <geom name="trail_frame_vis" type="mesh" mesh="m_trailing_truck_frame" material="mat_black_iron" pos="0 0 0" contype="0" conaffinity="0" mass="0"/>
+        <body name="trailing_wheelset" pos="-0.054000 0 0">
+          <joint name="j_trailing_spin" type="hinge" axis="0 1 0" damping="0.0004"/>
+          <inertial pos="-0.000000 -0.000000 -0.000000" mass="0.012374" fullinertia="7.177224181e-06 1.484371856e-06 7.177224181e-06 1.252833312e-19 4.883267352e-20 7.421535502e-21"/>
+          <geom name="trail_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="trail_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="trail_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+          <geom name="trail_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+          <geom name="trail_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="trail_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="trail_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+          <geom name="trail_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+          <geom name="trail_axle_rod_vis" type="cylinder" fromto="0 -0.0245 0  0 0.0245 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+          <geom name="trail_vis_L" type="mesh" mesh="m_truck_wheel_L" material="mat_black_iron" pos="0 0.022880 0" contype="0" conaffinity="0" mass="0"/>
+          <geom name="trail_vis_R" type="mesh" mesh="m_truck_wheel_R" material="mat_black_iron" pos="0 -0.022880 0" contype="0" conaffinity="0" mass="0"/>
+        </body>
+      </body>
+      <body name="axle_pump_ram" pos="-0.022000 0 0">
+        <inertial pos="-0.007287 -0.000000 -0.000000" mass="0.001437" fullinertia="2.365301622e-09 4.352904734e-08 4.340683320e-08 2.648658140e-19 6.630721475e-17 -4.330460600e-21"/>
+        <joint name="j_pump_ram" type="slide" axis="1 0 0" limited="true" range="-0.012 0.012" damping="0.4"/>
+        <geom name="axle_pump_ram_vis" type="mesh" mesh="m_axle_pump_ram" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <site name="s_pump_pin" pos="0 0 0"/>
+      </body>
+      <body name="pump_ball_suction" pos="-0.038800 0.000000 -0.002100">
+        <inertial pos="-0.000000 -0.000000 0.000000" mass="0.000112" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 5.241424169e-27 -3.479162043e-43 3.814394488e-44"/>
+        <joint name="j_pump_ball_suc" type="slide" axis="0 0 1" limited="true" range="0.0 0.0009" armature="0.0015" stiffness="0.08" damping="0.012"/>
+        <geom name="pump_ball_suction_vis" type="mesh" mesh="m_pump_check_ball" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="pump_ball_delivery" pos="-0.038800 0.000000 0.006300">
+        <inertial pos="-0.000000 -0.000000 0.000000" mass="0.000112" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 5.241424169e-27 -3.479162043e-43 3.814394488e-44"/>
+        <joint name="j_pump_ball_del" type="slide" axis="0 0 1" limited="true" range="0.0 0.0009" armature="0.0015" stiffness="0.08" damping="0.012"/>
+        <geom name="pump_ball_delivery_vis" type="mesh" mesh="m_pump_check_ball" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="reverser_shaft" pos="0.025500 0 0.026500">
+        <inertial pos="0.000784 0.002485 -0.005407" mass="0.005104" fullinertia="3.916407341e-06 2.992787413e-07 3.724949984e-06 9.937139727e-09 -4.979803874e-08 -1.074555101e-07"/>
+        <joint name="j_reverser" type="hinge" axis="0 1 0" limited="true" range="-0.48 0.48" armature="0.0015" damping="0.6"/>
+        <geom name="reverser_shaft_vis" type="mesh" mesh="m_reverser_shaft" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+        <body name="lift_link_L" pos="0.011000 0.036000 0" euler="0 0.000116 0">
+          <inertial pos="0.000000 -0.000889 -0.005202" mass="0.000669" fullinertia="1.594940221e-08 1.500775744e-08 1.729589312e-09 -6.108721349e-22 -1.009399261e-22 -2.721352001e-09"/>
+          <joint name="j_lift_L" type="hinge" axis="0 1 0"/>
+          <geom name="lift_link_vis_L" type="mesh" mesh="m_lift_link_L" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+          <site name="s_lift_bot_L" pos="0 0 -0.011000"/>
+        </body>
+        <body name="lift_link_R" pos="0.011000 -0.036000 0" euler="0 0.003047 0">
+          <inertial pos="0.000000 0.000889 -0.005202" mass="0.000669" fullinertia="1.594940221e-08 1.500775744e-08 1.729589312e-09 5.641710035e-22 1.078323240e-22 2.721352001e-09"/>
+          <joint name="j_lift_R" type="hinge" axis="0 1 0"/>
+          <geom name="lift_link_vis_R" type="mesh" mesh="m_lift_link_R" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+          <site name="s_lift_bot_R" pos="0 0 -0.011000"/>
+        </body>
+      </body>
+      <body name="cab_reach_rod" pos="0.025500 0.032500 0.033500">
+        <inertial pos="-0.072258 0.000003 0.009020" mass="0.003007" fullinertia="3.552031069e-08 6.810547079e-06 6.776393673e-06 4.228491654e-10 3.038895004e-07 3.187700473e-13"/>
+        <joint name="j_reach_rod" type="slide" axis="1 0 0" limited="true" range="-0.005 0.005" damping="0.02"/>
+        <geom name="cab_reach_rod_vis" type="mesh" mesh="m_cab_reach_rod" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="drain_cock_linkage" pos="0.124200 0.000000 -0.003800">
+        <inertial pos="0.000875 -0.000000 -0.005022" mass="0.006382" fullinertia="3.902598242e-06 2.908552047e-07 3.722895596e-06 1.061172059e-13 2.348200166e-08 -8.842698027e-14"/>
+        <joint name="j_drain_cock" type="hinge" axis="0 -1 0" limited="true" range="-0.32 0.32" stiffness="0.08" damping="0.008"/>
+        <geom name="drain_cock_vis" type="mesh" mesh="m_drain_cock_linkage" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="drain_pull_rod" pos="0 0 0">
+        <inertial pos="-0.015356 -0.017947 0.008508" mass="0.002835" fullinertia="1.599162707e-09 1.943685824e-05 1.943748617e-05 -4.919905341e-08 2.752177122e-09 -4.631711235e-12"/>
+        <joint name="j_drain_pull" type="slide" axis="1 0 0" limited="true" range="-0.005 0.005" damping="0.02"/>
+        <geom name="drain_pull_rod_vis" type="mesh" mesh="m_drain_pull_rod" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="cab_reverser_wheel" pos="-0.127500 0.032500 0.044000">
+        <inertial pos="-0.004811 -0.000000 0.000068" mass="0.001015" fullinertia="4.032842757e-09 6.033767626e-08 5.711240930e-08 2.413558134e-24 6.714783600e-10 1.687611996e-23"/>
+        <joint name="j_reverser_wheel" type="hinge" axis="1 0 0" damping="0.002"/>
+        <geom name="cab_reverser_wheel_vis" type="mesh" mesh="m_cab_reverser_wheel" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="cab_reverser_nut" pos="-0.127500 0.032500 0.044000">
+        <inertial pos="0.001311 -0.000000 -0.000000" mass="0.000494" fullinertia="1.000000000e-09 2.789661393e-09 2.800771732e-09 8.225475831e-25 1.100754461e-23 2.404075862e-26"/>
+        <joint name="j_reverser_nut" type="slide" axis="1 0 0" limited="true" range="-0.005 0.005" damping="0.02"/>
+        <geom name="cab_reverser_nut_vis" type="mesh" mesh="m_cab_reverser_nut" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="cab_regulator_lever" pos="-0.119200 0.008200 0.066500">
+        <inertial pos="-0.003820 -0.000159 0.000023" mass="0.000554" fullinertia="1.328493967e-09 1.409598810e-08 1.475863940e-08 1.963061546e-09 -4.771408248e-11 -4.488341845e-12"/>
+        <joint name="j_cab_regulator" type="hinge" axis="0 -1 0" limited="true" range="0.0 1.25" damping="0.003"/>
+        <geom name="cab_regulator_vis" type="mesh" mesh="m_cab_regulator_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="cab_blower_wheel" pos="-0.121600 0.000000 0.066500">
+        <inertial pos="0.000324 -0.000000 -0.000000" mass="0.000358" fullinertia="2.146522619e-09 1.368195099e-09 1.368195099e-09 -1.198407285e-23 -1.964450219e-23 -2.483714393e-24"/>
+        <joint name="j_cab_blower" type="hinge" axis="1 0 0" limited="true" range="-6.28 6.28" damping="0.001"/>
+        <geom name="cab_blower_vis" type="mesh" mesh="m_cab_blower_wheel" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="cab_whistle_lever" pos="-0.115600 0.015500 0.062200">
+        <inertial pos="-0.003521 -0.000000 -0.001528" mass="0.000249" fullinertia="1.000000000e-09 3.986221371e-09 3.470912428e-09 -8.499185847e-25 -1.037378631e-09 6.254278069e-26"/>
+        <joint name="j_cab_whistle" type="hinge" axis="0 -1 0" limited="true" range="0.0 0.42" stiffness="0.04" damping="0.002"/>
+        <geom name="cab_whistle_vis" type="mesh" mesh="m_cab_whistle_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="cab_sight_drain" pos="-0.118500 -0.031300 0.028800">
+        <inertial pos="-0.000000 -0.000000 0.000286" mass="0.000458" fullinertia="1.208264312e-09 1.193377658e-09 1.000000000e-09 3.815071624e-23 -1.418129263e-23 7.114516755e-24"/>
+        <joint name="j_cab_sight_drain" type="slide" axis="0 0 -1" limited="true" range="0.0 0.0018" stiffness="0.25" damping="0.008"/>
+        <geom name="cab_sight_drain_vis" type="mesh" mesh="m_cab_sight_drain" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="cab_pressure_needle" pos="-0.123050 -0.016500 0.066800">
+        <inertial pos="-0.000135 -0.000000 0.000586" mass="0.000047" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 -2.588637850e-26 5.876322756e-12 -3.462069070e-25"/>
+        <joint name="j_cab_pg_needle" type="hinge" axis="1 0 0" limited="true" range="-2.5 2.5" damping="0.0005"/>
+        <geom name="cab_pg_needle_vis" type="mesh" mesh="m_cab_pressure_needle" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="cab_blowdown_screw" pos="-0.115500 0.020600 0.015800">
+        <inertial pos="-0.000000 0.000174 0.000000" mass="0.000306" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 -7.870743673e-25 1.801503391e-24 -3.809565128e-25"/>
+        <joint name="j_cab_blowdown" type="hinge" axis="0 1 0" limited="true" range="-6.28 6.28" damping="0.001"/>
+        <geom name="cab_blowdown_vis" type="mesh" mesh="m_cab_blowdown_screw" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="cab_firebox_door" pos="-0.115400 0.000000 0.021800">
+        <inertial pos="-0.000210 0.000006 0.005854" mass="0.003134" fullinertia="8.386285529e-08 5.111619291e-08 3.624395380e-08 2.794946278e-11 1.073917563e-09 -1.259938890e-10"/>
+        <joint name="j_cab_fire_door" type="hinge" axis="0 -1 0" limited="true" range="0.0 1.45" frictionloss="0.0004" damping="0.0025"/>
+        <geom name="cab_fire_door_vis" type="mesh" mesh="m_cab_firebox_door" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="cab_bypass_lever" pos="-0.135500 0.008500 0.022400">
+        <inertial pos="-0.000771 0.001790 -0.000387" mass="0.001451" fullinertia="2.559210467e-08 1.232468875e-08 2.489195101e-08 8.018003004e-09 1.058244817e-09 -2.425795897e-09"/>
+        <joint name="j_cab_bypass" type="hinge" axis="0 0 1" limited="true" range="-1.57 1.57" damping="0.002"/>
+        <geom name="cab_bypass_vis" type="mesh" mesh="m_cab_bypass_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="cab_drain_lever" pos="-0.133500 -0.021000 0.015000">
+        <inertial pos="-0.005886 0.000015 0.008172" mass="0.002421" fullinertia="6.226346683e-08 7.909461288e-08 2.616106858e-08 -2.145699389e-10 2.897298525e-08 5.355637492e-10"/>
+        <joint name="j_cab_drain" type="hinge" axis="0 1 0" limited="true" range="-0.42 0.42" damping="0.0004"/>
+        <geom name="cab_drain_lever_vis" type="mesh" mesh="m_cab_drain_lever" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="dome_lid_29_12" pos="0.062400 0.000000 0.091850">
+        <inertial pos="-0.005861 -0.000000 0.000174" mass="0.001591" fullinertia="1.394358935e-08 1.557887881e-08 2.886546160e-08 8.476335577e-21 5.098974182e-11 -1.000710621e-22"/>
+        <joint name="j_dome_lid" type="hinge" axis="0 1 0" limited="true" range="0.0 1.35" damping="0.004"/>
+        <geom name="dome_lid_vis" type="mesh" mesh="m_dome_lid_29_12" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="safety_poppet_1" pos="-0.046000 0.000000 0.075500">
+        <inertial pos="0.000000 -0.000000 0.001614" mass="0.000153" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 -2.585622707e-27 -2.266889711e-24 -4.077892233e-27"/>
+        <joint name="j_safety_poppet_1" type="slide" axis="0 0 1" limited="true" range="0.0 0.0008" stiffness="15.0" damping="0.015"/>
+        <geom name="safety_poppet_vis_1" type="mesh" mesh="m_safety_valve_poppet" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="safety_poppet_2" pos="-0.033000 0.000000 0.075500">
+        <inertial pos="0.000000 -0.000000 0.001614" mass="0.000153" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 -2.585622707e-27 -2.266889711e-24 -4.077892233e-27"/>
+        <joint name="j_safety_poppet_2" type="slide" axis="0 0 1" limited="true" range="0.0 0.0008" stiffness="15.0" damping="0.015"/>
+        <geom name="safety_poppet_vis_2" type="mesh" mesh="m_safety_valve_poppet" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <geom name="cyl_housing_L" type="mesh" mesh="m_cylinder_block_L" material="mat_black_iron" pos="0.126000 0.032500 0.000000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="slide_bar_vis_L" type="mesh" mesh="m_slide_bar_L" material="mat_machined_steel" pos="0.126000 0.032500 0.000000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="piston_tail_sheath_vis_L" type="mesh" mesh="m_piston_tail_sheath_L" material="mat_black_iron" pos="0.126000 0.032500 0.000000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="valve_spindle_sheath_vis_L" type="mesh" mesh="m_valve_spindle_sheath_L" material="mat_black_iron" pos="0.126000 0.032500 0.000000" mass="0" contype="0" conaffinity="0"/>
+      <body name="piston_crosshead_L" pos="0.102000 0.032500 0.000000">
+        <inertial pos="0.025216 0.000141 0.000432" mass="0.009754" fullinertia="2.057960835e-07 2.940049213e-06 2.887593300e-06 3.539626828e-08 1.207136233e-07 5.693752383e-09"/>
+        <joint name="j_piston_L" type="slide" axis="1 0 0" limited="true" range="-0.022000 0.002000" damping="0.35" frictionloss="0.12"/>
+        <geom name="piston_ch_vis_L" type="mesh" mesh="m_piston_crosshead_L" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <site name="s_crosshead_pin_L" pos="0 0 0"/>
+        <body name="union_link_L" pos="0.000000 0.003500 -0.009500" euler="0 -0.066300 0">
+          <inertial pos="0.007318 0.000031 -0.000000" mass="0.000898" fullinertia="1.752848365e-09 3.444628993e-08 3.512016006e-08 -6.458548571e-11 -1.003902991e-22 5.343411668e-24"/>
+          <joint name="j_union_L" type="hinge" axis="0 1 0"/>
+          <geom name="union_link_vis_L" type="mesh" mesh="m_union_link_L" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+          <body name="comb_lever_L" pos="0.015000 0 0" euler="0 -0.200922 0">
+            <inertial pos="0.000000 0.000000 0.013005" mass="0.000788" fullinertia="5.926730420e-08 5.952156338e-08 1.000000000e-09 9.505492415e-25 2.359591011e-22 -3.182922406e-23"/>
+            <joint name="j_comb_L" type="hinge" axis="0 1 0"/>
+            <geom name="comb_lever_vis_L" type="mesh" mesh="m_combination_lever" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+            <site name="s_comb_radius_L" pos="0 0 0.024500"/>
+            <site name="s_comb_valve_L" pos="0 0 0.028000"/>
+          </body>
+        </body>
+      </body>
+      <body name="slide_valve_L" pos="0.109574 0.036000 0.018500">
+        <inertial pos="0.017577 -0.000000 -0.000702" mass="0.003484" fullinertia="1.955573511e-08 1.407718066e-07 1.446432696e-07 -1.060680430e-11 5.190398318e-09 4.233973391e-13"/>
+        <joint name="j_valve_L" type="slide" axis="1 0 0" limited="true" range="-0.008 0.008" damping="0.12" frictionloss="0.04"/>
+        <geom name="valve_vis_L" type="mesh" mesh="m_slide_valve_L" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <site name="s_valve_clevis_L" pos="0 0 0"/>
+      </body>
+      <body name="expansion_link_L" pos="0.046500 0.036000 0.015500">
+        <inertial pos="0.000282 0.001003 -0.003035" mass="0.001451" fullinertia="7.667097728e-08 7.468653061e-08 6.196348902e-09 3.294868405e-10 7.245120032e-10 -2.694564828e-09"/>
+        <joint name="j_explink_L" type="hinge" axis="0 1 0"/>
+        <geom name="exp_link_vis_L" type="mesh" mesh="m_expansion_link_L" material="mat_machined_steel" euler="0 0.028118 0" contype="0" conaffinity="0" mass="0"/>
+        <site name="s_exp_tail_L" pos="0.000646 0 -0.013485"/>
+        <body name="die_block_L" pos="-0.000001 0 -0.000051" euler="0 -0.000794 0">
+          <inertial pos="-0.000000 -0.000246 -0.000000" mass="0.000266" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 3.601392869e-24 -5.682971467e-26 1.524652448e-25"/>
+          <joint name="j_die_shift_L" type="hinge" axis="0 1 0" pos="0.063975 0 -0.001799" ref="-0.000794" limited="true" range="-0.101738 0.101738" damping="0.00035"/>
+          <geom name="die_vis_L" type="mesh" mesh="m_die_block_L" material="mat_brass" euler="0 0.028118 0" contype="0" conaffinity="0" mass="0"/>
+          <body name="radius_rod_L" pos="0 0 0" euler="0 0.005872 0">
+            <inertial pos="0.030255 -0.001535 -0.000000" mass="0.001500" fullinertia="1.868260955e-09 8.102364465e-07 8.106485225e-07 -1.865715265e-08 -3.280813617e-21 -1.107953285e-26"/>
+            <joint name="j_radius_L" type="hinge" axis="0 1 0"/>
+            <geom name="radius_rod_vis_L" type="mesh" mesh="m_radius_rod_L" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+            <site name="s_rad_front_L" pos="0.064000 0 0"/>
+            <site name="s_rad_lift_L" pos="-0.010000 0 0"/>
+          </body>
+        </body>
+      </body>
+      <geom name="cyl_housing_R" type="mesh" mesh="m_cylinder_block_R" material="mat_black_iron" pos="0.126000 -0.032500 0.000000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="slide_bar_vis_R" type="mesh" mesh="m_slide_bar_R" material="mat_machined_steel" pos="0.126000 -0.032500 0.000000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="piston_tail_sheath_vis_R" type="mesh" mesh="m_piston_tail_sheath_R" material="mat_black_iron" pos="0.126000 -0.032500 0.000000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="valve_spindle_sheath_vis_R" type="mesh" mesh="m_valve_spindle_sheath_R" material="mat_black_iron" pos="0.126000 -0.032500 0.000000" mass="0" contype="0" conaffinity="0"/>
+      <body name="piston_crosshead_R" pos="0.091455 -0.032500 0.000000">
+        <inertial pos="0.025216 -0.000141 0.000432" mass="0.009754" fullinertia="2.057960835e-07 2.940049213e-06 2.887593300e-06 -3.539626828e-08 1.207136233e-07 -5.693752383e-09"/>
+        <joint name="j_piston_R" type="slide" axis="1 0 0" limited="true" range="-0.011455 0.012545" damping="0.35" frictionloss="0.12"/>
+        <geom name="piston_ch_vis_R" type="mesh" mesh="m_piston_crosshead_R" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <site name="s_crosshead_pin_R" pos="0 0 0"/>
+        <body name="union_link_R" pos="0.000000 -0.003500 -0.009500" euler="0 -0.025238 0">
+          <inertial pos="0.007318 -0.000031 -0.000000" mass="0.000898" fullinertia="1.752848365e-09 3.444628993e-08 3.512016006e-08 6.458548571e-11 -9.654845959e-23 -1.750321365e-24"/>
+          <joint name="j_union_R" type="hinge" axis="0 1 0"/>
+          <geom name="union_link_vis_R" type="mesh" mesh="m_union_link_R" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+          <body name="comb_lever_R" pos="0.015000 0 0" euler="0 0.189857 0">
+            <inertial pos="0.000000 0.000000 0.013005" mass="0.000788" fullinertia="5.926730420e-08 5.952156338e-08 1.000000000e-09 9.505492415e-25 2.359591011e-22 -3.182922406e-23"/>
+            <joint name="j_comb_R" type="hinge" axis="0 1 0"/>
+            <geom name="comb_lever_vis_R" type="mesh" mesh="m_combination_lever" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+            <site name="s_comb_radius_R" pos="0 0 0.024500"/>
+            <site name="s_comb_valve_R" pos="0 0 0.028000"/>
+          </body>
+        </body>
+      </body>
+      <body name="slide_valve_R" pos="0.111039 -0.036000 0.018500">
+        <inertial pos="0.017577 0.000000 -0.000702" mass="0.003484" fullinertia="1.955573511e-08 1.407718066e-07 1.446432696e-07 1.060680430e-11 5.190398318e-09 -4.233973391e-13"/>
+        <joint name="j_valve_R" type="slide" axis="1 0 0" limited="true" range="-0.008 0.008" damping="0.12" frictionloss="0.04"/>
+        <geom name="valve_vis_R" type="mesh" mesh="m_slide_valve_R" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <site name="s_valve_clevis_R" pos="0 0 0"/>
+      </body>
+      <body name="expansion_link_R" pos="0.046500 -0.036000 0.015500">
+        <inertial pos="-0.001140 -0.001003 -0.002827" mass="0.001451" fullinertia="6.244914563e-08 7.468653061e-08 2.041818056e-08 9.425065428e-10 -2.829386369e-08 2.545765623e-09"/>
+        <joint name="j_explink_R" type="hinge" axis="0 1 0"/>
+        <geom name="exp_link_vis_R" type="mesh" mesh="m_expansion_link_R" material="mat_machined_steel" euler="0 0.504370 0" contype="0" conaffinity="0" mass="0"/>
+        <site name="s_exp_tail_R" pos="-0.005608 0 -0.012280"/>
+        <body name="die_block_R" pos="-0.000034 0 -0.000061" euler="0 -0.001091 0">
+          <inertial pos="-0.000000 0.000246 -0.000000" mass="0.000266" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 1.150401867e-24 1.677482299e-26 -9.018444875e-25"/>
+          <joint name="j_die_shift_R" type="hinge" axis="0 1 0" pos="0.056031 0 -0.030928" ref="-0.001091" limited="true" range="-0.101738 0.101738" damping="0.00035"/>
+          <geom name="die_vis_R" type="mesh" mesh="m_die_block_R" material="mat_brass" euler="0 0.504370 0" contype="0" conaffinity="0" mass="0"/>
+          <body name="radius_rod_R" pos="0 0 0" euler="0 0.007209 0">
+            <inertial pos="0.030255 0.001535 -0.000000" mass="0.001500" fullinertia="1.868260955e-09 8.102364465e-07 8.106485225e-07 1.865715265e-08 -3.743458320e-21 2.217706126e-23"/>
+            <joint name="j_radius_R" type="hinge" axis="0 1 0"/>
+            <geom name="radius_rod_vis_R" type="mesh" mesh="m_radius_rod_R" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+            <site name="s_rad_front_R" pos="0.064000 0 0"/>
+            <site name="s_rad_lift_R" pos="-0.010000 0 0"/>
+          </body>
+        </body>
+      </body>
+      <body name="drawbar_8_8" pos="-0.146000 0 -0.006">
+        <joint name="j_drawbar_yaw" type="hinge" axis="0 0 1" armature="0.0005" damping="0.02"/>
+        <joint name="j_drawbar_pitch" type="hinge" axis="0 1 0" armature="0.0005" damping="0.02"/>
+        <geom name="drawbar_bar_vis" type="box" pos="-0.017000 0.000000 0" euler="0 0 3.141593" size="0.017000 0.002800 0.001250" material="mat_machined_steel" rgba="0.72 0.74 0.77 1" density="7930.0" contype="0" conaffinity="0"/>
+        <geom name="drawbar_eye_f_vis" type="cylinder" fromto="0 0 -0.001500  0 0 0.001500" size="0.003500" material="mat_machined_steel" rgba="0.72 0.74 0.77 1" mass="0" contype="0" conaffinity="0"/>
+        <geom name="drawbar_eye_r_vis" type="cylinder" fromto="-0.034000 0.000000 -0.001500  -0.034000 0.000000 0.001500" size="0.003200" material="mat_machined_steel" rgba="0.72 0.74 0.77 1" mass="0" contype="0" conaffinity="0"/>
+        <geom name="umb_hose_fuel" type="mesh" mesh="m_umb_hose_fuel" material="mat_silicone_hose" mass="0" contype="0" conaffinity="0"/>
+        <geom name="umb_hose_feed" type="mesh" mesh="m_umb_hose_feed" material="mat_viton_hose" mass="0" contype="0" conaffinity="0"/>
+        <geom name="umb_union_34_8_vis" type="mesh" mesh="m_umb_union_34_8" material="mat_brass" mass="0" contype="0" conaffinity="0"/>
+        <geom name="umb_hose_return" type="mesh" mesh="m_umb_hose_return" material="mat_viton_hose" mass="0" contype="0" conaffinity="0"/>
+        <site name="s_drawbar_rear" pos="-0.034000 0.000000 0"/>
+      </body>
+    </body>
+    <body name="tender_body" pos="-0.282000 0.000000 0.021800" euler="0 0 0.000000">
+      <freejoint name="tender_free"/>
+      <inertial pos="-0.003546 0.000130 0.031398" mass="1.680529" fullinertia="1.860079103e-03 7.269387390e-03 7.819358331e-03 1.917477441e-05 -1.140412086e-04 -1.777813479e-06"/>
+      <site name="s_tender_front_pin" pos="0.102000 0 -0.001700"/>
+      <geom name="tender_internals_vis" type="mesh" mesh="m_tender_internals" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      <geom name="tender_body_vis" type="mesh" mesh="m_tender_body" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      <geom name="tender_rear_ladder_vis" type="mesh" mesh="m_tender_rear_ladder" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      <body name="tender_hp_links" pos="-0.047000 0.004000 0.031700">
+        <inertial pos="0.010000 -0.000000 0.000000" mass="0.002498" fullinertia="1.321935324e-08 1.356049445e-07 1.414585606e-07 -8.215406697e-17 -4.768274632e-23 2.370548193e-24"/>
+        <joint name="j_tender_hp_link" type="hinge" axis="0 1 0" limited="true" range="-0.35 0.35" damping="0.004"/>
+        <geom name="tender_hp_links_vis" type="mesh" mesh="m_tender_hp_links" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <body name="tender_handpump_lever" pos="0.020000 0.000000 0.000000">
+          <inertial pos="-0.000000 -0.000000 0.008638" mass="0.003037" fullinertia="3.864116896e-07 3.877151441e-07 5.409488314e-09 4.129123427e-25 7.160168810e-22 1.251682397e-25"/>
+          <joint name="j_tender_handpump" type="hinge" axis="0 1 0" limited="true" range="-0.45 0.45" damping="0.008"/>
+          <geom name="tender_handpump_vis" type="mesh" mesh="m_tender_handpump_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+          <site name="s_hp_lever_bot" pos="0.000000 0.000000 -0.010000"/>
+        </body>
+      </body>
+      <body name="tender_handpump_ram" pos="-0.027000 0.004000 0.021700">
+        <inertial pos="-0.011391 -0.000000 -0.000000" mass="0.008312" fullinertia="5.188922227e-08 5.019156062e-07 5.068230454e-07 5.393434290e-20 1.155543870e-14 -8.561824378e-21"/>
+        <joint name="j_tender_hp_ram" type="slide" axis="1 0 0" limited="true" range="-0.008 0.008" damping="0.04"/>
+        <geom name="tender_hp_ram_vis" type="mesh" mesh="m_tender_handpump_ram" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <site name="s_hp_ram_pin" pos="0.000000 0.000000 0.000000"/>
+      </body>
+      <body name="tender_drain_plug" pos="-0.041000 -0.010300 0.015200">
+        <inertial pos="0.000000 -0.000000 0.016040" mass="0.002940" fullinertia="6.389153215e-07 6.389153215e-07 7.465439408e-09 -9.307061808e-25 -2.467465836e-22 -8.125311596e-24"/>
+        <joint name="j_tender_drain_plug" type="slide" axis="0 0 1" limited="true" range="0.0 0.0055" damping="0.05"/>
+        <geom name="tender_drain_plug_vis" type="mesh" mesh="m_tender_drain_plug" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="tender_coal_cover" pos="-0.045000 0.000000 0.063800">
+        <inertial pos="-0.001144 0.000000 0.001404" mass="0.023703" fullinertia="2.925233260e-06 8.242699252e-06 1.077175929e-05 3.738892921e-20 1.741219423e-07 6.659706035e-22"/>
+        <joint name="j_tender_coal_cover" type="slide" axis="0 0 1" limited="true" range="0.0 0.032" damping="0.05"/>
+        <geom name="tender_coal_cover_vis" type="mesh" mesh="m_tender_coal_cover" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="tender_fuel_valve" pos="0.021700 -0.006000 0.066600">
+        <inertial pos="-0.000000 -0.000000 -0.016431" mass="0.001844" fullinertia="3.518432823e-07 3.495214970e-07 3.709444563e-09 -7.115968968e-21 1.582029626e-15 5.217210684e-19"/>
+        <joint name="j_tender_fuel_valve" type="hinge" axis="0 0 1" limited="true" range="-1.57 1.57" damping="0.002"/>
+        <geom name="tender_fuel_valve_vis" type="mesh" mesh="m_tender_fuel_valve" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="tender_fuel_cap" pos="0.032700 0.006500 0.065800">
+        <inertial pos="-0.000000 -0.000000 0.000412" mass="0.002604" fullinertia="1.961390562e-08 1.961390562e-08 2.820169229e-08 1.488642707e-24 1.172996546e-22 2.527960126e-25"/>
+        <joint name="j_tender_fuel_cap" type="slide" axis="0 0 1" limited="true" range="0.0 0.006" damping="0.05"/>
+        <geom name="tender_fuel_cap_vis" type="mesh" mesh="m_tender_fuel_cap" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+      </body>
+      <body name="tender_bogie_1" pos="0.056250 0 -0.004750">
+        <inertial pos="0.000000 0.000000 0.001521" mass="0.059461" fullinertia="2.630234029e-05 1.571612078e-05 4.148355692e-05 8.486736988e-19 6.912066656e-19 1.646126596e-19"/>
+        <joint name="j_tbogie_1_yaw" type="hinge" axis="0 0 1" damping="0.015"/>
+        <joint name="j_tbogie_1_pitch" type="hinge" axis="0 1 0" limited="true" range="-0.08 0.08" stiffness="0.6" damping="0.05"/>
+        <joint name="j_tbogie_1_roll" type="hinge" axis="1 0 0" limited="true" range="-0.05 0.05" stiffness="1.2" damping="0.08"/>
+        <geom name="tbogie_vis_1" type="mesh" mesh="m_tender_bogie_frame" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+        <body name="tender_axlebox_1" pos="0.024200 0 0">
+          <inertial pos="0.000000 -0.000000 0.000015" mass="0.002503" fullinertia="1.951909344e-06 2.748584255e-08 1.950325814e-06 1.224673696e-21 4.304698868e-26 6.953487024e-24"/>
+          <joint name="j_tsusp_z1" type="slide" axis="0 0 1" springref="-0.0024" limited="true" range="-0.0025 0.0025" stiffness="980" damping="14"/>
+          <geom name="tabox_vis_1_L" type="mesh" mesh="m_tender_axlebox_L" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+          <geom name="tabox_vis_1_R" type="mesh" mesh="m_tender_axlebox_R" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+          <body name="tender_wheelset_1" pos="0 0 0">
+            <joint name="j_twheel_1" type="hinge" axis="0 1 0" damping="0.0005"/>
+            <inertial pos="-0.000000 -0.000000 -0.000000" mass="0.012374" fullinertia="7.177224181e-06 1.484371856e-06 7.177224181e-06 1.252833312e-19 4.883267352e-20 7.421535502e-21"/>
+            <geom name="tdr_1_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_1_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_1_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+            <geom name="tdr_1_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+            <geom name="tdr_1_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_1_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_1_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+            <geom name="tdr_1_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+            <geom name="tdr_axle_rod_vis_1" type="cylinder" fromto="0 -0.0272 0  0 0.0272 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+            <geom name="tdr_vis_1_L" type="mesh" mesh="m_truck_wheel_L" material="mat_black_iron" pos="0 0.022880 0" contype="0" conaffinity="0" mass="0"/>
+            <geom name="tdr_vis_1_R" type="mesh" mesh="m_truck_wheel_R" material="mat_black_iron" pos="0 -0.022880 0" contype="0" conaffinity="0" mass="0"/>
+          </body>
+        </body>
+        <body name="tender_axlebox_2" pos="-0.024200 0 0">
+          <inertial pos="0.000000 -0.000000 0.000015" mass="0.002503" fullinertia="1.951909344e-06 2.748584255e-08 1.950325814e-06 1.224673696e-21 4.304698868e-26 6.953487024e-24"/>
+          <joint name="j_tsusp_z2" type="slide" axis="0 0 1" springref="-0.0024" limited="true" range="-0.0025 0.0025" stiffness="980" damping="14"/>
+          <geom name="tabox_vis_2_L" type="mesh" mesh="m_tender_axlebox_L" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+          <geom name="tabox_vis_2_R" type="mesh" mesh="m_tender_axlebox_R" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+          <body name="tender_wheelset_2" pos="0 0 0">
+            <joint name="j_twheel_2" type="hinge" axis="0 1 0" damping="0.0005"/>
+            <inertial pos="-0.000000 -0.000000 -0.000000" mass="0.012374" fullinertia="7.177224181e-06 1.484371856e-06 7.177224181e-06 1.252833312e-19 4.883267352e-20 7.421535502e-21"/>
+            <geom name="tdr_2_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_2_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_2_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+            <geom name="tdr_2_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+            <geom name="tdr_2_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_2_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_2_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+            <geom name="tdr_2_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+            <geom name="tdr_axle_rod_vis_2" type="cylinder" fromto="0 -0.0272 0  0 0.0272 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+            <geom name="tdr_vis_2_L" type="mesh" mesh="m_truck_wheel_L" material="mat_black_iron" pos="0 0.022880 0" contype="0" conaffinity="0" mass="0"/>
+            <geom name="tdr_vis_2_R" type="mesh" mesh="m_truck_wheel_R" material="mat_black_iron" pos="0 -0.022880 0" contype="0" conaffinity="0" mass="0"/>
+          </body>
+        </body>
+      </body>
+      <body name="tender_bogie_2" pos="-0.056250 0 -0.004750">
+        <inertial pos="0.000000 0.000000 0.001521" mass="0.059461" fullinertia="2.630234029e-05 1.571612078e-05 4.148355692e-05 8.486736988e-19 6.912066656e-19 1.646126596e-19"/>
+        <joint name="j_tbogie_2_yaw" type="hinge" axis="0 0 1" damping="0.015"/>
+        <joint name="j_tbogie_2_pitch" type="hinge" axis="0 1 0" limited="true" range="-0.08 0.08" stiffness="0.6" damping="0.05"/>
+        <joint name="j_tbogie_2_roll" type="hinge" axis="1 0 0" limited="true" range="-0.05 0.05" stiffness="1.2" damping="0.08"/>
+        <geom name="tbogie_vis_2" type="mesh" mesh="m_tender_bogie_frame" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+        <body name="tender_axlebox_3" pos="0.024200 0 0">
+          <inertial pos="0.000000 -0.000000 0.000015" mass="0.002503" fullinertia="1.951909344e-06 2.748584255e-08 1.950325814e-06 1.224673696e-21 4.304698868e-26 6.953487024e-24"/>
+          <joint name="j_tsusp_z3" type="slide" axis="0 0 1" springref="-0.0024" limited="true" range="-0.0025 0.0025" stiffness="980" damping="14"/>
+          <geom name="tabox_vis_3_L" type="mesh" mesh="m_tender_axlebox_L" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+          <geom name="tabox_vis_3_R" type="mesh" mesh="m_tender_axlebox_R" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+          <body name="tender_wheelset_3" pos="0 0 0">
+            <joint name="j_twheel_3" type="hinge" axis="0 1 0" damping="0.0005"/>
+            <inertial pos="-0.000000 -0.000000 -0.000000" mass="0.012374" fullinertia="7.177224181e-06 1.484371856e-06 7.177224181e-06 1.252833312e-19 4.883267352e-20 7.421535502e-21"/>
+            <geom name="tdr_3_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_3_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_3_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+            <geom name="tdr_3_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+            <geom name="tdr_3_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_3_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_3_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+            <geom name="tdr_3_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+            <geom name="tdr_axle_rod_vis_3" type="cylinder" fromto="0 -0.0272 0  0 0.0272 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+            <geom name="tdr_vis_3_L" type="mesh" mesh="m_truck_wheel_L" material="mat_black_iron" pos="0 0.022880 0" contype="0" conaffinity="0" mass="0"/>
+            <geom name="tdr_vis_3_R" type="mesh" mesh="m_truck_wheel_R" material="mat_black_iron" pos="0 -0.022880 0" contype="0" conaffinity="0" mass="0"/>
+          </body>
+        </body>
+        <body name="tender_axlebox_4" pos="-0.024200 0 0">
+          <inertial pos="0.000000 -0.000000 0.000015" mass="0.002503" fullinertia="1.951909344e-06 2.748584255e-08 1.950325814e-06 1.224673696e-21 4.304698868e-26 6.953487024e-24"/>
+          <joint name="j_tsusp_z4" type="slide" axis="0 0 1" springref="-0.0024" limited="true" range="-0.0025 0.0025" stiffness="980" damping="14"/>
+          <geom name="tabox_vis_4_L" type="mesh" mesh="m_tender_axlebox_L" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+          <geom name="tabox_vis_4_R" type="mesh" mesh="m_tender_axlebox_R" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
+          <body name="tender_wheelset_4" pos="0 0 0">
+            <joint name="j_twheel_4" type="hinge" axis="0 1 0" damping="0.0005"/>
+            <inertial pos="-0.000000 -0.000000 -0.000000" mass="0.012374" fullinertia="7.177224181e-06 1.484371856e-06 7.177224181e-06 1.252833312e-19 4.883267352e-20 7.421535502e-21"/>
+            <geom name="tdr_4_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_4_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_4_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+            <geom name="tdr_4_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+            <geom name="tdr_4_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_4_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_4_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
+            <geom name="tdr_4_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
+            <geom name="tdr_axle_rod_vis_4" type="cylinder" fromto="0 -0.0272 0  0 0.0272 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+            <geom name="tdr_vis_4_L" type="mesh" mesh="m_truck_wheel_L" material="mat_black_iron" pos="0 0.022880 0" contype="0" conaffinity="0" mass="0"/>
+            <geom name="tdr_vis_4_R" type="mesh" mesh="m_truck_wheel_R" material="mat_black_iron" pos="0 -0.022880 0" contype="0" conaffinity="0" mass="0"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <equality>
+    <connect name="loop_axle_pump" site1="s_pump_rod_end" site2="s_pump_pin"/>
+    <joint name="couple_reach_rod" joint1="j_reach_rod" joint2="j_reverser" polycoef="0 0.007 0 -0.001167 0"/>
+    <joint name="couple_drain_rod" joint1="j_drain_pull" joint2="j_drain_cock" polycoef="0 -0.0118 0 0.001967 0"/>
+    <joint name="couple_reverser_wheel" joint1="j_reverser_wheel" joint2="j_reverser" polycoef="0 10.0 0 0 0"/>
+    <joint name="couple_reverser_nut" joint1="j_reverser_nut" joint2="j_reverser" polycoef="0 0.007 0 -0.001167 0"/>
+    <joint name="couple_cab_drain" joint1="j_cab_drain" joint2="j_drain_cock" polycoef="0 1.25 0 0 0"/>
+    <connect name="loop_coup_2_L" site1="s_coup_hole_2_L" site2="s_crank_pin_2_L"/>
+    <connect name="loop_coup_1_L" site1="s_coup_hole_1_L" site2="s_crank_pin_1_L"/>
+    <connect name="loop_coup_4_L" site1="s_coup_hole_4_L" site2="s_crank_pin_4_L"/>
+    <connect name="loop_main_drive_L" site1="s_mainrod_small_L" site2="s_crosshead_pin_L"/>
+    <connect name="loop_valve_L" site1="s_comb_valve_L" site2="s_valve_clevis_L"/>
+    <connect name="loop_eccentric_L" site1="s_ecc_front_L" site2="s_exp_tail_L"/>
+    <connect name="loop_radius_L" site1="s_rad_front_L" site2="s_comb_radius_L"/>
+    <connect name="loop_reverser_L" site1="s_lift_bot_L" site2="s_rad_lift_L"/>
+    <connect name="loop_coup_2_R" site1="s_coup_hole_2_R" site2="s_crank_pin_2_R"/>
+    <connect name="loop_coup_1_R" site1="s_coup_hole_1_R" site2="s_crank_pin_1_R"/>
+    <connect name="loop_coup_4_R" site1="s_coup_hole_4_R" site2="s_crank_pin_4_R"/>
+    <connect name="loop_main_drive_R" site1="s_mainrod_small_R" site2="s_crosshead_pin_R"/>
+    <connect name="loop_valve_R" site1="s_comb_valve_R" site2="s_valve_clevis_R"/>
+    <connect name="loop_eccentric_R" site1="s_ecc_front_R" site2="s_exp_tail_R"/>
+    <connect name="loop_radius_R" site1="s_rad_front_R" site2="s_comb_radius_R"/>
+    <connect name="loop_reverser_R" site1="s_lift_bot_R" site2="s_rad_lift_R"/>
+    <connect name="loop_tender_handpump" site1="s_hp_lever_bot" site2="s_hp_ram_pin" solref="0.0015 1.0" solimp="0.995 0.9995 0.00005"/>
+    <connect name="loop_tender_drawbar" site1="s_drawbar_rear" site2="s_tender_front_pin" solref="0.0004 1.0" solimp="0.998 0.9998 0.000001"/>
+  </equality>
+  <tendon>
+    <fixed name="tendon_eq_front" stiffness="1650" damping="22" springlength="-0.0017">
+      <joint joint="j_susp_z1" coef="0.5"/>
+      <joint joint="j_susp_z2" coef="0.5"/>
+    </fixed>
+    <fixed name="tendon_eq_mid" stiffness="1650" damping="22" springlength="-0.0017">
+      <joint joint="j_susp_z2" coef="0.5"/>
+      <joint joint="j_susp_z3" coef="0.5"/>
+    </fixed>
+    <fixed name="tendon_eq_rear" stiffness="1650" damping="22" springlength="-0.0017">
+      <joint joint="j_susp_z3" coef="0.5"/>
+      <joint joint="j_susp_z4" coef="0.5"/>
+    </fixed>
+    <fixed name="tendon_rock_eq_1_L" stiffness="0.45" damping="0.045" springlength="0">
+      <joint joint="j_eq_bay_1_L" coef="1.0"/>
+      <joint joint="j_susp_z1" coef="37.037"/>
+      <joint joint="j_susp_z2" coef="-37.037"/>
+    </fixed>
+    <fixed name="tendon_rock_eq_1_R" stiffness="0.45" damping="0.045" springlength="0">
+      <joint joint="j_eq_bay_1_R" coef="1.0"/>
+      <joint joint="j_susp_z1" coef="37.037"/>
+      <joint joint="j_susp_z2" coef="-37.037"/>
+    </fixed>
+    <fixed name="tendon_rock_eq_2_L" stiffness="0.45" damping="0.045" springlength="0">
+      <joint joint="j_eq_bay_2_L" coef="1.0"/>
+      <joint joint="j_susp_z2" coef="37.037"/>
+      <joint joint="j_susp_z3" coef="-37.037"/>
+    </fixed>
+    <fixed name="tendon_rock_eq_2_R" stiffness="0.45" damping="0.045" springlength="0">
+      <joint joint="j_eq_bay_2_R" coef="1.0"/>
+      <joint joint="j_susp_z2" coef="37.037"/>
+      <joint joint="j_susp_z3" coef="-37.037"/>
+    </fixed>
+    <fixed name="tendon_rock_eq_3_L" stiffness="0.45" damping="0.045" springlength="0">
+      <joint joint="j_eq_bay_3_L" coef="1.0"/>
+      <joint joint="j_susp_z3" coef="37.037"/>
+      <joint joint="j_susp_z4" coef="-37.037"/>
+    </fixed>
+    <fixed name="tendon_rock_eq_3_R" stiffness="0.45" damping="0.045" springlength="0">
+      <joint joint="j_eq_bay_3_R" coef="1.0"/>
+      <joint joint="j_susp_z3" coef="37.037"/>
+      <joint joint="j_susp_z4" coef="-37.037"/>
+    </fixed>
+  </tendon>
+  <actuator>
+    <general name="steam_force_L" joint="j_piston_L" gainprm="1"/>
+    <general name="steam_force_R" joint="j_piston_R" gainprm="1"/>
+    <position name="reverser_ctrl" joint="j_reverser" kp="60" ctrlrange="-0.46 0.46"/>
+  </actuator>
+  <sensor>
+    <jointpos name="piston_pos_L" joint="j_piston_L"/>
+    <jointvel name="piston_vel_L" joint="j_piston_L"/>
+    <jointpos name="valve_pos_L" joint="j_valve_L"/>
+    <jointpos name="piston_pos_R" joint="j_piston_R"/>
+    <jointvel name="piston_vel_R" joint="j_piston_R"/>
+    <jointpos name="valve_pos_R" joint="j_valve_R"/>
+    <jointvel name="wheel3_omega" joint="j_wheel_3"/>
+    <jointvel name="pump_ram_vel" joint="j_pump_ram"/>
+    <framepos name="loco_world_pos" objtype="body" objname="loco_frame"/>
+    <jointpos name="leading_yaw_rad" joint="j_leading_yaw"/>
+    <jointpos name="drawbar_yaw_rad" joint="j_drawbar_yaw"/>
+  </sensor>
+</mujoco>

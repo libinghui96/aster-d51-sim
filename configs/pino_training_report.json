@@ -1,15 +1,16 @@
 {
   "gpu_device": "NVIDIA GeForce RTX 5080",
-  "arch_version": "d51_pino_v4_6op",
-  "total_training_time_sec": 34.05,
-  "total_parameters": 1563148,
+  "arch_version": "d51_pino_v5_7op",
+  "total_training_time_sec": 21.71,
+  "total_parameters": 1598972,
   "burner_params": 744102,
   "cylinder_params": 171851,
   "cab_manifold_params": 158652,
   "tender_hydraulic_params": 200415,
   "safety_valve_pop_params": 119728,
   "boiler_wick_cht_params": 168400,
-  "weights_size_mb": 3.05,
+  "thermo_elastic_params": 35824,
+  "weights_size_mb": 3.12,
   "burner_validation": {
     "val_field_loss": 0.00821,
     "r2_smokebox_vacuum": 0.9998,
@@ -48,12 +49,19 @@
     "r2_shell_heat_loss_w": 1.0,
     "r2_boiler_efficiency_pct": 1.0
   },
+  "thermo_elastic_validation": {
+    "val_thermo_elastic_loss": 0.0001,
+    "r2_flue_bow_mm": 0.9997,
+    "r2_flue_oval_mm": 0.9948,
+    "r2_von_mises_mpa": 0.9997
+  },
   "gate10_zero_if_emergence": {
     "gate10_emergence_pass": true,
     "gate17_cab_tender_emergence_pass": true,
     "gate21_safety_pop_emergence_pass": true,
     "gate22_wick_cht_emergence_pass": true,
-    "rtx5080_bf16_combined_infer_ms": 7.282,
+    "gate23_thermo_elastic_pass": true,
+    "rtx5080_bf16_combined_infer_ms": 7.331,
     "intact_5flue_airtight": {
       "vacuum_pa": 43.02,
       "grate_air_gs": 1.025,
@@ -126,12 +134,32 @@
       136.8
     ],
     "boiler_shell_loss_w_insulated_vs_bare": [
-      35.66,
-      94.01
+      35.64,
+      93.9
     ],
     "boiler_efficiency_pct_insulated_vs_bare": [
       46.29,
       43.78
+    ],
+    "thermo_elastic_cold_wet_dry_cases": [
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.00076,
+        0.00016,
+        4.24839,
+        0.00017
+      ],
+      [
+        1.22717,
+        0.0006,
+        437.48059,
+        0.16284
+      ]
     ]
   }
 }

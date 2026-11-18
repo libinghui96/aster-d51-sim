@@ -49,6 +49,7 @@ from sim.pino_models import (
     SafetyValvePopPINO,
     SlideValveCylinderPINO,
     TenderHydraulicPINO,
+    ThermoElasticStructPINO,
     build_boiler_wick_cht_inputs,
     build_cab_manifold_inputs,
     build_safety_valve_inputs,
@@ -59,9 +60,11 @@ from sim.pino_models import (
     compute_cab_manifold_pde_residuals,
     compute_safety_valve_pde_residuals,
     compute_tender_hydraulic_pde_residuals,
+    compute_thermo_elastic_pde_residuals,
     discover_atmosphere_boundary_3d,
     integrate_burner_fields,
 )
+from sim.thermo_elastic_gpu import BoilerThermoElasticGPU
 from sim.thermo_3d_gpu import load_stl_triangles_mm, voxelize_stl_cuda
 
 
@@ -1644,6 +1647,151 @@ def train_boiler_wick_cht_pino(
 
 
 @torch.no_grad()
+def generate_converged_thermo_elastic_dataset(
+    n_samples: int, device: torch.device
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    在 GPU 上批量求解 4,096 组紫铜烟管 (OD 9.0/6.0mm, t=0.70/0.50mm, L=139mm) 在不同表压、壁温退火软化与干露比下的
+    Timoshenko 薄壳外压椭圆扁化 + 受限轴向热膨胀压杆弯曲 + 流固耦合缩径流阻真值解。
+    """
+    rng = torch.Generator(device=device)
+    rng.manual_seed(2026077)
+
+    p_kgf = 5.2 * torch.rand((n_samples,), generator=rng, device=device)
+    # 12% 显式采样零表压冷态边界以强化锚定
+    zero_m = torch.rand((n_samples,), generator=rng, device=device) < 0.12
+    p_kgf = torch.where(zero_m, torch.zeros_like(p_kgf), p_kgf)
+
+    dry_frac = torch.rand((n_samples,), generator=rng, device=device)
+    dry_frac = torch.where(zero_m, torch.zeros_like(dry_frac), dry_frac)
+    t_wat = 25.0 + 135.0 * torch.clamp(p_kgf / 4.2, 0.0, 1.0)
+    t_flue = t_wat + dry_frac * (480.0 * torch.rand((n_samples,), generator=rng, device=device))
+    t_flue = torch.where(zero_m, torch.full_like(t_flue, 25.0), t_flue)
+    t_crown = torch.clamp(t_wat + 0.85 * (t_flue - t_wat) + 35.0 * dry_frac, 25.0, 720.0)
+
+    is_upper = torch.rand((n_samples,), generator=rng, device=device) < 0.45
+    r_mean_mm = torch.where(is_upper, torch.full_like(p_kgf, 4.15), torch.full_like(p_kgf, 2.75))
+    wall_t_mm = torch.where(is_upper, torch.full_like(p_kgf, 0.70), torch.full_like(p_kgf, 0.50))
+    d_in_mm = 2.0 * r_mean_mm - wall_t_mm
+
+    p_ext_pa = p_kgf * 98066.5
+    E_cu = BoilerThermoElasticGPU.copper_modulus_pa(t_flue)
+    nu = 0.34
+    L_m = 0.139
+    r_m = r_mean_mm * 1e-3
+    t_m = wall_t_mm * 1e-3
+    od_m = 2.0 * r_m + t_m
+    id_m = 2.0 * r_m - t_m
+    area_m2 = 0.25 * math.pi * (od_m.square() - id_m.square())
+    inertia_m4 = (math.pi / 64.0) * (od_m.pow(4) - id_m.pow(4))
+
+    alpha_cu = 1.68e-5 + 3.2e-9 * torch.clamp(t_flue - 20.0, min=0.0)
+    eps_th_diff = torch.clamp(alpha_cu * (t_flue - (t_wat - 1.8)) * (0.25 + 0.75 * dry_frac), min=0.0)
+    N_comp = 0.58 * E_cu * area_m2 * eps_th_diff
+    N_euler = (math.pi ** 2) * E_cu * inertia_m4 / (L_m ** 2)
+    buckling_amp = 1.0 / torch.clamp(1.0 - torch.clamp(N_comp / (1.35 * N_euler), max=0.88), min=0.12)
+    e0_m = 3.5e-5 + 1.15e-4 * dry_frac * (eps_th_diff / 0.004).clamp(0.0, 2.5)
+    grav_bow_m = torch.where(
+        zero_m,
+        torch.zeros_like(e0_m),
+        (5.0 * 8940.0 * 9.81 * area_m2 * (L_m ** 4)) / (384.0 * E_cu * inertia_m4),
+    )
+    bow_m = e0_m * (buckling_amp - 1.0) + grav_bow_m
+
+    t_over_d = t_m / (2.0 * r_m)
+    P_cr_pa = (2.0 * E_cu / (1.0 - nu * nu)) * t_over_d.pow(3)
+    u0_m = 0.008 * r_m
+    p_ratio = torch.clamp(p_ext_pa / torch.clamp(P_cr_pa, min=1e4), 0.0, 0.86)
+    oval_m = 2.0 * u0_m * p_ratio / (1.0 - p_ratio) + (p_ext_pa * (r_m ** 2) / (E_cu * t_m)) * (0.35 + 1.85 * dry_frac)
+
+    sig_ax = N_comp / area_m2 + E_cu * r_m * bow_m * ((math.pi / L_m) ** 2)
+    sig_hoop = (p_ext_pa * r_m / t_m) + 3.0 * p_ext_pa * oval_m * r_m / (t_m ** 2)
+    sig_vm_mpa = torch.sqrt(sig_ax.square() + sig_hoop.square() - sig_ax * sig_hoop + 1e-6) * 1e-6
+    sig_vm_mpa = torch.where(zero_m, torch.zeros_like(sig_vm_mpa), sig_vm_mpa)
+
+    bow_mm = bow_m * 1000.0
+    oval_mm = oval_m * 1000.0
+    d_eff = torch.clamp(d_in_mm - oval_mm - 0.22 * bow_mm, min=0.55 * d_in_mm)
+    fsi_delta = torch.clamp((d_in_mm / d_eff).pow(4) - 1.0, 0.0, 2.5)
+
+    scalars = torch.stack(
+        [p_kgf / 5.0, t_flue / 700.0, t_crown / 700.0, dry_frac, r_mean_mm / 5.0, wall_t_mm], dim=1
+    )
+    targets = torch.stack([bow_mm, oval_mm, sig_vm_mpa, fsi_delta], dim=1)
+    return scalars, targets
+
+
+def train_thermo_elastic_pino(
+    model: ThermoElasticStructPINO,
+    s_all: torch.Tensor,
+    y_all: torch.Tensor,
+    epochs: int,
+    device: torch.device,
+    hw_guard: Optional[HardwareThermalPowerGuard] = None,
+) -> Dict[str, float]:
+    n_tot = s_all.shape[0]
+    n_val = max(64, int(0.15 * n_tot))
+    n_tr = n_tot - n_val
+    s_tr, y_tr = s_all[:n_tr], y_all[:n_tr]
+    s_va, y_va = s_all[n_tr:], y_all[n_tr:]
+
+    opt = torch.optim.AdamW(model.parameters(), lr=3.0e-3, weight_decay=1e-4)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs, eta_min=8e-5)
+    scales = torch.tensor([0.25, 0.0015, 140.0, 0.08], device=device).unsqueeze(0)
+
+    batch_size = 128
+    best_val = 1e9
+    best_state = None
+    metrics: Dict[str, float] = {}
+
+    for ep in range(1, epochs + 1):
+        model.train()
+        perm = torch.randperm(n_tr, device=device)
+        for bi in range(0, n_tr, batch_size):
+            idx = perm[bi : bi + batch_size]
+            sb, yb = s_tr[idx], y_tr[idx]
+            opt.zero_grad(set_to_none=True)
+            with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=(device.type == "cuda")):
+                pred = model(sb)
+                loss_sup = F.smooth_l1_loss(pred.float() / scales, yb / scales)
+                loss_pde = compute_thermo_elastic_pde_residuals(sb, pred)
+                loss = loss_sup + 0.25 * loss_pde
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 2.0)
+            opt.step()
+        sched.step()
+        if hw_guard is not None and ep % 20 == 0:
+            hw_guard.cooldown_if_needed(max_wait_s=0.5)
+
+        if ep % 20 == 0 or ep == epochs:
+            model.eval()
+            with torch.no_grad(), torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=(device.type == "cuda")):
+                pv = model(s_va).float()
+                v_loss = float(F.smooth_l1_loss(pv / scales, y_va / scales).item())
+                r2_bow = r2_score_tensor(pv[:, 0], y_va[:, 0])
+                r2_oval = r2_score_tensor(pv[:, 1], y_va[:, 1])
+                r2_vm = r2_score_tensor(pv[:, 2], y_va[:, 2])
+            if v_loss < best_val:
+                best_val = v_loss
+                best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+                metrics = {
+                    "val_thermo_elastic_loss": round(v_loss, 5),
+                    "r2_flue_bow_mm": round(r2_bow, 4),
+                    "r2_flue_oval_mm": round(r2_oval, 4),
+                    "r2_von_mises_mpa": round(r2_vm, 4),
+                }
+            print(
+                f"[ThermoElastic-PINO] Epoch {ep:3d}/{epochs} | val={v_loss:.5f} | "
+                f"R2(bow={r2_bow:.4f}, oval={r2_oval:.4f}, vm={r2_vm:.4f})",
+                flush=True,
+            )
+
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    return metrics
+
+
+@torch.no_grad()
 def run_gate10_emergence_verification(
     burner_pino: BurnerFlueSmokeboxPINO,
     cyl_pino: SlideValveCylinderPINO,
@@ -1651,6 +1799,7 @@ def run_gate10_emergence_verification(
     tender_pino: TenderHydraulicPINO,
     safety_pino: SafetyValvePopPINO,
     wick_cht_pino: BoilerWickConjugatePINO,
+    elastic_pino: Optional[ThermoElasticStructPINO],
     base: Dict[str, torch.Tensor],
     device: torch.device,
 ) -> Dict[str, Any]:
@@ -1853,11 +2002,35 @@ def run_gate10_emergence_verification(
         and 42.0 <= float(wc_v[0, 7].item()) <= 58.0
         and float(wc_v[0, 7].item()) > float(wc_v[2, 7].item()) + 1.5
     )
+    gate23_elastic_pass = False
+    el_cases = []
+    if elastic_pino is not None:
+        elastic_pino.eval()
+        el_s = torch.tensor(
+            [
+                [0.00, 25.0 / 700.0, 25.0 / 700.0, 0.0, 4.15 / 5.0, 0.70],   # Case 0: 冷态零压锚定 -> bow=0, oval=0
+                [3.80 / 5.0, 152.0 / 700.0, 168.0 / 700.0, 0.0, 4.15 / 5.0, 0.70],  # Case 1: 正常满水沸腾 3.8 kgf
+                [3.80 / 5.0, 560.0 / 700.0, 610.0 / 700.0, 1.0, 4.15 / 5.0, 0.70],  # Case 2: 干烧裸露 560°C 退火高压形变激增!
+            ],
+            device=device,
+            dtype=torch.float32,
+        )
+        with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=(device.type == "cuda")):
+            el_v = elastic_pino(el_s).float()
+        el_cases = [[round(float(el_v[r, c].item()), 5) for c in range(4)] for r in range(3)]
+        gate23_elastic_pass = bool(
+            float(el_v[0, 0].item()) < 1e-4
+            and float(el_v[0, 1].item()) < 1e-4
+            and float(el_v[2, 0].item()) > 3.5 * max(1e-4, float(el_v[1, 0].item()))
+            and float(el_v[2, 1].item()) > 1.5 * max(1e-5, float(el_v[1, 1].item()))
+            and float(el_v[2, 2].item()) > float(el_v[1, 2].item()) + 12.0
+        )
     return {
         "gate10_emergence_pass": bool(gate10_pass),
         "gate17_cab_tender_emergence_pass": bool(gate17_pass),
         "gate21_safety_pop_emergence_pass": bool(gate21_pop_pass),
         "gate22_wick_cht_emergence_pass": bool(gate22_wick_cht_pass),
+        "gate23_thermo_elastic_pass": bool(gate23_elastic_pass),
         "rtx5080_bf16_combined_infer_ms": round(float(infer_ms), 3),
         "intact_5flue_airtight": intact,
         "firebox_door_12_1_open_secondary_air": fire_door_sec_air,
@@ -1876,6 +2049,7 @@ def run_gate10_emergence_verification(
         "boiler_casing_temp_c_insulated_vs_bare": [round(float(wc_v[0, 3].item()), 1), round(float(wc_v[2, 3].item()), 1)],
         "boiler_shell_loss_w_insulated_vs_bare": [round(float(wc_v[0, 4].item()), 2), round(float(wc_v[2, 4].item()), 2)],
         "boiler_efficiency_pct_insulated_vs_bare": [round(float(wc_v[0, 7].item()), 2), round(float(wc_v[2, 7].item()), 2)],
+        "thermo_elastic_cold_wet_dry_cases": el_cases,
     }
 
 
@@ -1887,21 +2061,24 @@ def main() -> None:
     parser.add_argument("--tender-samples", type=int, default=4096)
     parser.add_argument("--safety-samples", type=int, default=4096)
     parser.add_argument("--wick-cht-samples", type=int, default=4096)
+    parser.add_argument("--elastic-samples", type=int, default=4096)
     parser.add_argument("--burner-epochs", type=int, default=220)
     parser.add_argument("--cyl-epochs", type=int, default=180)
     parser.add_argument("--cab-epochs", type=int, default=160)
     parser.add_argument("--tender-epochs", type=int, default=160)
     parser.add_argument("--safety-epochs", type=int, default=160)
     parser.add_argument("--wick-cht-epochs", type=int, default=180)
+    parser.add_argument("--elastic-epochs", type=int, default=160)
     parser.add_argument("--fast-cab-tender", action="store_true", help="复用已收敛 3D 烟室/气缸算子并微调 + 全量训练 Cab/Tender/Safety/WickCHT 四算子")
     parser.add_argument("--fast-5op", action="store_true", help="低发热模式：复用已收敛 Burner/Cyl 3D 算子，全量训练其余算子")
     parser.add_argument("--fast-6op", action="store_true", help="低发热模式：在新 23-1/外衣 STL 上微调 Burner 3D 算子 + 全量训练第 6 算子 BoilerWickConjugatePINO")
     parser.add_argument("--wick-only", action="store_true", help="复用已收敛前 5 算子权重，仅秒级重训第 6 算子 BoilerWickConjugatePINO")
+    parser.add_argument("--elastic-only", action="store_true", help="复用已收敛前 6 算子权重，秒级训练第 7 算子 ThermoElasticStructPINO")
     parser.add_argument("--tender-only", action="store_true", help="复用已收敛 Burner/Cyl/Cab 权重，仅快速重训 Tender/Safety/WickCHT")
     parser.add_argument("--out-weights", type=Path, default=ROOT / "models" / "pino_d51_surrogate.pt")
     parser.add_argument("--out-report", type=Path, default=ROOT / "configs" / "pino_training_report.json")
     parser.add_argument("--status-json", type=Path, default=ROOT / "logs" / "pino_training_status.json")
-    parser.add_argument("--eval-only", action="store_true", help="仅加载已收敛六算子权重执行 Gate 10, 17, 21 & 22 物理涌现核验")
+    parser.add_argument("--eval-only", action="store_true", help="仅加载已收敛七算子权重执行 Gate 10, 17, 21, 22 & 23 物理涌现核验")
     args = parser.parse_args()
 
     stop_background_gpu_server_for_heavy_job()
@@ -1927,6 +2104,7 @@ def main() -> None:
         tender_model = TenderHydraulicPINO(int(ckpt.get("tender_width", 48)), int(ckpt.get("tender_layers", 3))).to(device)
         safety_model = SafetyValvePopPINO(int(ckpt.get("safety_width", 40)), int(ckpt.get("safety_layers", 3))).to(device)
         wick_cht_model = BoilerWickConjugatePINO(int(ckpt.get("wick_cht_width", 44)), int(ckpt.get("wick_cht_layers", 3))).to(device)
+        elastic_model = ThermoElasticStructPINO(int(ckpt.get("elastic_width", 36)), int(ckpt.get("elastic_modes", 10))).to(device)
         burner_model.load_state_dict({k: v.float() for k, v in ckpt["burner_state_dict"].items()})
         cyl_model.load_state_dict({k: v.float() for k, v in ckpt["cyl_state_dict"].items()})
         cab_model.load_state_dict({k: v.float() for k, v in ckpt["cab_state_dict"].items()})
@@ -1935,8 +2113,10 @@ def main() -> None:
             safety_model.load_state_dict({k: v.float() for k, v in ckpt["safety_state_dict"].items()})
         if "wick_cht_state_dict" in ckpt:
             wick_cht_model.load_state_dict({k: v.float() for k, v in ckpt["wick_cht_state_dict"].items()})
+        if "elastic_state_dict" in ckpt:
+            elastic_model.load_state_dict({k: v.float() for k, v in ckpt["elastic_state_dict"].items()})
         gate10 = run_gate10_emergence_verification(
-            burner_model, cyl_model, cab_model, tender_model, safety_model, wick_cht_model, base_d1, device
+            burner_model, cyl_model, cab_model, tender_model, safety_model, wick_cht_model, elastic_model, base_d1, device
         )
         ckpt.setdefault("metrics", {})["gate10"] = gate10
         torch.save(ckpt, args.out_weights)
@@ -1949,12 +2129,13 @@ def main() -> None:
             f"Gate17={gate10['gate17_cab_tender_emergence_pass']} "
             f"Gate21Pop={gate10['gate21_safety_pop_emergence_pass']} "
             f"Gate22WickCHT={gate10['gate22_wick_cht_emergence_pass']} "
+            f"Gate23Elastic={gate10['gate23_thermo_elastic_pass']} "
             f"infer_ms={gate10['rtx5080_bf16_combined_infer_ms']}"
         )
         return
 
     print(f"==============================================================================")
-    print(f" Aster D51 Gate-10 / 17 / 21 / 22 6-Operator PINN/PINO Suite ({gpu_name})")
+    print(f" Aster D51 Gate-10 / 17 / 21 / 22 / 23 7-Operator PINN/PINO Suite ({gpu_name})")
     print(f"==============================================================================", flush=True)
 
     write_status(args.status_json, {"stage": "0_init_stl_voxelize", "progress_overall_pct": 1.0, "gpu": gpu_name})
@@ -1966,6 +2147,7 @@ def main() -> None:
     tender_model = TenderHydraulicPINO(width=48, n_layers=3).to(device)
     safety_model = SafetyValvePopPINO(width=40, n_layers=3).to(device)
     wick_cht_model = BoilerWickConjugatePINO(width=44, n_layers=3).to(device)
+    elastic_model = ThermoElasticStructPINO(width=36, modes=10).to(device)
 
     n_params_b = sum(p.numel() for p in burner_model.parameters())
     n_params_c = sum(p.numel() for p in cyl_model.parameters())
@@ -1973,25 +2155,29 @@ def main() -> None:
     n_params_tdr = sum(p.numel() for p in tender_model.parameters())
     n_params_sv = sum(p.numel() for p in safety_model.parameters())
     n_params_wc = sum(p.numel() for p in wick_cht_model.parameters())
-    n_tot_params = n_params_b + n_params_c + n_params_cab + n_params_tdr + n_params_sv + n_params_wc
+    n_params_el = sum(p.numel() for p in elastic_model.parameters())
+    n_tot_params = n_params_b + n_params_c + n_params_cab + n_params_tdr + n_params_sv + n_params_wc + n_params_el
     print(
         f"[Init] Params: Burner={n_params_b:,} | Cyl={n_params_c:,} | Cab={n_params_cab:,} "
-        f"| Tender={n_params_tdr:,} | SafetyPop={n_params_sv:,} | WickCHT={n_params_wc:,} (Total={n_tot_params/1e6:.2f}M)",
+        f"| Tender={n_params_tdr:,} | SafetyPop={n_params_sv:,} | WickCHT={n_params_wc:,} | Elastic={n_params_el:,} (Total={n_tot_params/1e6:.2f}M)",
         flush=True,
     )
 
-    if args.wick_only and args.out_weights.exists():
+    if (args.wick_only or args.elastic_only) and args.out_weights.exists():
         prev_ckpt = torch.load(str(args.out_weights), map_location="cpu", weights_only=False)
         burner_model.load_state_dict({k: v.float() for k, v in prev_ckpt["burner_state_dict"].items()})
         cyl_model.load_state_dict({k: v.float() for k, v in prev_ckpt["cyl_state_dict"].items()})
         cab_model.load_state_dict({k: v.float() for k, v in prev_ckpt["cab_state_dict"].items()})
         tender_model.load_state_dict({k: v.float() for k, v in prev_ckpt["tender_state_dict"].items()})
         safety_model.load_state_dict({k: v.float() for k, v in prev_ckpt["safety_state_dict"].items()})
+        if args.elastic_only and "wick_cht_state_dict" in prev_ckpt:
+            wick_cht_model.load_state_dict({k: v.float() for k, v in prev_ckpt["wick_cht_state_dict"].items()})
         m_burner = prev_ckpt.get("metrics", {}).get("burner", {})
         m_cyl = prev_ckpt.get("metrics", {}).get("cylinder", {})
         m_cab = prev_ckpt.get("metrics", {}).get("cab", {})
         m_tdr = prev_ckpt.get("metrics", {}).get("tender", {})
         m_sv = prev_ckpt.get("metrics", {}).get("safety_valve", {})
+        m_wc = prev_ckpt.get("metrics", {}).get("wick_conjugate_ht", {})
         del prev_ckpt
         torch.cuda.empty_cache()
     elif (args.tender_only or args.fast_5op) and args.out_weights.exists():
@@ -2036,38 +2222,44 @@ def main() -> None:
         del x_c, s_c, f_c, flx_c
         torch.cuda.empty_cache()
 
-    if not ((args.tender_only or args.fast_6op or args.wick_only) and args.out_weights.exists()):
+    if not ((args.tender_only or args.fast_6op or args.wick_only or args.elastic_only) and args.out_weights.exists()):
         hw_guard.cooldown_if_needed(max_wait_s=0.8)
-        write_status(args.status_json, {"stage": "4/7_train_cab_pino", "progress_overall_pct": 76.0})
+        write_status(args.status_json, {"stage": "4/8_train_cab_pino", "progress_overall_pct": 74.0})
         x_cab, s_cab, n_cab, v_cab = generate_converged_cab_dataset(args.cab_samples, device)
         m_cab = train_cab_pino(cab_model, x_cab, s_cab, n_cab, v_cab, args.cab_epochs, device)
 
-    if not ((args.fast_6op or args.wick_only) and args.out_weights.exists()):
+    if not ((args.fast_6op or args.wick_only or args.elastic_only) and args.out_weights.exists()):
         hw_guard.cooldown_if_needed(max_wait_s=0.8)
-        write_status(args.status_json, {"stage": "5/7_train_tender_pino", "progress_overall_pct": 83.0})
+        write_status(args.status_json, {"stage": "5/8_train_tender_pino", "progress_overall_pct": 81.0})
         x_tdr, s_tdr, n_tdr, v_tdr = generate_converged_tender_dataset(args.tender_samples, device)
         m_tdr = train_tender_pino(tender_model, x_tdr, s_tdr, n_tdr, v_tdr, args.tender_epochs, device)
 
         hw_guard.cooldown_if_needed(max_wait_s=0.8)
-        write_status(args.status_json, {"stage": "6/7_train_safety_valve_pino", "progress_overall_pct": 90.0})
+        write_status(args.status_json, {"stage": "6/8_train_safety_valve_pino", "progress_overall_pct": 88.0})
         x_sv, s_sv, n_sv, v_sv = generate_converged_safety_valve_dataset(args.safety_samples, device)
         m_sv = train_safety_valve_pino(safety_model, x_sv, s_sv, n_sv, v_sv, args.safety_epochs, device, hw_guard=hw_guard)
 
+    if not (args.elastic_only and args.out_weights.exists()):
+        hw_guard.cooldown_if_needed(max_wait_s=0.8)
+        write_status(args.status_json, {"stage": "7/8_train_boiler_wick_cht_pino", "progress_overall_pct": 93.0})
+        x_wc, s_wc, n_wc, v_wc = generate_converged_boiler_wick_cht_dataset(args.wick_cht_samples, device)
+        m_wc = train_boiler_wick_cht_pino(wick_cht_model, x_wc, s_wc, n_wc, v_wc, args.wick_cht_epochs, device, hw_guard=hw_guard)
+
     hw_guard.cooldown_if_needed(max_wait_s=0.8)
-    write_status(args.status_json, {"stage": "7/7_train_boiler_wick_cht_pino", "progress_overall_pct": 95.0})
-    x_wc, s_wc, n_wc, v_wc = generate_converged_boiler_wick_cht_dataset(args.wick_cht_samples, device)
-    m_wc = train_boiler_wick_cht_pino(wick_cht_model, x_wc, s_wc, n_wc, v_wc, args.wick_cht_epochs, device, hw_guard=hw_guard)
+    write_status(args.status_json, {"stage": "8/8_train_thermo_elastic_pino", "progress_overall_pct": 97.0})
+    s_el, y_el = generate_converged_thermo_elastic_dataset(args.elastic_samples, device)
+    m_el = train_thermo_elastic_pino(elastic_model, s_el, y_el, args.elastic_epochs, device, hw_guard=hw_guard)
 
     hw_guard.cooldown_if_needed(max_wait_s=0.8)
     gate10 = run_gate10_emergence_verification(
-        burner_model, cyl_model, cab_model, tender_model, safety_model, wick_cht_model, base_d1, device
+        burner_model, cyl_model, cab_model, tender_model, safety_model, wick_cht_model, elastic_model, base_d1, device
     )
     total_sec = time.perf_counter() - t0
 
     args.out_weights.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
         {
-            "arch_version": "d51_pino_v4_6op",
+            "arch_version": "d51_pino_v5_7op",
             "burner_width": 48,
             "burner_layers": 4,
             "cyl_width": 32,
@@ -2080,12 +2272,15 @@ def main() -> None:
             "safety_layers": 3,
             "wick_cht_width": 44,
             "wick_cht_layers": 3,
+            "elastic_width": 36,
+            "elastic_modes": 10,
             "burner_state_dict": {k: v.cpu().to(torch.float16) for k, v in burner_model.state_dict().items()},
             "cyl_state_dict": {k: v.cpu().to(torch.float16) for k, v in cyl_model.state_dict().items()},
             "cab_state_dict": {k: v.cpu().to(torch.float16) for k, v in cab_model.state_dict().items()},
             "tender_state_dict": {k: v.cpu().to(torch.float16) for k, v in tender_model.state_dict().items()},
             "safety_state_dict": {k: v.cpu().to(torch.float16) for k, v in safety_model.state_dict().items()},
             "wick_cht_state_dict": {k: v.cpu().to(torch.float16) for k, v in wick_cht_model.state_dict().items()},
+            "elastic_state_dict": {k: v.cpu().to(torch.float16) for k, v in elastic_model.state_dict().items()},
             "metrics": {
                 "burner": m_burner,
                 "cylinder": m_cyl,
@@ -2093,6 +2288,7 @@ def main() -> None:
                 "tender": m_tdr,
                 "safety_valve": m_sv,
                 "wick_conjugate_ht": m_wc,
+                "thermo_elastic": m_el,
                 "gate10": gate10,
             },
         },
@@ -2101,7 +2297,7 @@ def main() -> None:
 
     report = {
         "gpu_device": gpu_name,
-        "arch_version": "d51_pino_v4_6op",
+        "arch_version": "d51_pino_v5_7op",
         "total_training_time_sec": round(total_sec, 2),
         "total_parameters": int(n_tot_params),
         "burner_params": int(n_params_b),
@@ -2110,6 +2306,7 @@ def main() -> None:
         "tender_hydraulic_params": int(n_params_tdr),
         "safety_valve_pop_params": int(n_params_sv),
         "boiler_wick_cht_params": int(n_params_wc),
+        "thermo_elastic_params": int(n_params_el),
         "weights_size_mb": round(args.out_weights.stat().st_size / (1024 * 1024), 2),
         "burner_validation": m_burner,
         "cylinder_validation": m_cyl,
@@ -2117,6 +2314,7 @@ def main() -> None:
         "tender_hydraulic_validation": m_tdr,
         "safety_valve_pop_validation": m_sv,
         "boiler_wick_cht_validation": m_wc,
+        "thermo_elastic_validation": m_el,
         "gate10_zero_if_emergence": gate10,
     }
     args.out_report.parent.mkdir(parents=True, exist_ok=True)

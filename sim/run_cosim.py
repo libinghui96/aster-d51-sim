@@ -190,6 +190,8 @@ def render_dashboard(
             "=" * 78,
         ]
     )
+    if tel.derailed:
+        lines.append(f"  [DERAILED!!] 脱線落枕検知 ({tel.derail_reason}) — 枕木・道床抵抗により緊急制動中!")
     if tel.hydrolock_L or tel.hydrolock_R:
         lines.append("  [HYDROLOCK!] 冷気筒ウォーターハンマー発生! 直ちに [X] ドレン弁を開いて排水して下さい!")
     if tel.flash_steam_spike:
@@ -198,6 +200,13 @@ def render_dashboard(
         lines.append(f"  [WARNING] ボイラ低水位/空焚き危険 (銅火室頂板 {tel.crown_temp_c:.0f}°C, 損傷 {tel.copper_anneal_damage*100:.1f}%)!")
     if tel.emergency_overpressure:
         lines.append("  [EMERGENCY] 圧力 5.0 kgf/cm² 超過! 直ちに [I] 消火して下さい!")
+    if tel.gpu_monitor and tel.gpu_monitor.get("enabled"):
+        gm = tel.gpu_monitor
+        lines.append(
+            f"  [GPU MONITOR] SM={gm.get('sm_util_pct', 0):.0f}% | MemBW={gm.get('mem_bw_util_pct', 0):.0f}% | "
+            f"VRAM={gm.get('vram_used_mb', 0):.0f}/{gm.get('vram_total_mb', 0):.0f}MB (Torch {gm.get('torch_alloc_mb', 0):.0f}MB) | "
+            f"{gm.get('gpu_temp_c', 0):.0f}°C / {gm.get('gpu_power_w', 0):.1f}W | PDE+PINO={gm.get('gpu_3d_pde_ms', 0)+gm.get('gpu_pino_ms', 0):.2f}ms"
+        )
     return "\n".join(lines)
 
 
@@ -211,11 +220,13 @@ class CoSimRunner:
         use_gpu_3d: bool = False,
         cfd_subdiv: int = 12,
         snapshot_every_cfd: int = 3,
+        enable_gpu_monitor: bool = False,
     ):
         self.model = mujoco.MjModel.from_xml_path(str(xml_path))
         self.calib = calibrate_model_and_valves(self.model)
         self.data = mujoco.MjData(self.model)
         self.use_gpu_3d = bool(use_gpu_3d)
+        self.enable_gpu_monitor = bool(enable_gpu_monitor)
         if self.use_gpu_3d:
             from sim.thermo_3d_gpu import AsterD51Thermo3DGPU
 
@@ -223,15 +234,21 @@ class CoSimRunner:
                 self.calib,
                 cfd_subdiv=cfd_subdiv,
                 snapshot_every_cfd=snapshot_every_cfd,
+                enable_gpu_monitor=enable_gpu_monitor,
             )
             print(
-                f"[RTX 5080 3D] 已加载 {self.thermo.total_voxels:,} 体素五大零件域求解器 "
+                f"[RTX 5080 3D] 已加载 {self.thermo.total_voxels:,} 体素八大零件域+七算子PINO求解器 "
                 f"(STL 体素化耗时 {self.thermo.voxelize_init_ms:.1f} ms, PINO={self.thermo.pino_loaded}, "
                 f"5烟管贯通={self.thermo.open_flue_count}/5, 烟室气密={self.thermo.smokebox_airtight})"
             )
         else:
+            from sim.gpu_monitor import OptionalGPUMonitor
             self.thermo = AsterD51Thermo1D(self.calib)
+            self._fallback_gpu_mon = OptionalGPUMonitor(enabled=enable_gpu_monitor)
         self.ctrl = CabControls()
+        self.last_f_pump: float = 0.0
+        self.derailed: bool = False
+        self.derail_reason: str = ""
 
         # 缓存传感器、执行器与关节地址
         self.s_pL = self.model.sensor("piston_pos_L").adr[0]
@@ -256,9 +273,54 @@ class CoSimRunner:
         self.qvel_drain = int(self.model.jnt_dofadr[j_dc_id]) if j_dc_id >= 0 else -1
         self.loco_bid = self.model.body("loco_frame").id
         self.is_roller_mode = self.model.jnt_type[0] != mujoco.mjtJoint.mjJNT_FREE
+        self.is_curve_r2m = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "r2m_track_layout") >= 0
         self._prev_fwd_vel = 0.0
 
-        # P3 + Stage 16: 缓存驾驶室、双突跳安全阀与煤水车全部 17 个独立可动操纵件/仪表/阀瓣关节地址
+        # 缓存全编组 10 轴垂向板簧/螺旋簧弹性悬挂关节与轮对刚体 (用于板簧实时挠度与真实轮轨脱线落枕物理判定)
+        self._susp_qpos_addrs: List[int] = []
+        for s_jname in (
+            "j_leading_susp",
+            "j_susp_z1",
+            "j_susp_z2",
+            "j_susp_z3",
+            "j_susp_z4",
+            "j_trailing_susp",
+            "j_tsusp_z1",
+            "j_tsusp_z2",
+            "j_tsusp_z3",
+            "j_tsusp_z4",
+        ):
+            sj_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, s_jname)
+            self._susp_qpos_addrs.append(int(self.model.jnt_qposadr[sj_id]) if sj_id >= 0 else -1)
+
+        self._wheelset_specs: List[tuple[int, str, float]] = []
+        for wb_name, r_nom in (
+            ("leading_wheelset", 0.0130),
+            ("wheelset_1", 0.021875),
+            ("wheelset_2", 0.021875),
+            ("wheelset_3", 0.021875),
+            ("wheelset_4", 0.021875),
+            ("trailing_wheelset", 0.0130),
+            ("tender_wheelset_1", 0.0130),
+            ("tender_wheelset_2", 0.0130),
+            ("tender_wheelset_3", 0.0130),
+            ("tender_wheelset_4", 0.0130),
+        ):
+            wbid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, wb_name)
+            if wbid >= 0:
+                self._wheelset_specs.append((int(wbid), wb_name, r_nom))
+
+        self._offrail_geom_ids: set[int] = set()
+        self._wheel_geom_ids: set[int] = set()
+        for gid in range(self.model.ngeom):
+            gname = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, gid) or ""
+            if gname == "ground" or gname.startswith("sleeper_"):
+                self._offrail_geom_ids.add(gid)
+            elif "_tread_" in gname or "_flange_" in gname or "_throat_" in gname:
+                self._wheel_geom_ids.add(gid)
+        self._derail_consec_steps = 0
+
+        # P3 + Stage 18: 缓存驾驶室、6-5 止回球、双突跳安全阀与煤水车全部 19 个独立可动操纵件/仪表/阀瓣关节地址
         self._vis_joints: dict[str, tuple[int, int]] = {}
         for jname in (
             "j_cab_regulator",
@@ -272,6 +334,8 @@ class CoSimRunner:
             "j_dome_lid",
             "j_safety_poppet_1",
             "j_safety_poppet_2",
+            "j_pump_ball_suc",
+            "j_pump_ball_del",
             "j_tender_hp_link",
             "j_tender_handpump",
             "j_tender_drain_plug",
@@ -350,6 +414,9 @@ class CoSimRunner:
                 self.data.qvel[hp_addrs[1]] = (q_hp_val - q_hp_prev) / max(1e-6, dt)
 
         sv_lift_m = max(0.0, min(0.00075, float(getattr(tel, "safety_valve_lift_mm", 0.0)) * 1e-3))
+        pb_lifts = getattr(self.thermo, "pump_ball_lifts_mm", [0.0, 0.0, 0.0])
+        b_suc_m = max(0.0, min(0.0008, float(pb_lifts[0]) * 1e-3)) if len(pb_lifts) >= 1 else 0.0
+        b_del_m = max(0.0, min(0.0008, float(pb_lifts[1]) * 1e-3)) if len(pb_lifts) >= 2 else 0.0
         targets = {
             "j_cab_regulator": 1.15 * self.ctrl.regulator,
             "j_cab_blower": 3.14 * self.ctrl.blower_valve,
@@ -362,6 +429,8 @@ class CoSimRunner:
             "j_dome_lid": 1.15 if (bool(getattr(self.ctrl, "dome_lid_open", False)) or bool(getattr(self.ctrl, "cab_roof_open", False))) else 0.0,
             "j_safety_poppet_1": sv_lift_m,
             "j_safety_poppet_2": sv_lift_m * 0.94,
+            "j_pump_ball_suc": b_suc_m,
+            "j_pump_ball_del": b_del_m,
             "j_tender_drain_plug": 0.0050 if bool(getattr(self.ctrl, "tender_drain_open", False)) else 0.0,
             "j_tender_coal_cover": 0.026 if open_water_bay else 0.0,
             "j_tender_fuel_valve": 1.50 * self.ctrl.fuel_valve,
@@ -371,13 +440,18 @@ class CoSimRunner:
             addrs = self._vis_joints.get(jname)
             if addrs is not None:
                 qadr, dadr = addrs
-                if jname.startswith("j_safety_poppet"):
-                    nxt = tgt
+                if jname == "j_cab_fire_door":
+                    # 12-1/12-2 铸铁铰接火室门: 依赖 MJCF 隐式阻尼 (damping=0.0025) + 显式卡扣弹簧力矩，无条件数值稳定!
+                    q_fd = float(self.data.qpos[qadr])
+                    self.data.qfrc_applied[dadr] = 0.032 * (tgt - q_fd)
+                elif jname.startswith("j_safety_poppet") or jname.startswith("j_pump_ball_"):
+                    self.data.qpos[qadr] = tgt
+                    self.data.qvel[dadr] = 0.0
                 else:
                     curr = float(self.data.qpos[qadr])
                     nxt = curr + alpha * (tgt - curr)
-                self.data.qpos[qadr] = nxt
-                self.data.qvel[dadr] = 0.0
+                    self.data.qpos[qadr] = nxt
+                    self.data.qvel[dadr] = 0.0
 
     def apply_hot_preset(self) -> None:
         self.thermo.reset_hot_ready()
@@ -389,12 +463,84 @@ class CoSimRunner:
         self.ctrl.drain_cock = True
         self.ctrl.thermal_warp = 1.0
 
+    def set_gpu_monitor_enabled(self, enabled: bool) -> None:
+        self.enable_gpu_monitor = bool(enabled)
+        if hasattr(self.thermo, "set_gpu_monitor_enabled"):
+            self.thermo.set_gpu_monitor_enabled(enabled)
+        elif hasattr(self, "_fallback_gpu_mon"):
+            self._fallback_gpu_mon.set_enabled(bool(enabled))
+
+    def _evaluate_wheel_rail_derailment(self) -> tuple[bool, str]:
+        """
+        检查全车 10 根轮对与钢轨/枕木/地面的真实三维接触与几何偏离状态:
+          - 若任一车轮碰撞体与枕木 (sleeper_*) 或地面 (ground) 发生物理接触，或横向越出钢轨头 >4.8mm，或垂向跌落轨面 >1.6mm，
+            判定为真实物理脱轨落枕！
+        """
+        if self.is_roller_mode:
+            self._derail_consec_steps = 0
+            return False, ""
+
+        hit_sleeper_wheel = ""
+        for ci in range(int(self.data.ncon)):
+            con = self.data.contact[ci]
+            g1, g2 = int(con.geom1), int(con.geom2)
+            if (g1 in self._wheel_geom_ids and g2 in self._offrail_geom_ids) or (
+                g2 in self._wheel_geom_ids and g1 in self._offrail_geom_ids
+            ):
+                wg = g1 if g1 in self._wheel_geom_ids else g2
+                hit_sleeper_wheel = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, wg) or "wheel"
+                break
+
+        worst_reason = ""
+        raw_offrail = False
+        if hit_sleeper_wheel:
+            raw_offrail = True
+            worst_reason = f"{hit_sleeper_wheel} 接触枕木/道床"
+
+        for wbid, wname, r_nom in self._wheelset_specs:
+            wx, wy, wz = float(self.data.xpos[wbid, 0]), float(self.data.xpos[wbid, 1]), float(self.data.xpos[wbid, 2])
+            if not (math.isfinite(wx) and math.isfinite(wy) and math.isfinite(wz)):
+                raw_offrail = True
+                worst_reason = f"{wname} 数値発散保護"
+                break
+            if self.is_curve_r2m:
+                lat_err_m = math.hypot(wx, wy + 2.000) - 2.000
+            else:
+                lat_err_m = wy
+            drop_m = (0.004 + r_nom) - wz
+            if abs(lat_err_m) > 0.0048 or drop_m > 0.0015:
+                raw_offrail = True
+                worst_reason = f"{wname} (横偏 {lat_err_m*1000.0:+.1f}mm, 沈下 {drop_m*1000.0:+.1f}mm)"
+                break
+
+        if raw_offrail:
+            self._derail_consec_steps += 1
+        else:
+            self._derail_consec_steps = max(0, self._derail_consec_steps - 1)
+
+        if self._derail_consec_steps >= 4:
+            self.derailed = True
+            if worst_reason:
+                self.derail_reason = worst_reason
+        elif self._derail_consec_steps == 0:
+            self.derailed = False
+            self.derail_reason = ""
+        return self.derailed, self.derail_reason
+
     def step_once(self) -> ThermoTelemetry:
         sd = self.data.sensordata
         dt = float(self.model.opt.timestep)
         omega_3 = float(sd[self.s_w3])
         v_vL = float(self.data.qvel[self.qvel_valL])
         v_vR = float(self.data.qvel[self.qvel_valR])
+
+        # 读取全编组 10 轴板簧/螺旋簧实时弹性形变位移 (m)
+        susp_z_m = [
+            float(self.data.qpos[qadr]) if qadr >= 0 else 0.00065
+            for qadr in self._susp_qpos_addrs
+        ]
+        if self.use_gpu_3d and hasattr(self.thermo, "last_susp_z_m"):
+            self.thermo.last_susp_z_m = susp_z_m
 
         # 提取车体上坡俯仰角与纵向加速度 (用于 O4-1 坡道假水位与顶板浸没判定)
         pitch_rad = 0.0
@@ -427,12 +573,13 @@ class CoSimRunner:
         if self.use_gpu_3d:
             step_kwargs["q_ram"] = float(self.data.qpos[self.qpos_pump])
         F_L, F_R, F_pump, tel = self.thermo.step(**step_kwargs)
+        self.last_f_pump = float(F_pump)
 
         self.data.ctrl[self.act_fL] = F_L
         self.data.ctrl[self.act_fR] = F_R
         self.data.ctrl[self.act_rev] = self.ctrl.reverser * 0.45
 
-        # 施加平面滑阀背压摩擦反力 (O3-2)、给水泵液压负载与列车运行阻力
+        # 施加平面滑阀背压摩擦反力 (O3-2)、给水泵双向抽吸/压送液压负载与运行阻力
         self.data.qfrc_applied[self.qvel_valL] = tel.valve_friction_L
         self.data.qfrc_applied[self.qvel_valR] = tel.valve_friction_R
         self.data.qfrc_applied[self.qvel_pump] = F_pump
@@ -441,7 +588,30 @@ class CoSimRunner:
         if self.is_roller_mode:
             self.data.qfrc_applied[self.qvel_w3] = -0.0022 * omega_3 - 0.00012 * omega_3 * abs(omega_3)
         else:
-            self.data.qfrc_applied[self.qvel_w3] = -0.0055 * omega_3 - 0.00048 * omega_3 * abs(omega_3)
+            # 轨道模式: 轴承滚动摩擦与风阻；若车轮脱轨跌落枕木/道床，立即产生真实犁木陷滞阻力制停列车 (杜绝脱轨仍正常滑行!)
+            is_der, der_msg = self._evaluate_wheel_rail_derailment()
+            tel.derailed = is_der
+            tel.derail_reason = der_msg
+            if is_der:
+                vx, vy = float(self.data.qvel[0]), float(self.data.qvel[1])
+                v_spd = math.hypot(vx, vy)
+                if v_spd > 1e-5:
+                    f_plow = min(48.0, 26.0 + 65.0 * v_spd)
+                    self.data.qfrc_applied[0] = -f_plow * (vx / v_spd)
+                    self.data.qfrc_applied[1] = -f_plow * (vy / v_spd)
+                else:
+                    self.data.qfrc_applied[0] = 0.0
+                    self.data.qfrc_applied[1] = 0.0
+                self.data.qfrc_applied[self.qvel_w3] = -0.35 * omega_3 - 0.08 * math.tanh(omega_3 * 4.0)
+            else:
+                self.data.qfrc_applied[0] = 0.0
+                self.data.qfrc_applied[1] = 0.0
+                self.data.qfrc_applied[self.qvel_w3] = -0.0038 * omega_3 - 0.00032 * omega_3 * abs(omega_3)
+
+        if not self.use_gpu_3d:
+            tel.spring_deflect_mm = [round(abs(z) * 1000.0, 3) for z in susp_z_m]
+            if hasattr(self, "_fallback_gpu_mon") and self._fallback_gpu_mon.enabled:
+                tel.gpu_monitor = self._fallback_gpu_mon.snapshot().to_dict()
 
         self._sync_cab_tender_visual_joints(dt, tel)
         mujoco.mj_step(self.model, self.data)
@@ -455,10 +625,18 @@ def run_interactive(
     ai_mode_init: str = "off",
     use_gpu_3d: bool = False,
     enable_copilot: bool = False,
+    enable_gpu_monitor: bool = False,
 ) -> None:
     import mujoco.viewer
 
-    runner = CoSimRunner(xml_path, preset=preset, use_gpu_3d=use_gpu_3d, cfd_subdiv=36, snapshot_every_cfd=2)
+    runner = CoSimRunner(
+        xml_path,
+        preset=preset,
+        use_gpu_3d=use_gpu_3d,
+        cfd_subdiv=16,
+        snapshot_every_cfd=2,
+        enable_gpu_monitor=enable_gpu_monitor,
+    )
     hw_guard = HardwareThermalPowerGuard(max_cpu_c=78.0, max_gpu_c=72.0, max_gpu_w=230.0)
     human_agent = HumanEngineerAgent()
     oracle_agent = IdealOracleController()
@@ -694,7 +872,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Aster D51 1D-3D 实时热机联合仿真器")
     parser.add_argument("--xml", type=Path, default=Path("models/d51_full.xml"))
     parser.add_argument("--preset", choices=["cold", "hot"], default="cold")
-    parser.add_argument("--gpu-3d", action="store_true", help="启用本地 RTX 5080 571万体素五大零件域真 3D 多相热流 + PINO 求解器")
+    parser.add_argument("--gpu-3d", action="store_true", help="启用本地 RTX 5080 578万体素八大零件域真 3D 多相热流 + 热弹性 + 7-PINO 求解器")
+    parser.add_argument("--gpu-monitor", action="store_true", help="开启可选实时 GPU SM/显存/温度/功耗与 CUDA 算子耗时监控")
     parser.add_argument("--copilot", action="store_true", help="启用异步本地 Ollama bonsai-2:27b L3 机务诊断副驾")
     parser.add_argument("--auto-fireman", action="store_true", help="启动时默认开启理想最优自动司炉巡航")
     parser.add_argument(
@@ -721,6 +900,7 @@ def main() -> None:
             ai_mode_init=init_mode,
             use_gpu_3d=args.gpu_3d,
             enable_copilot=args.copilot,
+            enable_gpu_monitor=args.gpu_monitor,
         )
 
 

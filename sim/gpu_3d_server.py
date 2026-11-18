@@ -141,6 +141,7 @@ def _terminate_stale_gpu_servers(my_pid: int) -> None:
 
 SCENE_XML_MAP = {
     "roller": PROJECT_ROOT / "models" / "d51_full.xml",
+    "track": PROJECT_ROOT / "models" / "d51_track.xml",
     "curve": PROJECT_ROOT / "models" / "d51_r2m.xml",
 }
 
@@ -253,9 +254,31 @@ def pack_frame_payload(
             "burnerLumenConnected": bool(getattr(tel, "burner_lumen_connected", True)),
             "feedwaterGS": round(tel.feedwater_g_s, 3),
             "steamGenGS": round(tel.steam_gen_g_s, 3),
+            "steamOutGS": round(float(getattr(tel, "steam_out_g_s", tel.steam_gen_g_s)), 3),
+            "cutoffPct": round(float(getattr(tel, "cutoff_pct", 0.0)), 1),
+            "cylExpansionWorkW": round(float(getattr(tel, "cyl_expansion_work_w", 0.0)), 3),
+            "specificSteamGKj": round(float(getattr(tel, "specific_steam_g_kj", 0.0)), 2),
+            "pumpChamberKgf": round(float(getattr(tel, "pump_chamber_kgf", 0.0)), 3),
+            "pumpSuctionVacKpa": round(float(getattr(tel, "pump_suction_vac_kpa", 0.0)), 2),
+            "pumpShaftPowerW": round(float(getattr(tel, "pump_shaft_power_w", 0.0)), 4),
+            "lubeOilTempC": round(float(getattr(tel, "lube_oil_temp_c", 25.0)), 1),
+            "lubeOilViscosityMpas": round(float(getattr(tel, "lube_oil_viscosity_mpas", 1850.0)), 1),
+            "alcoholTempC": round(float(getattr(tel, "alcohol_temp_c", 25.0)), 1),
+            "alcoholViscosityMpas": round(float(getattr(tel, "alcohol_viscosity_mpas", 1.08)), 3),
+            "drainBlowdownGS": round(float(getattr(tel, "drain_blowdown_g_s", 0.0)), 3),
+            "flueDeflectionMm": getattr(tel, "flue_deflection_mm", [0.0] * 5),
+            "flueOvalizationMm": getattr(tel, "flue_ovalization_mm", [0.0] * 5),
+            "crownBulgeMm": round(float(getattr(tel, "crown_bulge_mm", 0.0)), 4),
+            "maxBoilerStressMpa": round(float(getattr(tel, "max_boiler_stress_mpa", 0.0)), 2),
+            "copperYieldMpa": round(float(getattr(tel, "copper_yield_mpa", 185.0)), 1),
+            "springDeflectMm": getattr(tel, "spring_deflect_mm", [0.0] * 10),
+            "derailed": bool(getattr(tel, "derailed", False)),
+            "derailReason": str(getattr(tel, "derail_reason", "")),
+            "pino7OpActive": bool(getattr(tel, "pino_7op_active", False)),
+            "gpuMonitor": getattr(tel, "gpu_monitor", {}),
             "forceL": round(tel.force_L, 2),
             "forceR": round(tel.force_R, 2),
-            "fPump": 0.0,
+            "fPump": round(float(getattr(runner, "last_f_pump", 0.0)), 3),
             "wheelRpm": round(tel.wheel_rpm, 1),
             "scaleSpeedKmh": round(tel.scale_speed_kmh, 2),
         },
@@ -293,6 +316,7 @@ def pack_frame_payload(
             "lubeWaterFrac": float(sp.lube_water_frac),
             "pino4OpActive": bool(getattr(sp, "pino_4op_active", False)),
             "pino6OpActive": bool(getattr(sp, "pino_6op_active", False)),
+            "pino7OpActive": bool(getattr(sp, "pino_7op_active", False)),
             "burnerLumenConnected": bool(getattr(sp, "burner_lumen_connected", True)),
             "wickCapillaryMlS": float(getattr(sp, "wick_capillary_ml_s", 0.0)),
             "wickSaturation": float(getattr(sp, "wick_saturation", 0.90)),
@@ -304,6 +328,12 @@ def pack_frame_payload(
             "insulationCoverage": float(getattr(sp, "insulation_coverage", 0.86)),
             "tenderBayTempC": float(getattr(sp, "tender_bay_temp_c", 25.0)),
             "tenderWaveRmsMm": float(getattr(sp, "tender_wave_rms_mm", 0.0)),
+            "flueDeflectionMm": getattr(sp, "flue_deflection_mm", [0.0] * 5),
+            "flueOvalizationMm": getattr(sp, "flue_ovalization_mm", [0.0] * 5),
+            "crownBulgeMm": float(getattr(sp, "crown_bulge_mm", 0.0)),
+            "maxBoilerStressMpa": float(getattr(sp, "max_boiler_stress_mpa", 0.0)),
+            "copperYieldMpa": float(getattr(sp, "copper_yield_mpa", 185.0)),
+            "gpuMonitor": getattr(sp, "gpu_monitor", {}),
             "tenderWaveB64": b64_wave,
             "midplaneTempB64": b64_slice,
         },
@@ -316,16 +346,23 @@ def pack_frame_payload(
 
 
 class GPU3DRealtimeBridge:
-    def __init__(self, scene: str = "roller", preset: str = "hot", enable_copilot: bool = True):
+    def __init__(
+        self,
+        scene: str = "roller",
+        preset: str = "hot",
+        enable_copilot: bool = True,
+        enable_gpu_monitor: bool = False,
+    ):
         self.scene = scene if scene in SCENE_XML_MAP else "roller"
         self.preset = preset
-        # 实时推流采用 cfd_subdiv=48 (41.7Hz 7域体素+5算子PINO, 2000Hz 精确 MuJoCo+IAPWS)，彻底消除单核与 GPU 持续满载死顶!
+        # 提升 GPU 利用率至 125Hz (cfd_subdiv=16) 推进 8 大三维体素/壳梁域 + 7 算子 PINO，同时消除 48 步跨度引起的面板锯齿!
         self.runner = CoSimRunner(
             SCENE_XML_MAP[self.scene],
             preset=preset,
             use_gpu_3d=True,
-            cfd_subdiv=48,
-            snapshot_every_cfd=1,
+            cfd_subdiv=16,
+            snapshot_every_cfd=2,
+            enable_gpu_monitor=enable_gpu_monitor,
         )
         self.human_agent = HumanEngineerAgent()
         self.oracle_agent = IdealOracleController()
@@ -440,6 +477,11 @@ class GPU3DRealtimeBridge:
                 self.runner.ctrl = CabControls()
                 self._set_ai_mode("off")
                 self.runner._handpump_vis_timer = 0.0
+                self.runner.derailed = False
+                self.runner.derail_reason = ""
+            elif act == "toggleGpuMonitor":
+                en = bool(msg.get("enabled", not self.runner.enable_gpu_monitor))
+                self.runner.set_gpu_monitor_enabled(en)
         elif mtype == "scene":
             self.switch_scene(str(msg.get("scene", "roller")))
 
@@ -605,7 +647,12 @@ class GPU3DRealtimeBridge:
 
 
 async def async_main(args: argparse.Namespace) -> None:
-    bridge = GPU3DRealtimeBridge(scene=args.scene, preset=args.preset, enable_copilot=not args.no_copilot)
+    bridge = GPU3DRealtimeBridge(
+        scene=args.scene,
+        preset=args.preset,
+        enable_copilot=not args.no_copilot,
+        enable_gpu_monitor=args.gpu_monitor,
+    )
     gpu_str = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
 
     app = web.Application()
@@ -642,9 +689,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Aster D51 RTX 5080 真 3D 多相热流 HTTP + WebSocket 一体化服务")
     parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--scene", choices=["roller", "curve"], default="roller")
+    parser.add_argument("--scene", choices=["roller", "track", "curve"], default="roller")
     parser.add_argument("--preset", choices=["cold", "hot"], default="hot")
     parser.add_argument("--fps", type=float, default=30.0)
+    parser.add_argument("--gpu-monitor", action="store_true", help="默认开启实时 GPU SM/VRAM/温度/功耗监控遥测")
     parser.add_argument("--no-copilot", action="store_true", help="禁用异步本地 Ollama bonsai-2:27b L3 诊断副驾")
     parser.add_argument("--no-replace", action="store_true", help="不自动清理同端口已有的旧 gpu_3d_server 进程")
     args = parser.parse_args()

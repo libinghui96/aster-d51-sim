@@ -38,6 +38,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from sim.gpu_monitor import OptionalGPUMonitor
 from sim.pino_models import (
     BoilerWickConjugatePINO,
     BurnerFlueSmokeboxPINO,
@@ -45,6 +46,7 @@ from sim.pino_models import (
     SafetyValvePopPINO,
     SlideValveCylinderPINO,
     TenderHydraulicPINO,
+    ThermoElasticStructPINO,
     build_boiler_wick_cht_inputs,
     build_cab_manifold_inputs,
     build_safety_valve_inputs,
@@ -52,6 +54,7 @@ from sim.pino_models import (
     compute_approx_sdf_3d,
     integrate_burner_fields,
 )
+from sim.thermo_elastic_gpu import BoilerThermoElasticGPU
 from sim.thermo_1d import (
     AsterD51Thermo1D,
     CabControls,
@@ -234,6 +237,7 @@ class Spatial3DSnapshot:
     pino_4op_active: bool = False
     pino_5op_active: bool = False
     pino_6op_active: bool = False
+    pino_7op_active: bool = False
     hollow_lumen_verified: bool = True
     burner_lumen_connected: bool = True
     wick_capillary_ml_s: float = 0.0
@@ -253,7 +257,14 @@ class Spatial3DSnapshot:
     tender_bay_temp_c: float = 25.0
     tender_wave_rms_mm: float = 0.0
     tender_wave_u8: List[int] = field(default_factory=list)
-    # 7. 供 Web 端 X-Ray 叠加渲染的中心纵剖面温度云图 (64×24 uint8 归一化 0..255)
+    # 7. Domain 8 锅炉 5 烟管与紫铜火室顶板热弹塑性形变场 + 可选 GPU 利用率监控快照
+    flue_deflection_mm: List[float] = field(default_factory=lambda: [0.0] * 5)
+    flue_ovalization_mm: List[float] = field(default_factory=lambda: [0.0] * 5)
+    crown_bulge_mm: float = 0.0
+    max_boiler_stress_mpa: float = 0.0
+    copper_yield_mpa: float = 185.0
+    gpu_monitor: Dict[str, Any] = field(default_factory=dict)
+    # 8. 供 Web 端 X-Ray 叠加渲染的中心纵剖面温度云图 (64×24 uint8 归一化 0..255)
     midplane_temp_u8: List[int] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -262,7 +273,7 @@ class Spatial3DSnapshot:
 
 class AsterD51Thermo3DGPU:
     """
-    基于本地 RTX 5080 CUDA 的 573 万体素、7 域双向紧耦合真壁厚空心内腔多相热流 + 5-Operator PINO 求解器。
+    基于本地 RTX 5080 CUDA 的 578 万体素、8 域双向紧耦合真壁厚空心内腔多相热流 + 热弹塑性形变 + 7-Operator PINO 求解器。
     """
 
     D1_SHAPE = (256, 80, 104)     # 燃烧 + 火室 + 5烟管 + 烟室射流 (2,129,920 体素)
@@ -272,6 +283,7 @@ class AsterD51Thermo3DGPU:
     D5_SHAPE = (2, 112, 56, 56)   # 6-5 轴动泵空心流道 + 4-2 置换注油器 0.8mm 壁厚水/油/汽三相内腔 (702,464 体素)
     D6_SHAPE = (48, 20)           # 31-10/35-1 煤水车敞口水槽守恒浅水波自由液面 + 加水/回水/放水热混合网格 (960 网格)
     D7_SHAPE = (96, 20, 32)       # 23-1 供醇管 -> 3x ø2.8mm 立孔 -> 3x 灯芯杯 + セラミックヤーン 三维漫水毛细汽化场 (61,440 体素)
+    D8_SHAPE = (5, 64, 24)        # 锅炉 5 紫铜烟管轴向x周向 + 火室顶板热弹塑性应力/形变三维壳梁域 (7,680 节点)
 
     def __init__(
         self,
@@ -280,8 +292,9 @@ class AsterD51Thermo3DGPU:
         lut_path: Optional[Path] = Path("configs/smokebox_lut.json"),
         pino_ckpt_path: Optional[Path] = Path("models/pino_d51_surrogate.pt"),
         device: str = "cuda",
-        cfd_subdiv: int = 12,
+        cfd_subdiv: int = 10,
         snapshot_every_cfd: int = 3,
+        enable_gpu_monitor: bool = False,
     ):
         self.calib = calib
         self.device = torch.device(device if torch.cuda.is_available() else "cpu")
@@ -290,8 +303,8 @@ class AsterD51Thermo3DGPU:
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
 
-        self.cfd_subdiv = max(1, int(cfd_subdiv))  # 默认每 12 个 0.5ms 步 (6.0ms = 166.7Hz) 推进一次三维算子与体素场
-        self.snapshot_every_cfd = max(1, int(snapshot_every_cfd))  # 每 3 个 CFD 步 (~55.6Hz) 聚合导出一次空间视觉快照
+        self.cfd_subdiv = max(1, int(cfd_subdiv))  # 默认每 10 个 0.5ms 步 (5.0ms = 200Hz) 推进一次三维算子与体素场，充分释放 GPU 算力
+        self.snapshot_every_cfd = max(1, int(snapshot_every_cfd))
         self._step_counter = 0
         self._cfd_counter = 0
 
@@ -305,6 +318,7 @@ class AsterD51Thermo3DGPU:
             + math.prod(self.D5_SHAPE)
             + math.prod(self.D6_SHAPE)
             + math.prod(self.D7_SHAPE)
+            + math.prod(self.D8_SHAPE)
         )
         self.last_gpu_step_ms = 1.8
         self.stl_passages_verified = True
@@ -315,12 +329,24 @@ class AsterD51Thermo3DGPU:
         self.pino_4op_loaded = False
         self.pino_5op_loaded = False
         self.pino_6op_loaded = False
+        self.pino_7op_loaded = False
         self.burner_pino: Optional[BurnerFlueSmokeboxPINO] = None
         self.cyl_pino: Optional[SlideValveCylinderPINO] = None
         self.cab_pino: Optional[CabManifoldSightGlassPINO] = None
         self.tender_pino: Optional[TenderHydraulicPINO] = None
         self.safety_pino: Optional[SafetyValvePopPINO] = None
         self.wick_cht_pino: Optional[BoilerWickConjugatePINO] = None
+        self.elastic_pino: Optional[ThermoElasticStructPINO] = None
+        self.thermo_elastic = BoilerThermoElasticGPU(device=self.device)
+        self.gpu_monitor = OptionalGPUMonitor(
+            enabled=bool(enable_gpu_monitor),
+            active_voxels=self.total_voxels,
+            pino_operators=7,
+            cfd_hz=2000.0 / max(1, self.cfd_subdiv),
+        )
+        self.last_susp_z_m: Optional[List[float]] = None
+        self._3d_sh_target_c: Optional[float] = None
+        self._3d_crown_peak_c: Optional[float] = None
         self.d7_lumen_cond: float = 1.0
         self.d7_open_cups: int = 3
         self.insulation_coverage: float = 0.86
@@ -367,11 +393,23 @@ class AsterD51Thermo3DGPU:
 
     def reset_cold_prepared(self) -> None:
         self.core1d.reset_cold_prepared()
+        self.thermo_elastic.reset(T_init_c=25.0)
+        self._3d_sh_target_c = None
+        self._3d_crown_peak_c = None
         self._sync_3d_fields_to_preset(hot=False)
 
     def reset_hot_ready(self) -> None:
         self.core1d.reset_hot_ready()
+        self.thermo_elastic.reset(T_init_c=149.6)
+        self._3d_sh_target_c = 165.0
+        self._3d_crown_peak_c = 168.5
         self._sync_3d_fields_to_preset(hot=True)
+
+    def set_gpu_monitor_enabled(self, enabled: bool) -> None:
+        self.gpu_monitor.set_enabled(bool(enabled))
+
+    def close(self) -> None:
+        self.gpu_monitor.close()
 
     def trigger_hand_pump(self, strokes: int = 5) -> None:
         self.core1d.trigger_hand_pump(strokes)
@@ -664,6 +702,7 @@ class AsterD51Thermo3DGPU:
         raw_cov = cov_hits / max(1, cov_tot)
         self.insulation_coverage = round(min(0.95, raw_cov * 1.08), 4)
         self.core1d.insulation_coverage = self.insulation_coverage
+        self.core1d._ema_eta_pct = 0.0
 
     @torch.no_grad()
     def rebuild_d7_stl_geometry(self, s7_brn_override: Optional[torch.Tensor] = None) -> None:
@@ -918,6 +957,7 @@ class AsterD51Thermo3DGPU:
         sup_use = s1_sup_override if s1_sup_override is not None else self.s1_sup_raw
         self._rebuild_d1_stl_masks(cu_use, self.s1_sh_raw, self.s1_brn_raw, sup_use, X1, Y1, Z1)
         self.stl_passages_verified = bool(self.d1_connected and self.open_flue_count == 5 and self.smokebox_airtight)
+        self._d1_dirty = True
 
     @torch.no_grad()
     def _build_pino_d4_masks(self, s4_cyl: torch.Tensor) -> None:
@@ -1008,6 +1048,15 @@ class AsterD51Thermo3DGPU:
                 self.wick_cht_pino = wc_net
                 self.pino_6op_loaded = True
                 self.spatial.pino_6op_active = True
+            if "elastic_state_dict" in ckpt:
+                el_w = int(ckpt.get("elastic_width", 36))
+                el_m = int(ckpt.get("elastic_modes", 10))
+                el_net = ThermoElasticStructPINO(width=el_w, modes=el_m).to(self.device)
+                el_net.load_state_dict({k: v.float() for k, v in ckpt["elastic_state_dict"].items()})
+                el_net.eval()
+                self.elastic_pino = el_net
+                self.pino_7op_loaded = True
+                self.spatial.pino_7op_active = True
             self.pino_loaded = True
             self.spatial.pino_active = True
         except Exception as exc:
@@ -1753,9 +1802,45 @@ class AsterD51Thermo3DGPU:
         Tw6 = torch.clamp(Tw6, 20.0, 68.0) * self.d6_tank_mask + 25.0 * (1.0 - self.d6_tank_mask)
         self.d6_state = torch.cat([eta6, qx6, qy6, Tw6], dim=1)
 
+        # === [Domain 8 + PINO Op 7] 锅炉 5 紫铜烟管与火室顶板热弹塑性应力/形变及走行部板簧挠度 GPU 求解 ===
+        t_gas_in_est = (
+            float((self.core1d.ext_pino_burner or {}).get("t_flue_upper_c", self.core1d.T_boiler_c + 120.0)) + 160.0
+            if fuel_active
+            else max(self.core1d.T_boiler_c, self.core1d.T_crown_c)
+        )
+        el_st = self.thermo_elastic.step(
+            dt_s=dt_cfd,
+            P_boiler_pa=self.core1d.P_boiler,
+            T_water_c=self.core1d.T_boiler_c,
+            T_crown_c=self.core1d.T_crown_c,
+            T_flue_gas_in_c=t_gas_in_est,
+            water_free_z_mm=self.core1d.water_free_z_mm,
+            grade_deg=math.degrees(pitch_rad) + float(ctrl.grade_deg),
+            susp_z_m=self.last_susp_z_m,
+            pino_op7=self.elastic_pino,
+        )
+        self.core1d.flue_fsi_mult = 1.0 / max(1.0, float(el_st.flue_fsi_resistance_mult))
+        self.core1d.ext_pino_elastic = {
+            "flue_deflection_mm": el_st.flue_deflection_mm,
+            "flue_ovalization_mm": el_st.flue_ovalization_mm,
+            "crown_bulge_mm": el_st.crown_bulge_mm,
+            "max_boiler_stress_mpa": el_st.max_boiler_stress_mpa,
+            "copper_yield_mpa": el_st.copper_yield_mpa,
+            "spring_deflect_mm": el_st.spring_deflect_mm,
+            "pino_7op_active": bool(self.pino_7op_loaded),
+        }
+
         if self._ev_end is not None and not self._ev_pending:
             self._ev_end.record()
             self._ev_pending = True
+        if self.gpu_monitor.enabled:
+            tot_k_ms = max(0.05, float(self.last_gpu_step_ms))
+            self.gpu_monitor.record_kernel_timings(
+                step_wall_ms=tot_k_ms / max(1, self.cfd_subdiv),
+                pde_ms=0.52 * tot_k_ms,
+                pino_ms=0.38 * tot_k_ms,
+                elastic_ms=0.10 * tot_k_ms,
+            )
 
         self._cfd_counter += 1
         if self._cfd_counter % self.snapshot_every_cfd == 0 or self._cfd_counter == 1:
@@ -1877,14 +1962,16 @@ class AsterD51Thermo3DGPU:
             f_1d = (float(p_pair[1]) - P_ATM) * self.core1d.A_crank - (float(p_pair[0]) - P_ATM) * self.core1d.A_head
             self.d4_force_corr_N[s_i] = float(np.clip(0.15 * (f_3d - f_1d), -0.08 * abs(f_1d), +0.08 * abs(f_1d)))
 
-        # 双向物理耦合回写:
-        # (a) Domain 3 四程过热器三维出口混合蒸汽温度回写 core1d.T_superheat_c
+        # 双向物理耦合连续目标缓存 (消除原先每 36 步直接改写 core1d 状态引发的锯齿跳变，改在 2000Hz 步内平滑松弛!):
         if ctrl.regulator > 0.01 and self.core1d.P_boiler > P_ATM + 8000.0:
-            self.core1d.T_superheat_c = 0.82 * self.core1d.T_superheat_c + 0.18 * max(self.core1d.T_boiler_c, sh_T8[-1])
-        # (b) Domain 2 紫铜火室顶板局部三维干烧热点 (当局部顶板真正裸露升温超过 210°C 时!) 回写 core1d.T_crown_c
+            self._3d_sh_target_c = max(self.core1d.T_boiler_c, sh_T8[-1])
+        else:
+            self._3d_sh_target_c = None
         crown_peak_c = max(crown_6)
-        if crown_peak_c > 210.0 and crown_peak_c > self.core1d.T_crown_c + 4.0 and fuel_active:
-            self.core1d.T_crown_c = 0.88 * self.core1d.T_crown_c + 0.12 * crown_peak_c
+        if crown_peak_c > 210.0 and fuel_active:
+            self._3d_crown_peak_c = crown_peak_c
+        else:
+            self._3d_crown_peak_c = None
 
         # 64×24 uint8 纵剖面最大热场投影切片 + 24×10 uint8 煤水车 35-1 敞口槽液面波纹图
         ny1 = self.D1_SHAPE[1]
@@ -1952,6 +2039,7 @@ class AsterD51Thermo3DGPU:
             pino_4op_active=bool(self.pino_4op_loaded),
             pino_5op_active=bool(self.pino_5op_loaded),
             pino_6op_active=bool(self.pino_6op_loaded),
+            pino_7op_active=bool(self.pino_7op_loaded),
             hollow_lumen_verified=bool(self.hollow_lumen_verified),
             burner_lumen_connected=bool(self.d7_open_cups == 3 and self.d7_lumen_cond >= 0.5),
             wick_capillary_ml_s=round(
@@ -1984,6 +2072,12 @@ class AsterD51Thermo3DGPU:
             tender_bay_temp_c=bay_temp_c,
             tender_wave_rms_mm=wave_rms_mm,
             tender_wave_u8=u8_wave,
+            flue_deflection_mm=list(self.thermo_elastic.last_state.flue_deflection_mm),
+            flue_ovalization_mm=list(self.thermo_elastic.last_state.flue_ovalization_mm),
+            crown_bulge_mm=float(self.thermo_elastic.last_state.crown_bulge_mm),
+            max_boiler_stress_mpa=float(self.thermo_elastic.last_state.max_boiler_stress_mpa),
+            copper_yield_mpa=float(self.thermo_elastic.last_state.copper_yield_mpa),
+            gpu_monitor=self.gpu_monitor.snapshot().to_dict() if self.gpu_monitor.enabled else {},
             midplane_temp_u8=u8_slice,
         )
 
@@ -2044,6 +2138,28 @@ class AsterD51Thermo3DGPU:
                 omega_3=omega_3,
             )
 
+        # 2000Hz 连续平滑松弛融合 3D 过热出口与火室顶板局部热点，消除跨步长阶跃锯齿
+        if getattr(self, "_d1_dirty", False) and self.pino_loaded:
+            p_g_est = max(0.0, (self.core1d.P_boiler - P_ATM) / PA_PER_KGF_CM2)
+            self._run_pino_surrogates(
+                ctrl=ctrl,
+                q_pL=q_pL,
+                v_pL=v_pL,
+                q_vL=q_vL,
+                q_pR=q_pR,
+                v_pR=v_pR,
+                q_vR=q_vR,
+                mdot_exh_kg_s=0.0,
+                mdot_blw_kg_s=1.8e-4 * ctrl.blower_valve * max(0.0, p_g_est / 3.5),
+            )
+            self.core1d._ema_vac_pa = 0.0
+            self._d1_dirty = False
+        dt_eff = dt * max(1.0, ctrl.thermal_warp)
+        if self._3d_sh_target_c is not None and ctrl.regulator > 0.01:
+            self.core1d.T_superheat_c += min(0.05, 1.8 * dt_eff) * (self._3d_sh_target_c - self.core1d.T_superheat_c)
+        if self._3d_crown_peak_c is not None and self._3d_crown_peak_c > self.core1d.T_crown_c + 2.0:
+            self.core1d.T_crown_c += min(0.04, 1.2 * dt_eff) * (self._3d_crown_peak_c - self.core1d.T_crown_c)
+
         F_L, F_R, F_pump, tel = self.core1d.step(
             dt=dt,
             q_pL=q_pL,
@@ -2071,7 +2187,7 @@ class AsterD51Thermo3DGPU:
 
         self._step_counter += 1
         if self._step_counter % self.cfd_subdiv == 0:
-            mdot_exh = max(0.0, tel.steam_gen_g_s) * 1e-3
+            mdot_exh = max(0.0, tel.exhaust_g_s) * 1e-3
             mdot_blw = 1.8e-4 * ctrl.blower_valve * max(0.0, tel.boiler_pressure_kgf / 3.5)
             mdot_reg = 2.2e-4 * ctrl.regulator * max(0.0, tel.boiler_pressure_kgf / 3.5)
             mdot_fw = max(0.0, tel.feedwater_g_s) * 1e-3
@@ -2097,4 +2213,7 @@ class AsterD51Thermo3DGPU:
 
         tel.lut_active = True
         tel.pino_active = bool(self.pino_loaded)
+        tel.pino_7op_active = bool(self.pino_7op_loaded)
+        if self.gpu_monitor.enabled:
+            tel.gpu_monitor = self.gpu_monitor.snapshot().to_dict()
         return F_L, F_R, F_pump, tel

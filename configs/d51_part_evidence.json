@@ -1,24 +1,24 @@
 {
   "meta": {
     "locomotive": "Aster Hobby JNR D51 (1/32 Gauge 1)",
-    "stage": "Stage 17 STEP-First CAD, End-to-End 3D Lumen, Ceramic Wick/Insulation & Whole-Loco Forensic Calibration",
+    "stage": "Stage 18 Multi-Physics Mechanical/Fluid/Thermo-Elastic Digital Twin & Blueprint Calibration",
     "coordinate_convention": "+X forward (smokebox), +Y left (JNR driver side), -Y right (fireman side), +Z upward"
   },
   "parts": [
     {
-      "part_no": "11-13/11-14",
-      "name": "Blower 4-Spoke Handwheel & Needle Stem (通風弁)",
+      "part_no": "11-15/11-13/11-14",
+      "name": "23.0mm Horizontal Transverse Brass Steam Turret Bar & 4-Spoke Blower Handwheel (蒸気分配器・通風弁)",
       "joint_type": "hinge",
       "axis_xyz": [1.0, 0.0, 0.0],
-      "mating_parent": "11-15 center -X face (Y=0.0, Z=+66.5mm)",
-      "verified_views": ["イラスト 11 item 13/14", "イラスト 14 callout Blower Valve", "p45 cab rear photo"]
+      "mating_parent": "11-15 horizontal bar (Y∈[-9.0,+14.0]mm, Z=+66.5mm); 11-13 wheel at Y=+2.2mm, Z=+66.5mm",
+      "verified_views": ["イラスト 11 item 13/14/15 (rotated 90deg CW)", "イラスト 13", "p45 cab rear photo"]
     },
     {
       "part_no": "11-10/11-11/11-12",
       "name": "Regulator Gland, Pierced Lever (+Y Finger Pin) & Y-Axis Spindle (加減弁)",
       "joint_type": "hinge",
       "axis_xyz": [0.0, -1.0, 0.0],
-      "mating_parent": "11-15 rear +Y left vertical face (Y=+8.2, Z=+66.5mm, -X horizontal closed)",
+      "mating_parent": "11-15 left +Y end (Y=+10.2, Z=+66.5mm, -X horizontal closed)",
       "verified_views": ["イラスト 11 item 10/11/12", "イラスト 13", "Manual p.29 horizontal closed text"]
     },
     {
@@ -26,40 +26,57 @@
       "name": "Whistle Poppet Valve & XZ-Plane Rearward Concave-Up 3-Hole Trigger Lever (気笛弁レバー)",
       "joint_type": "hinge",
       "axis_xyz": [0.0, -1.0, 0.0],
-      "mating_parent": "11-1 bottom clevis lug (-115.6, +14.8, +62.2mm), pointing -X rearward in XZ plane",
+      "mating_parent": "11-1 bottom clevis lug (-115.6, +15.5, +62.2mm), pointing -X rearward in XZ plane",
       "verified_views": ["イラスト 11 Fig.1", "イラスト 13", "イラスト 14 Whistle Valve", "p45 cab rear photo"]
     },
     {
       "part_no": "13-2/13-7/6-8",
       "name": "Mid-Height Boiler Clack Valve (SB-ø3, Blind 13-7 Cap) & Vertical Riser (逆止弁・ボイラ給水管)",
-      "joint_type": "static",
+      "joint_type": "slide",
+      "axis_xyz": [0.0, 0.0, 1.0],
       "dummy": false,
       "mating_parent": "12-6 right-inboard bush above dry firebox crown (-115.8, -11.8, +47.5mm)",
       "verified_views": ["イラスト 12 dry firebox 12-4", "イラスト 13 item 2/7", "p45 cab rear photo"]
     },
     {
       "part_no": "PG-20/13-1",
-      "name": "Vertical 0-deg Pressure Gauge & Bottom-Entry U-Siphon (圧力計・圧力管)",
+      "name": "Vertical 0-deg Pressure Gauge & Bottom-Entry U-Siphon from 11-15 Right End (圧力計・圧力管)",
       "joint_type": "hinge",
       "axis_xyz": [1.0, 0.0, 0.0],
-      "mating_parent": "11-15 rear -Y port -> 13-1 U-loop below 13-2 -> PG-20 (-122.0, -16.5, +66.8mm)",
+      "mating_parent": "11-15 right -Y=-8.0mm port -> 13-1 U-loop below 13-2 -> PG-20 (-122.0, -16.5, +66.8mm)",
       "verified_views": ["イラスト 13 orthogonal stem", "p45 differential rim calibration (0.0 deg)"]
     },
     {
-      "part_no": "4-17/6-9",
-      "name": "Transverse Under-Floor Bypass Valve & Left-Floor Needle Lever (バイパスバルブ・給水ニードル)",
-      "joint_type": "hinge",
-      "axis_xyz": [0.0, 0.0, 1.0],
-      "mating_parent": "4-8 cradle under 8-11 floor (-136.5, 0.0, +15.0mm); 6-9 stem at +Y=+6.8mm",
-      "verified_views": ["イラスト 4 item 17", "イラスト 6 item 9", "図 8.1", "p45 cab rear photo"]
+      "part_no": "6-1/6-2/6-3/6-5/SB-3x2",
+      "name": "Sealed Brass Axle Feedwater Pump Body (Blind Rear Wall & Dual 4-15 Blind Hex Banjos), ø3.2mm Plunger & Dual SB-ø3 Check Balls (軸動ポンプ)",
+      "joint_type": "slide",
+      "axis_xyz": [1.0, 0.0, 0.0],
+      "mating_parent": "loco_frame X=-38.8mm (6-5 body) + X=-22.0mm (6-1 plunger into blind ø3.20mm bore) + Axle 3 eccentric 6-2/6-3",
+      "verified_views": ["Group 6 BOM p.3", "イラスト 6 Fig.1", "Manual p.22 図 6.1 & 図 6.2", "p44 bottom ortho photo"]
     },
     {
-      "part_no": "8-7/8-10/8-6/8-5",
-      "name": "Cab-Interior Upright Right-Floor Drain Lever, Under-Floor Stand & Straight Shaft (ドレンレバー)",
+      "part_no": "4-17/6-9/8-7",
+      "name": "Stepped Under-Floor Brass Bypass Valve, Left-Floor Needle Stem & Split-Clamp Ring-Turned Radial Handle (バイパスバルブ・給水ニードル)",
       "joint_type": "hinge",
-      "axis_xyz": [0.0, 1.0, 0.0],
-      "mating_parent": "8-11 right cab floor slot (-133.5, -21.2, Z_top=+37.2mm inside cab) -> 8-10 pivot (Z=+15.0) -> 8-6/8-5 (Z=+8.5)",
-      "verified_views": ["Group 8 BOM p.5", "イラスト 8 item 5/6/7/10", "Manual p.24 図 8.1", "p45 cab rear photo"]
+      "axis_xyz": [0.0, 0.0, 1.0],
+      "mating_parent": "4-8 cradle under 8-11 center floor (-135.5, 0.0, +15.0mm); 6-9 vertical needle & split-clamp lever at (-135.5, +8.8, +24.2mm)",
+      "verified_views": ["イラスト 4 item 17", "イラスト 6 item 9", "イラスト 8", "p45 cab rear photo"]
+    },
+    {
+      "part_no": "8-5/8-6/8-10/1-16~19",
+      "name": "Cab-Interior Right-Floor Slanted Knurled Drain Pull-Knob (Zero Upright Stick!), Under-Floor Rocker & 4-Port Spring-Poppet Cylinder Drain Linkage (ドレンバルブ)",
+      "joint_type": "slide",
+      "axis_xyz": [-0.927, 0.0, 0.375],
+      "mating_parent": "8-11 right cab floor opening (-133.0, -21.0, +20.0mm) with knurled knob 8-6 above floor (-141.5, -21.0, +22.4mm) -> 8-10 -> straight 8-5 (Z=+8.5mm)",
+      "verified_views": ["Group 8 BOM p.4", "イラスト 1 Fig.1", "イラスト 8 item 5/6/10", "Manual p.24 図 8.1", "p45 cab rear photo"]
+    },
+    {
+      "part_no": "12-1/12-2/12-3/Template_3",
+      "name": "Sculpted Cast Split-Butterfly Firebox Door (4 Draft Holes, Straps, Latch), Template 3 Ceramic Liner & Bottom Hinge Pin (火室扉)",
+      "joint_type": "hinge",
+      "axis_xyz": [0.0, -1.0, 0.0],
+      "mating_parent": "11-9 lower-center firehole frame (-115.4, 0.0, +21.5mm bottom hinge pin 12-3)",
+      "verified_views": ["Group 12 BOM p.4", "イラスト 12 items 1/2/3", "p42 Template 3 (22.7x21.3mm)", "p45 cab rear photo"]
     },
     {
       "part_no": "21-15/21-28",
@@ -79,11 +96,27 @@
     },
     {
       "part_no": "29-11/29-12/29-13/29-14~19",
-      "name": "Standard D51 85.5mm Kamaboko Steam/Sand Dome Shroud, Wire-Hinged Front Lid & 6 Sand Pipes",
+      "name": "Kamaboko Steam/Sand Dome (Flat Crown to X=+62.5mm, Sealed C-M2-14 Well Under 29-12 Lid) & 6 Polar-Arc Sand Pipes Clear of R=32.0mm Cleading",
       "joint_type": "hinge",
-      "axis_xyz": [0.0, -1.0, 0.0],
-      "mating_parent": "boiler_superstructure X∈[-14.5,+71.0]mm (+17.6mm tall, bluff front nose +63..+71, S-curve rear tail +10..-14.5); 29-12 lid hinged at X=+62.2mm",
-      "verified_views": ["イラスト 29", "Manual p.36 Step 29", "p43 ortho side photos", "p44 ortho top photo"]
+      "axis_xyz": [0.0, 1.0, 0.0],
+      "mating_parent": "boiler_superstructure R_boiler=32.0mm, dome X∈[-15.0,+72.0]mm, lid 29-12 front hinge at X=+61.5mm, sand pipes r_center=33.25mm",
+      "verified_views": ["イラスト 15 item 6", "イラスト 29 items 11~19", "Manual p.36 Step 29", "p43/p44 ortho photos"]
+    },
+    {
+      "part_no": "3-4x6/3-5x8/5-9x8/5-15x2",
+      "name": "3-Bay Articulated Seesaw Equalizer Levers (6x), 3-Leaf Driving Springs (8x) & Axlebox Suspension",
+      "joint_type": "hinge",
+      "axis_xyz": [0.0, 1.0, 0.0],
+      "mating_parent": "loco_frame bays X=[+69.75, +23.25, -23.25]mm coupled to j_susp_z1..4",
+      "verified_views": ["Group 3 BOM p.3", "イラスト 3", "イラスト 5", "Manual p.19 図 3.1"]
+    },
+    {
+      "part_no": "19-1~9/19-10~17/31-25x8/31-28x8",
+      "name": "3-DOF Leading Bissel Truck (Roll 19-1 + Lateral Swing 19-3 + Coil 19-8), Coil-Sprung Trailing Delta Truck (19-12/15) & 8-Axlebox Sprung Tender Bogies",
+      "joint_type": "slide",
+      "axis_xyz": [0.0, 0.0, 1.0],
+      "mating_parent": "loco_frame leading pivot (+116/+106mm) & trailing pivot (-64mm); tender_bogie_1/2 ax_dx=±24.2mm",
+      "verified_views": ["Groups 19 & 31 BOM pp.6-7", "イラスト 19, 20, 31", "Manual p.33 図 20.1", "p46 tender side photo"]
     },
     {
       "part_no": "23-1/23-2/4-9/セラミックヤーン",

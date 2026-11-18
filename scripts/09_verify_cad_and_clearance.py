@@ -3014,8 +3014,9 @@ def verify_gate_22(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
             ((123.5, 0.0, 18.5), (0.0, 1.0, 0.0), 0.55),
         ],
         "feedwater_piping": [
-            ((-80.0, -9.5, 11.8), (1.0, 0.0, 0.0), 0.40),
-            ((-115.8, -11.8, 35.0), (0.0, 0.0, 1.0), 0.35),
+            ((-80.0, -8.2, 8.5), (1.0, 0.0, 0.0), 0.38),
+            ((-83.4, -3.5, 14.25), (1.0, 0.0, 0.0), 0.38),
+            ((-115.8, -11.8, 30.0), (0.0, 0.0, 1.0), 0.35),
         ],
         "displacement_lubricator": [
             ((128.0, 7.5, 18.5), (1.0, 0.0, 0.0), 0.35),
@@ -3098,7 +3099,7 @@ def verify_gate_22(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         )
     else:
         msgs.append(
-            f"PASS: STEP-First CAD verified ({len(parts_mp)}/101 parts compiled_from_step=True; "
+            f"PASS: STEP-First CAD verified ({len(parts_mp)}/104 parts compiled_from_step=True; "
             f"{total_sections}/{total_sections} {lumen_backend} 5-point fluid cross-sections 100% open across 23-1/17-5/6-6/4-2/34-6/31-14)"
         )
 
@@ -3250,6 +3251,7 @@ def verify_gate_22(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     lf_pos = d_mj.xpos[mujoco.mj_name2id(m_mj, mujoco.mjtObj.mjOBJ_BODY, "loco_frame")]
     dr_loc_mm = (d_mj.xpos[bid_dr] - lf_pos) * 1000.0
     dr_top_z_mm = dr_loc_mm[2] + float(dr_pts[:, 2].max())
+    dr_bot_z_mm = dr_loc_mm[2] + float(dr_pts[:, 2].min())
     dpr_xmin = float(stl_tris_mm["drain_pull_rod"].reshape(-1, 3)[:, 0].min()) + float(
         (d_mj.xpos[mujoco.mj_name2id(m_mj, mujoco.mjtObj.mjOBJ_BODY, "drain_pull_rod"), 0] - lf_pos[0]) * 1000.0
     )
@@ -3280,7 +3282,8 @@ def verify_gate_22(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         and abs(float(wh_ax[1]) + 1.0) < 1e-4
         and -140.0 <= dr_loc_mm[0] <= -128.0
         and -25.0 <= dr_loc_mm[1] <= -18.0
-        and dr_top_z_mm >= 35.0
+        and 24.0 <= dr_top_z_mm <= 30.8
+        and 6.5 <= dr_bot_z_mm <= 16.5
         and dpr_xmin >= -136.5
         and no_roof_hatch_jnt
         and has_dome_lid_jnt
@@ -3292,17 +3295,305 @@ def verify_gate_22(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     ):
         ok = False
         msgs.append(
-            f"FAIL: Stage 17 part geometry fixes failed: wh(yspan={wh_yspan:.2f}, xmin={wh_xmin:.1f}, ax={wh_ax.round(2)}), "
-            f"dr87(loc={dr_loc_mm.round(1)}, topZ={dr_top_z_mm:.1f}, dpr_xmin={dpr_xmin:.1f}), "
+            f"FAIL: Stage 17/18 part geometry fixes failed: wh(yspan={wh_yspan:.2f}, xmin={wh_xmin:.1f}, ax={wh_ax.round(2)}), "
+            f"dr86(loc={dr_loc_mm.round(1)}, topZ={dr_top_z_mm:.1f}, botZ={dr_bot_z_mm:.1f}, dpr_xmin={dpr_xmin:.1f}), "
             f"no_roof_jnt={no_roof_hatch_jnt}, dome_jnt={has_dome_lid_jnt}, sill_zmin={front_sill_zmin:.2f}, "
             f"dome(span={dome_xspan:.1f}, zmax={dome_zmax:.2f}), rr(rear_ptp={rr_rear_z_ptp:.2f}, drop={rr_drop_mm:.2f})"
         )
     else:
         msgs.append(
-            f"PASS: Stage 17 blueprint fixes verified: XZ-plane 11-3 whistle (x_min={wh_xmin:.1f}mm, y_span={wh_yspan:.1f}mm), "
-            f"interior right-floor 8-7 drain lever (Z_top=+{dr_top_z_mm:.1f}mm, zero under-cab overhang), "
+            f"PASS: Stage 17/18 blueprint fixes verified: XZ-plane 11-3 whistle (x_min={wh_xmin:.1f}mm, y_span={wh_yspan:.1f}mm), "
+            f"interior right-floor 8-6 knurled drain knob (Z=[+{dr_bot_z_mm:.1f}, +{dr_top_z_mm:.1f}]mm, zero fake upright stick & zero under-cab protrusion), "
             f"bolted 21-15 roof vent + hinged 29-12 dome lid, trimmed cab sill (Z_min=+{front_sill_zmin:.1f}mm), "
             f"Kamaboko 29-11 (L={dome_xspan:.1f}mm@Z>=75, Z_crown=+{dome_zmax:.1f}mm), straight-80% 8-18 reach rod (centerline ptp={rr_rear_z_ptp:.2f}mm, front drop={rr_drop_mm:.1f}mm)"
+        )
+
+    return ok, msgs
+
+
+def verify_gate_23(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
+    """
+    Stage 18 全面机械、多相热流、轮轨脱轨、烟管热弹塑性形变与 7-PINO / GPU 监控 17 项终极验收门禁:
+      1. 6-5 中央轴动给水泵实心盲底/盲头封闭、全长 6-1 柱塞、双 SB-ø3 止回钢球、抽吸负压真空与压送机械轴功 + 272/340ml 旁通循环；
+      2. 气缸开口系热力学第一定律真实气体多变膨胀做功、华氏逆转机截止率节汽效率对比与 1-16x4 气液两相均相闪蒸排液；
+      3. 4-2 蒸汽汽缸油与 36-4->23-1 燃料乙醇考虑温度黏度 mu(T)、蒸气压与坡度重力的真实流动；
+      4. 12-1 铸造四孔火室门、11-15 精确 23.0mm 横置分汽包、4-17/6-9/8-7 开口夹箍旁通阀、29-11 严密封闭砂箱顶与零凹陷极坐标撒砂管；
+      5. 3-4x6 铰接均衡梁与全车 10 轴板簧/螺旋簧重力弹性挠度、R2m 平顺通过 vs 侧向冲击脱轨落枕真实制停；
+      6. 0.0ml 干锅严格零蒸发、紫铜 5 烟管干烧退火外压弯曲/椭圆扁化热弹塑性形变、7 算子 PINO 与可选 GPU 监控器。
+    """
+    import torch
+    from sim.thermo_1d import AsterD51Thermo1D, CabControls, CylinderCalibration
+    from sim.thermo_elastic_gpu import BoilerThermoElasticGPU
+
+    ok = True
+    msgs: List[str] = []
+
+    # 23.1 核验 6-5 轴动泵盲底/盲头实心封闭、管壁包络内腔、6-1 全长柱塞与双 SB-ø3 止回球
+    ram_xmin = float(stl_tris_mm["axle_pump_ram"].reshape(-1, 3)[:, 0].min())
+    mp = json.loads((PROJECT_ROOT / "configs" / "d51_mass_props.json").read_text(encoding="utf-8"))["parts"]
+    ball_mass_g = float(mp["pump_check_ball"]["mass_kg"]) * 1000.0
+
+    def _pt_inside_stl(tris: np.ndarray, pt: Tuple[float, float, float]) -> bool:
+        d_ray = np.array([0.1731, 0.2419, 0.9547], dtype=np.float64)
+        d_ray /= np.linalg.norm(d_ray)
+        v0, e1, e2 = tris[:, 0], tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]
+        h = np.cross(d_ray, e2)
+        a = np.einsum("ij,ij->i", e1, h)
+        val = np.abs(a) > 1e-11
+        v0, e1, e2, h, inv_a = v0[val], e1[val], e2[val], h[val], 1.0 / a[val]
+        s = np.array(pt, dtype=np.float64) - v0
+        u = inv_a * np.einsum("ij,ij->i", s, h)
+        m1 = (u >= 0.0) & (u <= 1.0)
+        if not np.any(m1):
+            return False
+        q = np.cross(s[m1], e1[m1])
+        vb = inv_a[m1] * (q @ d_ray)
+        m2 = (vb >= 0.0) & (u[m1] + vb <= 1.0)
+        if not np.any(m2):
+            return False
+        t_hit = inv_a[m1][m2] * np.einsum("ij,ij->i", e2[m1][m2], q[m2])
+        return (int(np.sum(t_hit > 1e-6)) % 2) == 1
+
+    fw_tris = stl_tris_mm["feedwater_piping"]
+    pump_rear_solid = _pt_inside_stl(fw_tris, (-42.3, 0.0, 0.0))
+    pump_top_blind = _pt_inside_stl(fw_tris, (-38.8, 0.0, +11.2))
+    pump_bot_blind = _pt_inside_stl(fw_tris, (-38.8, 0.0, -8.4))
+    pipe_6_6_lumen_open = not _pt_inside_stl(fw_tris, (-83.4, -3.5, 14.25))
+    pipe_6_6_wall_solid = _pt_inside_stl(fw_tris, (-83.4, -3.5, 14.25 + 0.95))
+
+    if not (
+        len(mp) >= 104
+        and ram_xmin <= -16.5
+        and 0.09 <= ball_mass_g <= 0.15
+        and pump_rear_solid
+        and pump_top_blind
+        and pump_bot_blind
+        and pipe_6_6_lumen_open
+        and pipe_6_6_wall_solid
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Pump 6-5 CAD integrity failed: n_parts={len(mp)}, ram_xmin={ram_xmin:.2f}, ball_g={ball_mass_g:.3f}, "
+            f"rear_solid={pump_rear_solid}, top_blind={pump_top_blind}, bot_blind={pump_bot_blind}, "
+            f"6-6(open={pipe_6_6_lumen_open}, wall={pipe_6_6_wall_solid})"
+        )
+    else:
+        msgs.append(
+            f"PASS: Sealed 6-5 axle pump & 104 STEP parts verified: solid rear wall & blind (4-15) caps, "
+            f"6-1 plunger x_min={ram_xmin:.1f}mm, dual SB-ø3 balls ({ball_mass_g:.2f}g each), wall-bounded 6-6 lumen OK"
+        )
+
+    # 23.2 核验 12-1 铸造四孔火室门、11-15 精确 23.0mm 分汽包、封闭蒲鉾形砂箱 29-11 与零凹陷极坐标撒砂管
+    fd_tris = stl_tris_mm["cab_firebox_door"]
+    fd_holes_open = sum(
+        1 for hy, hz in ((-2.35, 8.55), (+2.35, 8.55), (-2.35, 5.45), (+2.35, 5.45))
+        if not _pt_inside_stl(fd_tris, (-1.35, hy, hz))
+    )
+    aux_pts = stl_tris_mm["boiler_aux_valves"].reshape(-1, 3)
+    turret_pts = aux_pts[
+        (aux_pts[:, 0] >= -120.2)
+        & (aux_pts[:, 0] <= -113.4)
+        & (aux_pts[:, 1] >= -9.2)
+        & (aux_pts[:, 1] <= +15.0)
+        & (aux_pts[:, 2] >= 63.2)
+        & (aux_pts[:, 2] <= 69.8)
+    ]
+    turret_yspan = float(turret_pts[:, 1].max() - turret_pts[:, 1].min()) if len(turret_pts) else 0.0
+
+    bs_tris = stl_tris_mm["boiler_superstructure"]
+    bs_pts_all = bs_tris.reshape(-1, 3)
+    # 砂箱全长顶面 (含前端沉孔井 X=+56.2 与后端 S 曲线斜坡 X=-6.0) 严密实心封闭，绝无贯通破洞；且极坐标撒砂管零凹陷!
+    dome_nose_sealed = _pt_inside_stl(bs_tris, (56.2, 0.0, 80.5)) and _pt_inside_stl(bs_tris, (-6.0, 0.0, 78.5))
+    sand_zone = bs_pts_all[
+        (bs_pts_all[:, 0] >= 0.0)
+        & (bs_pts_all[:, 0] <= 52.0)
+        & (np.abs(bs_pts_all[:, 1]) >= 18.0)
+        & (bs_pts_all[:, 2] >= 46.0)
+        & (bs_pts_all[:, 2] <= 70.0)
+    ]
+    r_sand = np.hypot(sand_zone[:, 1], sand_zone[:, 2] - 44.0)
+    # 撒砂管顶点在 R ≈ 30.8..32.6mm (外表面高于 R=30.00mm 锅筒外皮 + 30.75mm 锅带!)
+    outer_sand_pts = r_sand[r_sand > 30.82]
+
+    if not (fd_holes_open == 4 and 22.2 <= turret_yspan <= 24.0 and dome_nose_sealed and len(outer_sand_pts) >= 120):
+        ok = False
+        msgs.append(
+            f"FAIL: Cast 12-1 door / 11-15 turret / Kamaboko dome & sand pipes failed: "
+            f"fd_holes={fd_holes_open}/4, turret_yspan={turret_yspan:.2f}mm, nose_sealed={dome_nose_sealed}, sand_outer_pts={len(outer_sand_pts)}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Cast 4-hole 12-1 firebox door ({fd_holes_open}/4 draft holes), 11-15 turret bar L={turret_yspan:.1f}mm (spec 23.0mm), "
+            f"sealed Kamaboko 29-11 well & polar sand pipes (R_max={float(outer_sand_pts.max()):.2f}mm > 30.75mm bands, zero sunken chords)"
+        )
+
+    # 23.3 核验水循环抽吸负压/轴功/旁通、开口系气缸膨胀与逆转截止率节汽、两相排液、黏温油醇及 0ml 严格零蒸发
+    th = AsterD51Thermo1D(CylinderCalibration())
+    th.reset_hot_ready()
+    assert abs(th.tender_water_ml - 272.0) < 0.1 and abs(th.tender_water_cap_ml - 340.0) < 0.1
+
+    c_suct = CabControls(regulator=0.0, reverser=0.0, bypass_valve=0.85, burner_lit=True, fuel_valve=0.8)
+    for _ in range(40):
+        _, _, fp_suc, tel_suc = th.step(0.0005, 0.005, 0.0, 0.0, 0.005, 0.0, 0.0, 12.0, +0.048, c_suct)
+    vac_kpa = tel_suc.pump_suction_vac_kpa
+    w_suc = tel_suc.pump_shaft_power_w
+
+    c_del_byp = CabControls(regulator=0.0, reverser=0.0, bypass_valve=0.90, burner_lit=True, fuel_valve=0.8)
+    for _ in range(40):
+        _, _, fp_byp, tel_byp = th.step(0.0005, 0.005, 0.0, 0.0, 0.005, 0.0, 0.0, 12.0, -0.048, c_del_byp)
+
+    c_del_boil = CabControls(regulator=0.0, reverser=0.0, bypass_valve=0.0, burner_lit=True, fuel_valve=0.8)
+    for _ in range(90):
+        _, _, fp_boil, tel_boil = th.step(0.0005, 0.005, 0.0, 0.0, 0.005, 0.0, 0.0, 12.0, -0.048, c_del_boil)
+
+    # 对比华氏螺旋逆转机早截止巡航 (rev=0.42) vs 晚截止满档 (rev=0.88) 测功台定速巡航比耗汽率 (g/kJ) 与多变膨胀降温
+    def _eval_cutoff_run(rev_val: float) -> Tuple[float, float, float]:
+        r_sim = CoSimRunner(PROJECT_ROOT / "models" / "d51_full.xml", preset="hot", use_gpu_3d=False)
+        r_sim.thermo.T_cyl_wall_c = 158.0
+        r_sim.ctrl.regulator = 0.65
+        r_sim.ctrl.reverser = rev_val
+        r_sim.ctrl.drain_cock = False
+        w_qvels = [
+            int(r_sim.model.jnt_dofadr[mujoco.mj_name2id(r_sim.model, mujoco.mjtObj.mjOBJ_JOINT, f"j_wheel_{i}")])
+            for i in range(1, 5)
+        ]
+        steam_g_acc = 0.0
+        work_kj_acc = 0.0
+        min_t_gas_c = 999.0
+        dt_step = float(r_sim.model.opt.timestep)
+        for step_i in range(2000):
+            for qv in w_qvels:
+                r_sim.data.qvel[qv] = 22.0
+            t_r = r_sim.step_once()
+            if step_i >= 600:
+                steam_g_acc += t_r.steam_out_g_s * dt_step
+                work_kj_acc += max(0.0, t_r.cyl_expansion_work_w) * 1e-3 * dt_step
+                min_t_gas_c = min(min_t_gas_c, float(min(r_sim.thermo.T_gas_L.min(), r_sim.thermo.T_gas_R.min()) - 273.15))
+        spec_g_kj = steam_g_acc / max(1e-6, work_kj_acc)
+        return t_r.cutoff_pct, spec_g_kj, min_t_gas_c
+
+    cut_45, spec_45, tgas_45 = _eval_cutoff_run(0.42)
+    cut_88, spec_88, _ = _eval_cutoff_run(0.88)
+
+    # 冷态黏稠蒸汽油 vs 热态低黏蒸汽油毛细供油速率对比 + 1-16 两相排液吹除 + 0ml 严格零蒸发
+    th_cold_oil = AsterD51Thermo1D(CylinderCalibration())
+    th_cold_oil.reset_hot_ready()
+    th_cold_oil.T_lube_oil_c = 24.0
+    th_cold_oil.T_cyl_wall_c = 35.0
+    th_cold_oil.M_cond_L[:] = 2.0e-4
+    c_drn = CabControls(regulator=0.55, reverser=0.75, drain_cock=True, burner_lit=True, fuel_valve=0.8)
+    for _ in range(30):
+        _, _, _, tel_co = th_cold_oil.step(0.0005, 0.005, -0.06, -0.0022, 0.005, 0.06, +0.0022, 10.0, 0.0, c_drn)
+
+    th_hot_oil = AsterD51Thermo1D(CylinderCalibration())
+    th_hot_oil.reset_hot_ready()
+    th_hot_oil.T_lube_oil_c = 128.0
+    for _ in range(30):
+        _, _, _, tel_ho = th_hot_oil.step(0.0005, 0.005, -0.06, -0.0022, 0.005, 0.06, +0.0022, 10.0, 0.0, c_drn)
+
+    th_hot_oil.M_water_kg = 0.0
+    _, _, _, tel_zero = th_hot_oil.step(0.0005, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, c_drn)
+
+    if not (
+        vac_kpa >= 1.5
+        and fp_suc < -0.01
+        and w_suc > 0.0
+        and fp_boil > fp_byp > 0.05
+        and tel_byp.return_water_ml_s > tel_boil.return_water_ml_s + 0.05
+        and tel_boil.feedwater_g_s > tel_byp.feedwater_g_s + 0.05
+        and cut_45 < cut_88 - 18.0
+        and 0.1 < spec_45 < spec_88
+        and tgas_45 < th.T_superheat_c - 6.0
+        and tel_co.lube_oil_viscosity_mpas > 1200.0
+        and tel_ho.lube_oil_viscosity_mpas < 75.0
+        and tel_ho.roscoe_quill_oil_rate_mg_min >= tel_co.roscoe_quill_oil_rate_mg_min
+        and tel_co.drain_blowdown_g_s > 0.05
+        and tel_zero.boiler_water_ml == 0.0
+        and tel_zero.steam_gen_g_s == 0.0
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Stage 18 fluid/cutoff/0ml physics failed: vac={vac_kpa:.2f}kPa, fp=({fp_suc:.3f},{fp_byp:.3f},{fp_boil:.3f})N, "
+            f"cut=({cut_45:.1f}% vs {cut_88:.1f}%), spec=({spec_45:.1f} vs {spec_88:.1f} g/kJ, Tgas={tgas_45:.1f}C), "
+            f"oil_visc=({tel_co.lube_oil_viscosity_mpas:.0f}->{tel_ho.lube_oil_viscosity_mpas:.1f} mPa*s), "
+            f"drn={tel_co.drain_blowdown_g_s:.3f}g/s, zero_evap={tel_zero.steam_gen_g_s}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Pump suction/delivery/bypass & First-Law cutoff verified: suction vac=-{vac_kpa:.1f}kPa (F={fp_suc:.2f}N), "
+            f"delivery F={fp_boil:.2f}N (fw={tel_boil.feedwater_g_s:.2f}g/s vs return={tel_byp.return_water_ml_s:.2f}ml/s); "
+            f"Walschaerts cutoff {cut_45:.1f}%->spec={spec_45:.1f}g/kJ vs {cut_88:.1f}%->{spec_88:.1f}g/kJ; "
+            f"oil μ(24->128°C)={tel_co.lube_oil_viscosity_mpas:.0f}->{tel_ho.lube_oil_viscosity_mpas:.1f}mPa·s; 0ml evap=0.000g/s"
+        )
+
+    # 23.4 核验 3-4x6 均衡梁 + 10 轴板簧重力弹性形变 + R2m 正常过弯零脱轨 vs 侧向冲击脱轨落枕真实制停
+    r_r2m = CoSimRunner(PROJECT_ROOT / "models" / "d51_r2m.xml", preset="hot", use_gpu_3d=False)
+    has_6_eq = all(
+        mujoco.mj_name2id(r_r2m.model, mujoco.mjtObj.mjOBJ_GEOM, f"eq_lever_vis_{b}_{s}") >= 0
+        for s in ("L", "R")
+        for b in (1, 2, 3)
+    )
+    r_r2m.ctrl.regulator = 0.52
+    r_r2m.ctrl.reverser = 0.75
+    r_r2m.ctrl.drain_cock = False
+    for _ in range(800):
+        tel_r2m = r_r2m.step_once()
+    norm_ok = (not tel_r2m.derailed) and len(tel_r2m.spring_deflect_mm) == 10 and max(tel_r2m.spring_deflect_mm) > 0.08
+
+    v_pre = float(np.hypot(r_r2m.data.qvel[0], r_r2m.data.qvel[1]))
+    r_r2m.data.qvel[1] += 0.45
+    r_r2m.data.qvel[2] += 0.22
+    for _ in range(260):
+        tel_der = r_r2m.step_once()
+    v_post = float(np.hypot(r_r2m.data.qvel[0], r_r2m.data.qvel[1]))
+
+    if not (has_6_eq and norm_ok and tel_der.derailed and v_post < 0.65 * max(0.05, v_pre)):
+        ok = False
+        msgs.append(
+            f"FAIL: Running-gear springs / derailment physics failed: eq6={has_6_eq}, norm_ok={norm_ok} (spr={tel_r2m.spring_deflect_mm}), "
+            f"derailed={tel_der.derailed} ({tel_der.derail_reason}), v={v_pre:.3f}->{v_post:.3f}m/s"
+        )
+    else:
+        msgs.append(
+            f"PASS: 6 articulated 3-4 equalizers, 10-axle spring deflection (max={max(tel_r2m.spring_deflect_mm):.2f}mm), "
+            f"normal R2m zero-derail & forced derailment sleeper-plowing arrest ({v_pre:.2f}->{v_post:.3f}m/s: {tel_der.derail_reason})"
+        )
+
+    # 23.5 核验锅炉 5 烟管干烧热弹塑性挠曲/永久形变、第 7 算子 ThermoElasticStructPINO 与 GPU 利用率评估报告
+    dev_el = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    el_gpu = BoilerThermoElasticGPU(device=dev_el)
+    for _ in range(40):
+        st_wet = el_gpu.step(0.05, P_boiler_pa=101325.0 + 3.8 * 98066.5, T_water_c=150.0, T_crown_c=168.0, T_flue_gas_in_c=520.0, water_free_z_mm=55.5)
+    bow_wet = max(st_wet.flue_deflection_mm)
+    for _ in range(80):
+        st_dry = el_gpu.step(0.10, P_boiler_pa=101325.0 + 3.8 * 98066.5, T_water_c=150.0, T_crown_c=540.0, T_flue_gas_in_c=860.0, water_free_z_mm=18.2)
+    bow_dry = max(st_dry.flue_deflection_mm)
+    perm_bow = max(st_dry.flue_permanent_bow_mm)
+
+    pino_rep = json.loads((PROJECT_ROOT / "configs" / "pino_training_report.json").read_text(encoding="utf-8"))
+    gpu_rep_path = PROJECT_ROOT / "configs" / "gpu_utilization_report.json"
+    gpu_rep = json.loads(gpu_rep_path.read_text(encoding="utf-8")) if gpu_rep_path.exists() else {}
+    el_val = pino_rep.get("thermo_elastic_validation", {})
+
+    if not (
+        bow_dry > 3.0 * max(1e-4, bow_wet)
+        and perm_bow > 0.0
+        and st_dry.flue_fsi_resistance_mult > 1.0
+        and pino_rep.get("arch_version") == "d51_pino_v5_7op"
+        and float(el_val.get("r2_flue_bow_mm", 0.0)) >= 0.98
+        and int(gpu_rep.get("pino_operators_active", 0)) == 7
+        and float(gpu_rep.get("cfd_hz_after", 0.0)) >= 125.0
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Boiler thermo-elasticity / 7-PINO / GPU report failed: bow={bow_wet:.4f}->{bow_dry:.4f}mm (perm={perm_bow:.4f}mm), "
+            f"arch={pino_rep.get('arch_version')}, el_val={el_val}, gpu_rep={gpu_rep}"
+        )
+    else:
+        msgs.append(
+            f"PASS: GPU 5-flue thermo-elasto-plasticity (wet bow={bow_wet:.4f}mm -> dry-fire bow={bow_dry:.3f}mm, perm={perm_bow:.4f}mm, "
+            f"σ_max={st_dry.max_boiler_stress_mpa:.1f}MPa vs σ_y={st_dry.copper_yield_mpa:.1f}MPa), "
+            f"7th PINO R2={el_val.get('r2_flue_bow_mm')} & GPU offload {gpu_rep.get('cfd_hz_after')}Hz (SM peak {gpu_rep.get('sm_util_pct_peak')}%)"
         )
 
     return ok, msgs
@@ -3443,6 +3734,13 @@ def main() -> int:
     for m in g22_msgs:
         print(f"  - {m}")
     all_ok &= g22_ok
+
+    hw_guard.cooldown_if_needed()
+    g23_ok, g23_msgs = verify_gate_23(stl_tris_mm)
+    print(f"\n[Gate 23] Stage 18 Pump/Cutoff/Viscosity/Cast-Parts/Springs/Derailment/Thermo-Elastic & 7-PINO GPU Suite -> {'PASS' if g23_ok else 'FAIL'}")
+    for m in g23_msgs:
+        print(f"  - {m}")
+    all_ok &= g23_ok
 
     snap = hw_guard.read_metrics()
     print(f"\n[Thermal/Power Guard] Post-run telemetry: CPU={snap['cpu_c']:.1f}°C | GPU={snap['gpu_c']:.1f}°C | GPU_Power={snap['gpu_w']:.1f}W")

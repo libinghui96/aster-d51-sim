@@ -62,6 +62,12 @@
     .copilot-box.caution { background: rgba(210, 153, 34, 0.16); border-color: rgba(227, 179, 65, 0.42); }
     .copilot-box.critical { background: rgba(248, 81, 73, 0.18); border-color: rgba(255, 123, 114, 0.55); }
     .copilot-head { display: flex; justify-content: space-between; font-weight: 700; color: #79c0ff; margin-bottom: 2px; }
+    .gpu-mon-box {
+      display: none; margin-top: 2px; padding: 6px 8px; border-radius: 6px;
+      background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(52, 211, 153, 0.35);
+      font-size: 11px; line-height: 1.38; color: #d1fae5;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
 
     #part-tooltip {
       position: fixed; pointer-events: none; display: none; z-index: 90;
@@ -82,6 +88,7 @@
   <div id="scene-toolbar" class="hud-panel">
     <select id="select-scene">
       <option value="d51_full.xml">試運転用コロ (滚轮台悬空)</option>
+      <option value="d51_track.xml">直線枕木軌道 + 8-20B 煤水车</option>
       <option value="d51_r2m.xml">R2m 环形弯道 + 8-20B 煤水车</option>
     </select>
     <select id="select-cam">
@@ -92,6 +99,7 @@
     </select>
     <button id="btn-hot-preset" class="active">3.8kg/cm² 热炉即发</button>
     <button id="btn-cold-reset">冷炉整备重置</button>
+    <button id="btn-gpu-mon" title="可选开启 RTX 5080 SM 利用率、显存、功耗与三维 PDE/PINO 核耗时监控">📊 GPU 監視</button>
   </div>
 
   <div id="top-gauges" class="hud-panel">
@@ -125,9 +133,11 @@
     <div class="gauge-row"><span>煙室負圧 / シリンダ壁温</span><span id="txt-smokebox" class="val-mono">-78 Pa | 132°C</span></div>
     <div class="gauge-row"><span>動輪回転 / 1:32 換算車速</span><span id="txt-speed" class="val-mono">0 RPM | 0.0 km/h</span></div>
     <div class="gauge-row"><span>燃料 / 炭水車水 (戻水・水温)</span><span id="txt-tanks" class="val-mono">130ml | 272ml (25°C)</span></div>
-    <div class="gauge-row"><span>左右ピストン有効推力</span><span id="txt-forces" class="val-mono">L: 0.0N | R: 0.0N</span></div>
+    <div class="gauge-row"><span>左右ピストン推力 / 締切率</span><span id="txt-forces" class="val-mono">L: 0.0N | R: 0.0N | 61%</span></div>
+    <div class="gauge-row"><span>6-5 軸動ポンプ負圧 / 煙管撓み</span><span id="txt-pump-elastic" class="val-mono">-0.0kPa (0.0W) | 撓0.00mm</span></div>
     <div class="gauge-row"><span>乾き度 x / 当量比 φ / 油膜</span><span id="txt-fluid3d" class="val-mono">x=0.95 | φ=1.00 | 3.8μm</span></div>
     <div class="gauge-row"><span>熱効率 η / 断熱放熱 / 灯芯毛細</span><span id="txt-cht" class="val-mono">η=46.5% | 29.1W (71°C) | 0.11ml/s</span></div>
+    <div id="gpu-monitor-box" class="gpu-mon-box"></div>
     <div id="copilot-box" class="copilot-box">
       <div class="copilot-head"><span id="txt-copilot-model">L3 Bonsai-2:27B</span><span id="txt-copilot-lvl">NOMINAL</span></div>
       <div id="txt-copilot-body"></div>
@@ -188,7 +198,7 @@
     <div class="btn-row">
       <button id="btn-burner" class="active">23-1 点火</button>
       <button id="btn-fan">煙突通風機</button>
-      <button id="btn-drain" class="active" title="運転室右床面 8-7 室内ドレンレバー → 8-5 引き棒 → 1-19 シリンダ排液コック">8-7 室内ドレン弁</button>
+      <button id="btn-drain" class="active" title="運転室右床面 8-6 室内ローレットドレンノブ → 8-5 引き棒 → 1-19 シリンダ排液コック">8-6 室内ドレン弁</button>
       <button id="btn-whistle" title="押している間 11-3 後方引き3穴レバー→11-1→13-3→11-8 車底真鍮汽笛吹鳴">11-3 汽笛</button>
       <button id="btn-sightdrain" title="11-7 パイレックス水面計の下部 1-2 吹抜コック洗浄">1-2 水面計吹抜</button>
       <button id="btn-firedoor">12-1 火室扉</button>

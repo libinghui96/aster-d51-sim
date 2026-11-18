@@ -10,11 +10,11 @@ Aster Hobby JNR D51 (1/32, Gauge 1) 一维集总参数热力学—流体—配�
   - 冷气缸分腔液态冷凝水积聚与未开排液阀时的不可压缩水锤 (Hydrolock) 冲击锁死及密封退化
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import math
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -143,7 +143,29 @@ class ThermoTelemetry:
     boiler_efficiency_pct: float = 0.0     # 锅炉第一性原理实时热效率 (%)
     boiler_water_ml: float = 210.0         # 锅筒实时残余液态水体积 (ml, 干烧可直至 0.0 ml)
     water_free_z_mm: float = 55.5          # 锅筒自由液面真实物理高度 Z (mm, 18.2..69.5 mm)
-    steam_gen_g_s: float = 0.0
+    steam_gen_g_s: float = 0.0             # 锅水真实相变蒸发产汽率 (g/s, 0ml 干锅时严格归零!)
+    steam_out_g_s: float = 0.0             # 锅筒顶空实际排汽总质量流率 (g/s)
+    cutoff_pct: float = 0.0                # 华氏配气机构实时进汽截止率 (% 行程, 随螺旋逆转机变化)
+    cyl_expansion_work_w: float = 0.0      # 双缸蒸汽多变膨胀指示机械功率 (W)
+    specific_steam_g_kj: float = 0.0       # 比耗汽率 (g/kJ 指示功, 验证收逆转提膨胀效率)
+    pump_chamber_kgf: float = 0.0          # 6-5 中央轴动给水泵腔实时表压 (kgf/cm², 吸程为负真空!)
+    pump_suction_vac_kpa: float = 0.0      # 6-5 轴动泵吸程抽水真空度 (kPa)
+    pump_shaft_power_w: float = 0.0        # 6-5 轴动泵吸收第3动轮轴机械功率 (W)
+    lube_oil_temp_c: float = 25.0          # 4-2 置换注油箱内蒸汽汽缸油温度 (°C)
+    lube_oil_viscosity_mpas: float = 1850.0  # 蒸汽汽缸油 Walther 动态黏度 (mPa·s)
+    alcohol_temp_c: float = 25.0           # 供醇管路燃料乙醇温度 (°C)
+    alcohol_viscosity_mpas: float = 1.08   # 燃料乙醇动态黏度 (mPa·s)
+    drain_blowdown_g_s: float = 0.0        # 1-16x4 气缸排液阀气液两相闪蒸吹除总流率 (g/s)
+    flue_deflection_mm: List[float] = field(default_factory=lambda: [0.0] * 5)
+    flue_ovalization_mm: List[float] = field(default_factory=lambda: [0.0] * 5)
+    crown_bulge_mm: float = 0.0            # 紫铜火室顶板热-压耦合鼓曲形变 (mm)
+    max_boiler_stress_mpa: float = 0.0     # 受压紫铜烟管/顶板最大 Von Mises 等效应力 (MPa)
+    copper_yield_mpa: float = 185.0        # 当前壁温下 C1100 紫铜屈服强度 (MPa, >340°C 急剧退火软化)
+    spring_deflect_mm: List[float] = field(default_factory=lambda: [0.0] * 10)
+    derailed: bool = False                 # 轮轨脱线落枕告警标志
+    derail_reason: str = ""                # 脱轨车轴与物理原因描述
+    pino_7op_active: bool = False          # 七算子 PINO (含热弹性形变算子) 在线标志
+    gpu_monitor: Dict[str, Any] = field(default_factory=dict)
     force_L: float = 0.0
     force_R: float = 0.0
     wheel_rpm: float = 0.0
@@ -294,11 +316,45 @@ class AsterD51Thermo1D:
 
         self.P_cyl_L = np.array([P_ATM, P_ATM], dtype=np.float64)
         self.P_cyl_R = np.array([P_ATM, P_ATM], dtype=np.float64)
+        self.T_gas_L = np.array([298.15, 298.15], dtype=np.float64)     # 左缸前/后腔蒸汽实时绝对温度 (K, 截止后绝热膨胀降温!)
+        self.T_gas_R = np.array([298.15, 298.15], dtype=np.float64)     # 右缸前/后腔蒸汽实时绝对温度 (K)
         self.T_cyl_wall_c = 25.0
         # 左右气缸 [前腔 Head, 后腔 Crank] 液态冷凝水质量 (kg)
         self.M_cond_L = np.array([8.0e-5, 8.0e-5], dtype=np.float64)
         self.M_cond_R = np.array([8.0e-5, 8.0e-5], dtype=np.float64)
         self.condensate_kg = float(np.sum(self.M_cond_L) + np.sum(self.M_cond_R))
+
+        # 6-5 轴动给水泵真实可压缩液腔状态与抽吸真空/止回球状态
+        self.P_pump_chamber = P_ATM
+        self.P_fw_manifold = P_ATM
+        self.pump_suction_vac_kpa = 0.0
+        self.pump_shaft_power_w = 0.0
+        self.pump_ball_lifts_mm = [0.0, 0.0, 0.0]  # [6-5 下吸球, 6-5 上排球, 13-2 入炉球]
+
+        # 4-2 蒸汽油与 36-4->23-1 酒精真实温度-黏度-压力-重力状态
+        self.T_lube_oil_c = 25.0
+        self.lube_oil_visc_mpas = 1850.0
+        self.T_alcohol_c = 25.0
+        self.alcohol_visc_mpas = 1.08
+
+        # 锅筒顶空真实水蒸气质量守恒 (消除 0ml 干锅时分支跳变与虚假蒸発中读数!)
+        v_gas_0 = max(2e-5, self.V_boiler_total - self.M_water_kg / 960.0)
+        self.M_vap_kg = (P_ATM * v_gas_0) / (R_STEAM * 298.15)
+        self.T_vap_c = 25.0
+        self.flue_fsi_mult = 1.0
+
+        # 华氏配气实时截止率与仪表平滑器状态
+        self.cutoff_pct = 0.0
+        self._prev_adm_open_L = False
+        self._prev_adm_open_R = False
+        self._measured_cutoff_pct = 0.0
+        self._ema_exhaust_gs = 0.0
+        self._ema_evap_gs = 0.0
+        self._ema_heat_w = 0.0
+        self._ema_eta_pct = 0.0
+        self._ema_vac_pa = 0.0
+        self._ema_ind_work_w = 0.0
+        self._ema_spec_steam = 0.0
 
         self.copper_anneal_damage = 0.0
         self.seal_health = 1.0
@@ -311,7 +367,7 @@ class AsterD51Thermo1D:
         self.mariotte_headspace_kpa = 2.50
         self.steam_dryness_dome = 0.96
         self.steam_dryness_chest = 0.96
-        # L2 5-Operator PINO 实时物理神经算子注入槽 (为 None 时使用 1D + 离线 CFD LUT 兜底)
+        # L2 7-Operator PINO 实时物理神经算子注入槽 (为 None 时使用 1D + 离线 CFD LUT 兜底)
         self.ext_pino_burner: Optional[Dict[str, float]] = None
         self.ext_pino_cyl_L: Optional[Tuple[float, float, float, float, float, float]] = None
         self.ext_pino_cyl_R: Optional[Tuple[float, float, float, float, float, float]] = None
@@ -319,6 +375,7 @@ class AsterD51Thermo1D:
         self.ext_pino_tender: Optional[Tuple[float, ...]] = None
         self.ext_pino_safety: Optional[Tuple[float, ...]] = None
         self.ext_pino_wick_cht: Optional[Tuple[float, ...]] = None
+        self.ext_pino_elastic: Optional[Dict[str, Any]] = None
         self.burner_lumen_cond: float = 1.0
         self.insulation_coverage: float = 0.86
         self.wick_saturation: float = 0.90
@@ -330,8 +387,11 @@ class AsterD51Thermo1D:
         """一键热炉预设：气压 3.8 kgf/cm²、水位 50%、暖缸就绪，可直接开阀发车"""
         self.reset_cold_prepared()
         self.T_boiler_c = 149.6
+        self.T_vap_c = 149.6
         self.T_crown_c = 168.5
         self.P_boiler = sat_pressure_pa(self.T_boiler_c)
+        v_gas_h = max(2e-5, self.V_boiler_total - self.M_water_kg / 960.0)
+        self.M_vap_kg = (self.P_boiler * v_gas_h) / (R_STEAM * (self.T_boiler_c + 273.15))
         self.P_steam_chest = P_ATM
         self.pg_bourdon_kgf = max(0.0, (self.P_boiler - P_ATM) / PA_PER_KGF_CM2)
         self.turret_pressure_kgf = self.pg_bourdon_kgf
@@ -339,6 +399,12 @@ class AsterD51Thermo1D:
         self.T_sh_wall_c = 172.0
         self.sump_fuel_ml = 3.5
         self.T_cyl_wall_c = 132.0
+        self.T_gas_L[:] = 132.0 + 273.15
+        self.T_gas_R[:] = 132.0 + 273.15
+        self.T_lube_oil_c = 78.0
+        self.lube_oil_visc_mpas = 92.0
+        self.T_alcohol_c = 31.5
+        self.alcohol_visc_mpas = 0.96
         self.wick_saturation = 0.72
         self.wick_tip_temp_c = 82.8
         self.casing_temp_c = 71.2
@@ -381,10 +447,28 @@ class AsterD51Thermo1D:
         mu_eff = mu_film * (2.0 - self.seal_health)
         return -mu_eff * normal_load * math.tanh(v_valve / 0.015) - 0.10 * v_valve
 
+    def _compute_walschaerts_cutoff_pct(self, reverser: float) -> float:
+        """
+        根据原厂华氏配气机构几何参数 (外余面 e_s=1.36mm, 恒定先导量 lead=0.28mm, 满档半行程 R_max=2.65mm)
+        解析计算给定螺旋逆转机档位 reverser ∈ [-1, +1] 下的理论进汽截止率 (% 行程)。
+        """
+        u = min(1.0, abs(float(reverser)))
+        es = self.calib.steam_lap * 1000.0
+        a_lead = es + 0.28
+        b_quad = u * math.sqrt(max(0.0, 2.65 ** 2 - a_lead ** 2))
+        r_amp = math.hypot(a_lead, b_quad)
+        if r_amp <= es + 1e-6:
+            return 0.0
+        phi = math.atan2(a_lead, max(1e-9, b_quad))
+        theta_cut = math.pi - phi - math.asin(min(1.0, es / r_amp))
+        theta_cut = max(0.0, min(math.pi, theta_cut))
+        return 50.0 * (1.0 - math.cos(theta_cut))
+
     def _step_cylinder_side(
         self,
         dt_sub: float,
         p_pair: np.ndarray,
+        t_gas_pair: np.ndarray,
         m_cond_pair: np.ndarray,
         q_piston: float,
         v_piston: float,
@@ -392,15 +476,20 @@ class AsterD51Thermo1D:
         areas: Tuple[float, float, float, float],
         drain_open: bool,
         pino_cyl: Optional[Tuple[float, float, float, float, float, float]] = None,
-    ) -> Tuple[float, float, float, float, bool]:
+    ) -> Tuple[float, float, float, float, float, float, bool]:
         """
-        单侧双作用气缸充放气、壁面冷凝积水与不可压缩水锤 (Hydrolock) 子步求解。
-        若挂载 L2 SlideValveCylinderPINO 算子，则采用三维窄缝推理出的真实缩脉系数 Cd 与冲击凝结增强因子。
+        单侧双作用气缸开口系第一定律真实气体多变膨胀做功 (dU = dm_in*h_in - dm_out*h - P*dV - Q_wall)、
+        1-16x2 气液两相均相平衡闪蒸排液吹除与不可压缩水锤 (Hydrolock) 子步求解。
+        返回: (进汽 kg/s, 乏汽排汽 kg/s, 排液阀总吹除 kg/s, 冷凝生成 kg/s, 指示膨胀功率 W, 水锤反力 N, 水锤标志)
         """
         a_adm_h, a_exh_h, a_adm_c, a_exh_c = areas
-        t_sh_k = self.T_superheat_c + 273.15
-        a_drain = 3.2e-7 if drain_open else 0.0
-        # O4-3: 活塞环热退化窜汽面积
+        t_sh_k = max(295.0, self.T_superheat_c + 273.15)
+        t_wall_k = max(290.0, self.T_cyl_wall_c + 273.15)
+        cp_steam = (GAMMA_STEAM / (GAMMA_STEAM - 1.0)) * R_STEAM
+        cv_steam = (1.0 / (GAMMA_STEAM - 1.0)) * R_STEAM
+
+        # 1-16 齿轮旋塞排液孔 (ø1.1mm, A=0.95mm²; 开启时通畅吹除，关闭但超压 > P_chest+28kPa 时阀芯微量顶起泄压)
+        a_drain_base = 3.6e-7 if drain_open else 0.0
         a_blowby = 2.2e-7 * (1.0 - self.seal_health)
 
         s_p = min(self.calib.stroke, max(0.0, q_fdc - q_piston))
@@ -417,6 +506,9 @@ class AsterD51Thermo1D:
         v_h_gas = max(0.08 * self.V_clear, v_h_tot - vol_w_h)
         v_c_gas = max(0.08 * self.V_clear, v_c_tot - vol_w_c)
 
+        t_h_k = float(np.clip(t_gas_pair[0], 280.0, 680.0))
+        t_c_k = float(np.clip(t_gas_pair[1], 280.0, 680.0))
+
         # 未开排液阀且腔内积水超限 (>0.48 * V_clear) 时，气液两相乳化阻塞滑阀排气口产生高背压憋死
         exh_choke_h = 0.14 if (not drain_open and vol_w_h > 0.48 * self.V_clear) else 1.0
         exh_choke_c = 0.14 if (not drain_open and vol_w_c > 0.48 * self.V_clear) else 1.0
@@ -427,56 +519,119 @@ class AsterD51Thermo1D:
             cd_ah = cd_eh = cd_ac = cd_ec = 0.68
             cond_nu_mult = 1.0
 
+        # 超压自动顶阀排液保护面积
+        over_p_h = max(0.0, p_pair[0] - max(self.P_steam_chest + 28000.0, P_ATM + 45000.0))
+        over_p_c = max(0.0, p_pair[1] - max(self.P_steam_chest + 28000.0, P_ATM + 45000.0))
+        a_drn_h = a_drain_base + min(2.4e-7, 1.2e-11 * over_p_h)
+        a_drn_c = a_drain_base + min(2.4e-7, 1.2e-11 * over_p_c)
+
+        # 1-16 排液阀气液两相均相平衡流 (Homogeneous-Equilibrium Two-Phase Blowdown):
+        # 底部积水占比 alpha_w 越高，吹除射流中液相夹带密度越高，积水排净后自动过渡为纯蒸汽射流
+        alpha_w_h = min(0.94, vol_w_h / max(1e-12, vol_w_h + 0.10 * self.V_clear)) if m_cond_pair[0] > 1e-9 else 0.0
+        alpha_w_c = min(0.94, vol_w_c / max(1e-12, vol_w_c + 0.10 * self.V_clear)) if m_cond_pair[1] > 1e-9 else 0.0
+        dp_drn_h = max(0.0, p_pair[0] - P_ATM + RHO_LIQ_WATER * 9.81 * 0.015 * alpha_w_h)
+        dp_drn_c = max(0.0, p_pair[1] - P_ATM + RHO_LIQ_WATER * 9.81 * 0.015 * alpha_w_c)
+
+        m_drn_liq_h = 0.64 * (a_drn_h * alpha_w_h) * math.sqrt(2.0 * RHO_LIQ_WATER * dp_drn_h) if a_drn_h > 0.0 else 0.0
+        m_drn_liq_c = 0.64 * (a_drn_c * alpha_w_c) * math.sqrt(2.0 * RHO_LIQ_WATER * dp_drn_c) if a_drn_c > 0.0 else 0.0
+        m_drn_vap_h = orifice_mass_flow(p_pair[0], P_ATM, t_h_k, a_drn_h * (1.0 - 0.82 * alpha_w_h), cd=0.66)
+        m_drn_vap_c = orifice_mass_flow(p_pair[1], P_ATM, t_c_k, a_drn_c * (1.0 - 0.82 * alpha_w_c), cd=0.66)
+
         m_in_h = orifice_mass_flow(self.P_steam_chest, p_pair[0], t_sh_k, a_adm_h, cd=cd_ah)
-        m_out_h = orifice_mass_flow(p_pair[0], P_ATM, t_sh_k, a_exh_h * exh_choke_h, cd=cd_eh)
-        m_drn_h = orifice_mass_flow(p_pair[0], P_ATM, t_sh_k, a_drain, cd=0.68)
+        m_out_h = orifice_mass_flow(p_pair[0], P_ATM, t_h_k, a_exh_h * exh_choke_h, cd=cd_eh)
 
         m_in_c = orifice_mass_flow(self.P_steam_chest, p_pair[1], t_sh_k, a_adm_c, cd=cd_ac)
-        m_out_c = orifice_mass_flow(p_pair[1], P_ATM, t_sh_k, a_exh_c * exh_choke_c, cd=cd_ec)
-        m_drn_c = orifice_mass_flow(p_pair[1], P_ATM, t_sh_k, a_drain, cd=0.68)
+        m_out_c = orifice_mass_flow(p_pair[1], P_ATM, t_c_k, a_exh_c * exh_choke_c, cd=cd_ec)
 
         # 前后腔活塞环窜汽
         if p_pair[0] >= p_pair[1]:
-            m_blow = orifice_mass_flow(p_pair[0], p_pair[1], t_sh_k, a_blowby)
+            m_blow = orifice_mass_flow(p_pair[0], p_pair[1], t_h_k, a_blowby)
+            m_blow_in_h, m_blow_out_h = 0.0, m_blow
+            m_blow_in_c, m_blow_out_c = m_blow, 0.0
+            t_blow_in_h, t_blow_in_c = t_c_k, t_h_k
         else:
-            m_blow = -orifice_mass_flow(p_pair[1], p_pair[0], t_sh_k, a_blowby)
+            m_blow_mag = orifice_mass_flow(p_pair[1], p_pair[0], t_c_k, a_blowby)
+            m_blow = -m_blow_mag
+            m_blow_in_h, m_blow_out_h = m_blow_mag, 0.0
+            m_blow_in_c, m_blow_out_c = 0.0, m_blow_mag
+            t_blow_in_h, t_blow_in_c = t_c_k, t_h_k
 
-        # O4-4 + L1 湿蒸汽夹带液滴 + 冷气缸壁湍流冲击凝结积水 vs 排液阀吹除
+        # 湿蒸汽夹带液滴 + 冷气缸壁湍流冲击凝结积水 vs 1-16 两相闪蒸排液吹除
         t_sat_chest = sat_temp_c(self.P_steam_chest)
         subcool_c = max(0.0, t_sat_chest - self.T_cyl_wall_c - 6.0)
         wet_carry = max(0.0, 1.0 - self.steam_dryness_chest)
         cond_frac = min(0.88, 0.024 * subcool_c * cond_nu_mult + wet_carry)
         mdot_cond_gen = 3.2 * cond_frac * (m_in_h + m_in_c)
-        dm_w_h = 3.2 * cond_frac * m_in_h
-        dm_w_c = 3.2 * cond_frac * m_in_c
-        if drain_open:
-            dp_h_bar = max(0.25, (p_pair[0] - P_ATM) * 1e-5)
-            dp_c_bar = max(0.25, (p_pair[1] - P_ATM) * 1e-5)
-            dm_w_h -= 0.0060 * dp_h_bar * (1.0 if m_cond_pair[0] > 0.0 else 0.0)
-            dm_w_c -= 0.0060 * dp_c_bar * (1.0 if m_cond_pair[1] > 0.0 else 0.0)
-        else:
+        dm_w_h = 3.2 * cond_frac * m_in_h - m_drn_liq_h
+        dm_w_c = 3.2 * cond_frac * m_in_c - m_drn_liq_c
+        if not drain_open:
             if a_exh_h > 1e-8 and vol_w_h > 0.85 * self.V_clear:
                 dm_w_h -= 0.000015 * (m_out_h / max(1e-6, m_out_h + 2e-4))
             if a_exh_c > 1e-8 and vol_w_c > 0.85 * self.V_clear:
                 dm_w_c -= 0.000015 * (m_out_c / max(1e-6, m_out_c + 2e-4))
 
         max_cond_chamber = 3.20 * self.V_clear * RHO_LIQ_WATER
-        m_cond_pair[0] = float(np.clip(m_cond_pair[0] + dm_w_h * dt_sub, 0.0, max_cond_chamber))
-        m_cond_pair[1] = float(np.clip(m_cond_pair[1] + dm_w_c * dt_sub, 0.0, max_cond_chamber))
+        w_prev_h, w_prev_c = m_cond_pair[0], m_cond_pair[1]
+        m_cond_pair[0] = float(np.clip(w_prev_h + dm_w_h * dt_sub, 0.0, max_cond_chamber))
+        m_cond_pair[1] = float(np.clip(w_prev_c + dm_w_c * dt_sub, 0.0, max_cond_chamber))
+        actual_drn_liq_h = max(0.0, (w_prev_h + 3.2 * cond_frac * m_in_h * dt_sub - m_cond_pair[0]) / max(1e-9, dt_sub))
+        actual_drn_liq_c = max(0.0, (w_prev_c + 3.2 * cond_frac * m_in_c * dt_sub - m_cond_pair[1]) / max(1e-9, dt_sub))
 
-        dp_h = (GAMMA_STEAM * R_STEAM * t_sh_k / v_h_gas) * (
-            (1.0 - 0.5 * cond_frac) * m_in_h - m_out_h - m_drn_h - m_blow
+        # 气缸壁面对流传热 (Woschni-like 活塞速度增强换热系数)
+        h_conv_cyl = 58.0 + 340.0 * abs(v_piston)
+        a_wall_h = 2.0 * self.A_head + math.pi * 0.015 * (s_p + 0.002)
+        a_wall_c = 2.0 * self.A_crank + math.pi * 0.015 * ((self.calib.stroke - s_p) + 0.002)
+        q_wall_h = h_conv_cyl * a_wall_h * (t_h_k - t_wall_k)
+        q_wall_c = h_conv_cyl * a_wall_c * (t_c_k - t_wall_k)
+
+        # 开口系热力学第一定律精确解算腔压 P 与绝热膨胀降温 T_gas:
+        # 进汽截止后 (m_in=0, m_out=0) 气缸内封闭蒸汽按 P*V^gamma 绝热膨胀继续推动活塞做功且零额外耗汽!
+        m_in_eff_h = (1.0 - 0.5 * cond_frac) * m_in_h
+        m_in_eff_c = (1.0 - 0.5 * cond_frac) * m_in_c
+        m_leave_h = m_out_h + m_drn_vap_h + m_blow_out_h
+        m_leave_c = m_out_c + m_drn_vap_c + m_blow_out_c
+
+        dp_h = ((GAMMA_STEAM - 1.0) / v_h_gas) * (
+            m_in_eff_h * cp_steam * t_sh_k
+            + m_blow_in_h * cp_steam * t_blow_in_h
+            - m_leave_h * cp_steam * t_h_k
+            - q_wall_h
         ) - (GAMMA_STEAM * p_pair[0] / v_h_gas) * dv_h
-        dp_c = (GAMMA_STEAM * R_STEAM * t_sh_k / v_c_gas) * (
-            (1.0 - 0.5 * cond_frac) * m_in_c - m_out_c - m_drn_c + m_blow
+
+        dp_c = ((GAMMA_STEAM - 1.0) / v_c_gas) * (
+            m_in_eff_c * cp_steam * t_sh_k
+            + m_blow_in_c * cp_steam * t_blow_in_c
+            - m_leave_c * cp_steam * t_c_k
+            - q_wall_c
         ) - (GAMMA_STEAM * p_pair[1] / v_c_gas) * dv_c
 
-        p_relief = max(self.P_steam_chest + 25000.0, P_ATM + 35000.0)
-        p_pair[0] = min(p_relief, max(0.85 * P_ATM, p_pair[0] + dp_h * dt_sub))
-        p_pair[1] = min(p_relief, max(0.85 * P_ATM, p_pair[1] + dp_c * dt_sub))
+        m_gas_h = max(1.2e-9, (p_pair[0] * v_h_gas) / (R_STEAM * t_h_k))
+        m_gas_c = max(1.2e-9, (p_pair[1] * v_c_gas) / (R_STEAM * t_c_k))
+        dT_h = (
+            m_in_eff_h * (cp_steam * t_sh_k - cv_steam * t_h_k)
+            + m_blow_in_h * (cp_steam * t_blow_in_h - cv_steam * t_h_k)
+            - m_leave_h * R_STEAM * t_h_k
+            - p_pair[0] * dv_h
+            - q_wall_h
+        ) / (m_gas_h * cv_steam)
+        dT_c = (
+            m_in_eff_c * (cp_steam * t_sh_k - cv_steam * t_c_k)
+            + m_blow_in_c * (cp_steam * t_blow_in_c - cv_steam * t_c_k)
+            - m_leave_c * R_STEAM * t_c_k
+            - p_pair[1] * dv_c
+            - q_wall_c
+        ) / (m_gas_c * cv_steam)
+
+        p_relief = max(self.P_steam_chest + 32000.0, P_ATM + 48000.0)
+        p_pair[0] = min(p_relief, max(0.82 * P_ATM, p_pair[0] + dp_h * dt_sub))
+        p_pair[1] = min(p_relief, max(0.82 * P_ATM, p_pair[1] + dp_c * dt_sub))
+        t_gas_pair[0] = float(np.clip(t_h_k + dT_h * dt_sub, 280.0, max(360.0, t_sh_k + 25.0)))
+        t_gas_pair[1] = float(np.clip(t_c_k + dT_c * dt_sub, 280.0, max(360.0, t_sh_k + 25.0)))
+
+        # 双腔瞬时指示膨胀机械功率 P_ind = (P_h - P_atm)*dV_h/dt + (P_c - P_atm)*dV_c/dt (W)
+        p_ind_w = (p_pair[0] - P_ATM) * dv_h + (p_pair[1] - P_ATM) * dv_c
 
         # 不可压缩液态水锤 (Hydrolock) 单边接触冲击模型:
-        # 仅在活塞挤压液柱时产生刚性液压阻力与强非弹性阻尼，回程液柱气穴分离不产生虚假弹性推进功
         f_hydro_x = 0.0
         hydrolock = False
         if not drain_open and vol_w_h > 0.48 * self.V_clear:
@@ -493,7 +648,8 @@ class AsterD51Thermo1D:
                 if v_piston < 0.002:
                     f_hydro_x += min(420.0, 3.5e8 * over_c * (1.0 if v_piston <= 0.0 else 0.15) + 3200.0 * max(0.0, -v_piston))
 
-        return (m_in_h + m_in_c), (m_out_h + m_out_c), mdot_cond_gen, f_hydro_x, hydrolock
+        mdot_drain_tot = actual_drn_liq_h + actual_drn_liq_c + m_drn_vap_h + m_drn_vap_c
+        return (m_in_h + m_in_c), (m_out_h + m_out_c), mdot_drain_tot, mdot_cond_gen, p_ind_w, f_hydro_x, hydrolock
 
     def step(
         self,
@@ -520,18 +676,36 @@ class AsterD51Thermo1D:
         """
         dt_th = dt * max(1.0, ctrl.thermal_warp)
 
-        # --- 1. 煤水车 36-4 马氏瓶恒液位酒精箱 -> 34-2 サンプ -> 23-1 纵向 1x3 三头燃烧器 ---
+        # --- 1. 煤水车 36-4 马氏瓶恒液位酒精箱 -> 34-2 サンプ -> ST-ø7 -> 23-1 真实温度/黏度/蒸气压/重力/Poiseuille 流 ---
+        theta_grade_only = max(-0.30, min(0.30, pitch_rad + math.radians(ctrl.grade_deg)))
+        # 供醇管路乙醇温度随火室辐射与车底迎风/煤水车常温来流醇动态热平衡 (常态 ~36-44°C，严重干烧辐射时升至 ~55-64°C):
+        q_alc_rad_w = (0.028 if ctrl.burner_lit else 0.005) * max(0.0, 0.22 * self.T_crown_c + 0.35 * self.T_boiler_c - self.T_alcohol_c)
+        q_alc_cool_w = (0.19 + 0.015 * min(35.0, abs(omega_3))) * (self.T_alcohol_c - 25.0)
+        self.T_alcohol_c = float(np.clip(
+            self.T_alcohol_c + ((q_alc_rad_w - q_alc_cool_w) / 18.0) * dt_th,
+            18.0, 74.0
+        ))
+        # 燃料乙醇真实物理物性: Andrade 动态黏度 mu(T)、热膨胀密度 rho(T) 与 Antoine 饱和蒸气压 P_vap(T)
+        t_alc_k = self.T_alcohol_c + 273.15
+        self.alcohol_visc_mpas = 1.08 * math.exp(1680.0 * (1.0 / t_alc_k - 1.0 / 298.15))
+        rho_ethanol = 789.0 * (1.0 - 0.00108 * (self.T_alcohol_c - 25.0))
+        p_vap_eth_kpa = 0.133322 * (10.0 ** (8.20417 - 1642.89 / (230.30 + self.T_alcohol_c)))
+        vap_head_boost_kpa = max(0.0, p_vap_eth_kpa - 7.87) * 0.08  # 升温蒸气压削弱马氏瓶顶空净负压
+
         cap_open_flag = bool(getattr(ctrl, "fuel_cap_open", False))
+        # 34-2 サンプ (X=-268mm) 至 23-1 燃烧杯 (X=-92mm, ΔX=+176mm) 重力液位差 Δh_grav (含坡道俯仰角!)
+        dh_grade_m = -0.176 * math.sin(theta_grade_only)
+        visc_fluidity_eth = 1.08 / max(0.35, self.alcohol_visc_mpas)
+
         if self.ext_pino_tender is not None:
-            # 由 L2 TenderHydraulicPINO 解算马氏瓶密闭顶空真空度 (kPa) 与重力补醇流量 (ml/s)，零经验 if 分支!
-            # 马氏瓶降液管口液封静水力平衡液位: 密闭负压 (>0.3kPa) 锁死在 3.50ml，拧开 36-5 顶盖 (0kPa) 自然漫升至 7.3ml!
-            self.mariotte_headspace_kpa = max(0.0, float(self.ext_pino_tender[9]))
-            q_fuel_pino = max(0.0, float(self.ext_pino_tender[10]))
-            sump_equil_ml = 3.5 + 3.8 * math.exp(-self.mariotte_headspace_kpa / 0.08)
+            # 由 L2 TenderHydraulicPINO 解算马氏瓶密闭顶空真空度 (kPa) 与重力补醇流量 (ml/s)，叠加温度蒸气压与黏度修正
+            self.mariotte_headspace_kpa = max(0.0, float(self.ext_pino_tender[9]) - vap_head_boost_kpa)
+            q_fuel_pino = max(0.0, float(self.ext_pino_tender[10])) * (0.75 + 0.25 * visc_fluidity_eth)
+            sump_equil_ml = max(1.6, 3.5 + 3.8 * math.exp(-self.mariotte_headspace_kpa / 0.08) + 85.0 * dh_grade_m)
             refill_ml = min(self.alcohol_ml, q_fuel_pino * dt_th, max(0.0, sump_equil_ml - self.sump_fuel_ml))
             self.alcohol_ml -= refill_ml
             self.sump_fuel_ml += refill_ml
-            self.mariotte_flood_active = bool(self.sump_fuel_ml > 4.05 or (self.mariotte_headspace_kpa < 0.05 and q_fuel_pino > 0.65))
+            self.mariotte_flood_active = bool(self.sump_fuel_ml > 4.25 or (self.mariotte_headspace_kpa < 0.05 and q_fuel_pino > 0.65))
             if self.mariotte_headspace_kpa > 0.15 and refill_ml > 0.0:
                 self._mariotte_bubble_acc_ml += refill_ml
                 if self._mariotte_bubble_acc_ml >= 0.22:
@@ -542,9 +716,12 @@ class AsterD51Thermo1D:
                 cap_open_flag and ctrl.fuel_valve > 0.05 and self.alcohol_ml > 0.5
             )
             alc_norm_1d = max(0.0, min(1.0, self.alcohol_ml / 130.0))
-            self.mariotte_headspace_kpa = 0.0 if cap_open_flag else (0.35 + 2.15 * alc_norm_1d) * (1.0 if self.alcohol_ml > 0.5 else 0.0)
-            sump_target_ml = 7.2 if self.mariotte_flood_active else 3.5
-            refill_rate_coeff = 1.35 if self.mariotte_flood_active else 0.45
+            raw_vac_kpa = 0.0 if cap_open_flag else (0.35 + 2.15 * alc_norm_1d) * (1.0 if self.alcohol_ml > 0.5 else 0.0)
+            self.mariotte_headspace_kpa = max(0.0, raw_vac_kpa - vap_head_boost_kpa)
+            sump_target_ml = max(1.6, (7.2 if self.mariotte_flood_active else 3.5) + 85.0 * dh_grade_m)
+            # Hagen-Poiseuille 管路流导 G ∝ rho * g * Δh / mu(T)
+            grav_drive = max(0.25, 1.0 + dh_grade_m / 0.018)
+            refill_rate_coeff = (1.35 if self.mariotte_flood_active else 0.45) * visc_fluidity_eth * grav_drive
             if ctrl.fuel_valve > 0.01 and self.alcohol_ml > 0.0 and self.sump_fuel_ml < sump_target_ml:
                 refill_ml = min(self.alcohol_ml, refill_rate_coeff * ctrl.fuel_valve * dt_th, sump_target_ml - self.sump_fuel_ml)
                 self.alcohol_ml -= refill_ml
@@ -561,10 +738,10 @@ class AsterD51Thermo1D:
         if self.sump_fuel_ml <= 1e-4:
             ctrl.burner_lit = False
 
-        # --- 2. 蒸汽室 (Steam Chest)、过热器与双缸 4 子步充放气 + 水锤检测 ---
+        # --- 2. 蒸汽室 (Steam Chest)、华氏配气截止率检测与双缸 4 子步开口系真实气体膨胀做功 + 两相排液/水锤 ---
         a_regulator = 3.2e-6 * (ctrl.regulator ** 1.35)
         t_boil_k = self.T_boiler_c + 273.15
-        has_steam = (self.M_water_kg > 1.0e-4 or self.P_boiler > P_ATM + 1500.0) and self.P_boiler > P_ATM
+        has_steam = self.P_boiler > P_ATM + 400.0
 
         if self.ext_pino_cab is not None and has_steam and ctrl.regulator > 1e-4:
             mdot_reg = max(0.0, float(self.ext_pino_cab[1])) * 1e-3
@@ -574,11 +751,38 @@ class AsterD51Thermo1D:
         areas_L = self._valve_port_areas(q_vL, self.calib.q_valve_center_L)
         areas_R = self._valve_port_areas(q_vR, self.calib.q_valve_center_R)
 
+        # 实时捕捉华氏滑阀进汽口关闭瞬间 (Admission Cutoff) 的真实活塞行程百分比，并与解析华氏椭圆融合
+        theory_cutoff_pct = self._compute_walschaerts_cutoff_pct(ctrl.reverser)
+        s_L_now = min(self.calib.stroke, max(0.0, self.calib.q_fdc_L - q_pL))
+        s_R_now = min(self.calib.stroke, max(0.0, self.calib.q_fdc_R - q_pR))
+        adm_open_L = (areas_L[0] > 1e-9) or (areas_L[2] > 1e-9)
+        adm_open_R = (areas_R[0] > 1e-9) or (areas_R[2] > 1e-9)
+        if abs(omega_3) > 0.8 and abs(ctrl.reverser) > 0.05:
+            if self._prev_adm_open_L and not adm_open_L:
+                frac_L = (s_L_now / self.calib.stroke) if v_pL < 0.0 else (1.0 - s_L_now / self.calib.stroke)
+                if 0.06 <= frac_L <= 0.92:
+                    self._measured_cutoff_pct = 100.0 * frac_L
+            if self._prev_adm_open_R and not adm_open_R:
+                frac_R = (s_R_now / self.calib.stroke) if v_pR < 0.0 else (1.0 - s_R_now / self.calib.stroke)
+                if 0.06 <= frac_R <= 0.92:
+                    self._measured_cutoff_pct = 100.0 * frac_R
+            if self._measured_cutoff_pct > 1.0:
+                self.cutoff_pct = 0.55 * theory_cutoff_pct + 0.45 * self._measured_cutoff_pct
+            else:
+                self.cutoff_pct = theory_cutoff_pct
+        else:
+            self._measured_cutoff_pct = theory_cutoff_pct
+            self.cutoff_pct = theory_cutoff_pct
+        self._prev_adm_open_L = adm_open_L
+        self._prev_adm_open_R = adm_open_R
+
         n_sub = 4
         dt_sub = dt / n_sub
         mdot_cyl_in = 0.0
         mdot_cyl_exh = 0.0
+        mdot_drain_blow = 0.0
         mdot_cond_tot = 0.0
+        ind_work_w_acc = 0.0
         f_hydro_L_acc = 0.0
         f_hydro_R_acc = 0.0
         hydrolock_L = False
@@ -586,11 +790,11 @@ class AsterD51Thermo1D:
         v_sc_vol = 2.8e-5
 
         for _ in range(n_sub):
-            in_L, exh_L, cgen_L, fh_L, hl_L = self._step_cylinder_side(
-                dt_sub, self.P_cyl_L, self.M_cond_L, q_pL, v_pL, self.calib.q_fdc_L, areas_L, ctrl.drain_cock, self.ext_pino_cyl_L
+            in_L, exh_L, drn_L, cgen_L, pind_L, fh_L, hl_L = self._step_cylinder_side(
+                dt_sub, self.P_cyl_L, self.T_gas_L, self.M_cond_L, q_pL, v_pL, self.calib.q_fdc_L, areas_L, ctrl.drain_cock, self.ext_pino_cyl_L
             )
-            in_R, exh_R, cgen_R, fh_R, hl_R = self._step_cylinder_side(
-                dt_sub, self.P_cyl_R, self.M_cond_R, q_pR, v_pR, self.calib.q_fdc_R, areas_R, ctrl.drain_cock, self.ext_pino_cyl_R
+            in_R, exh_R, drn_R, cgen_R, pind_R, fh_R, hl_R = self._step_cylinder_side(
+                dt_sub, self.P_cyl_R, self.T_gas_R, self.M_cond_R, q_pR, v_pR, self.calib.q_fdc_R, areas_R, ctrl.drain_cock, self.ext_pino_cyl_R
             )
             in_tot = in_L + in_R
             # 填料函老化外漏损失
@@ -601,7 +805,9 @@ class AsterD51Thermo1D:
             self.P_steam_chest = min(self.P_boiler, max(P_ATM, self.P_steam_chest + dp_sc * dt_sub))
             mdot_cyl_in += in_tot / n_sub
             mdot_cyl_exh += (exh_L + exh_R) / n_sub
+            mdot_drain_blow += (drn_L + drn_R) / n_sub
             mdot_cond_tot += (cgen_L + cgen_R) / n_sub
+            ind_work_w_acc += (pind_L + pind_R) / n_sub
             f_hydro_L_acc += fh_L / n_sub
             f_hydro_R_acc += fh_R / n_sub
             hydrolock_L = hydrolock_L or hl_L
@@ -609,7 +815,7 @@ class AsterD51Thermo1D:
 
         self.condensate_kg = float(np.sum(self.M_cond_L) + np.sum(self.M_cond_R))
 
-        # --- 3. 气缸内衬凝结潜热 + 对流暖缸换热、4-2 蒸汽凝结等体积置换式注油器与密封退化 ---
+        # --- 3. 气缸内衬凝结潜热 + 对流暖缸换热、4-2 真实温度/Walther 黏度/重力浮力/压脉置换注油器与密封退化 ---
         if mdot_cyl_in > 1e-6 or mdot_cond_tot > 1e-7:
             q_lat_cyl = min(920.0, mdot_cond_tot * 2.10e6)
             q_conv_cyl = max(0.0, (self.T_superheat_c - self.T_cyl_wall_c) * 2.2)
@@ -620,20 +826,41 @@ class AsterD51Thermo1D:
         else:
             self.T_cyl_wall_c += (25.0 - self.T_cyl_wall_c) * 0.002 * dt_th
 
-        # 4-2 前车架卧式置换式注油器 (イラスト 4, 25, 真壁厚 t=0.80mm + 内部 ID 1.1mm 中心溢流立管):
-        # 主蒸汽经毛细管进入 4-2 黄铜油箱顶腔，经 0.80mm 黄铜筒壁向环境气流散热凝结沉底，按等体积置换将热态蒸汽油顶入内部溢流立管口进入 7-9 给汽歧管
-        if self.P_steam_chest > P_ATM + 2500.0 and self.lube_condensate_ml < self.lube_tank_cap_ml:
+        # 4-2 前车架卧式置换式注油器 (ISO VG 460 蒸汽汽缸油真实 Walther 黏度 mu(T) + 水油密度差浮力压头 + 蒸汽脉动毛细管 Poiseuille 流):
+        air_cool_factor = 1.0 + 0.025 * min(40.0, abs(omega_3))
+        if self.P_steam_chest > P_ATM + 1500.0:
             t_sat_lube_c = sat_temp_c(self.P_steam_chest)
-            air_cool_factor = 1.0 + 0.022 * min(40.0, abs(omega_3))
-            steam_pulse_factor = 0.35 + 0.65 * min(1.0, mdot_cyl_in / 1.5e-4)
-            q_lube_cond_w = 0.0115 * air_cool_factor * steam_pulse_factor * max(0.0, t_sat_lube_c - 25.0)
+            q_oil_heat = 0.085 * max(0.0, t_sat_lube_c - self.T_lube_oil_c)
+        else:
+            t_sat_lube_c = 25.0
+            q_oil_heat = 0.015 * max(0.0, self.T_cyl_wall_c - self.T_lube_oil_c)
+        q_oil_cool = 0.024 * air_cool_factor * (self.T_lube_oil_c - 25.0)
+        self.T_lube_oil_c = float(np.clip(self.T_lube_oil_c + ((q_oil_heat - q_oil_cool) / 6.2) * dt_th, 20.0, 165.0))
+        # ISO VG 460 复配蒸汽汽缸油黏温方程 (25°C ~1850 mPa·s -> 95°C ~82 mPa·s -> 135°C ~38 mPa·s)
+        self.lube_oil_visc_mpas = 0.42 * math.exp(1180.0 / (self.T_lube_oil_c + 115.0))
+        rho_oil = 902.0 * (1.0 - 0.00065 * (self.T_lube_oil_c - 25.0))
+        rho_cond_w = 997.0 - 0.18 * max(0.0, self.T_lube_oil_c - 25.0)
+
+        if self.P_steam_chest > P_ATM + 2500.0 and self.lube_condensate_ml < self.lube_tank_cap_ml:
+            steam_pulse_pa = abs(self.P_boiler - self.P_steam_chest) * min(1.0, mdot_cyl_in / 1.2e-4)
+            # 水沉底产生的阿基米德浮力静压差 ΔP_buoy = (rho_w - rho_oil) * g * h_oil * cos(theta)
+            h_oil_m = 0.012 * (self.lubricator_oil_pct / 100.0) * math.cos(theta_grade_only)
+            dp_buoy_pa = max(0.0, (rho_cond_w - rho_oil) * 9.81 * h_oil_m)
+            # 前车架 4-2 裸露黄铜油箱 (A≈16.5cm²) 蒸汽凝结散热 ~1.35 W -> 0.039 ml/min (2.4 ml / 60 min 原厂续航真值!)
+            q_lube_cond_w = 0.0115 * air_cool_factor * (0.35 + 0.65 * min(1.0, mdot_cyl_in / 1.5e-4)) * max(0.0, t_sat_lube_c - 28.0)
             mdot_lube_cond_kg_s = q_lube_cond_w / latent_heat_j_kg(t_sat_lube_c)
-            dv_disp_ml = (mdot_lube_cond_kg_s / RHO_LIQ_WATER) * 1e6 * dt_th
+            dv_cond_ml_s = (mdot_lube_cond_kg_s / rho_cond_w) * 1e6
+            # ø0.30mm x 24mm 节流计量毛细孔 Hagen-Poiseuille 黏性通流上限 (24°C ~2000mPa·s 冷态节流 ~7mg/min，暖机后 ~35mg/min 满额置换!)
+            mu_pa_s = self.lube_oil_visc_mpas * 1e-3
+            dp_quill_pa = 260.0 + dp_buoy_pa + 0.012 * steam_pulse_pa
+            q_poiseuille_max_ml_s = ((math.pi * (0.00030 ** 4) * dp_quill_pa) / (128.0 * max(1e-4, mu_pa_s) * 0.024)) * 1e6
+            dv_disp_ml_s = min(dv_cond_ml_s, q_poiseuille_max_ml_s)
+            dv_disp_ml = dv_disp_ml_s * dt_th
             self.lube_condensate_ml = min(self.lube_tank_cap_ml, self.lube_condensate_ml + dv_disp_ml)
             self.lubricator_oil_pct = max(
                 0.0, 100.0 * (1.0 - self.lube_condensate_ml / self.lube_tank_cap_ml)
             )
-            self.roscoe_quill_oil_rate_mg_min = round((dv_disp_ml / max(1e-9, dt_th)) * 890.0 * 60.0, 3)
+            self.roscoe_quill_oil_rate_mg_min = round(dv_disp_ml_s * (rho_oil * 1e-3) * 1000.0 * 60.0, 3)
         else:
             self.roscoe_quill_oil_rate_mg_min = 0.0
 
@@ -778,24 +1005,31 @@ class AsterD51Thermo1D:
             sh_delta_c = 28.0 * draft_eff
             smokebox_vac_pa = 140.0 * (draft_eff - 0.12)
 
-        theta_grade_only = max(-0.30, min(0.30, pitch_rad + math.radians(ctrl.grade_deg)))
-        wick_head_factor = max(0.75, min(1.22, 1.0 - 0.32 * math.tan(theta_grade_only)))
+        # 耦合 5 根紫铜烟管热弹塑性弓曲/椭圆扁化流固耦合阻尼因子 flue_fsi_mult 与 12-1 炉门 4 孔二次风旁通效应
+        fsi_m = float(np.clip(self.flue_fsi_mult, 0.25, 1.05))
         door_open = max(0.0, min(1.0, float(getattr(ctrl, "firebox_door", 0.0))))
+        draft_eff = draft_eff * fsi_m * (1.0 - 0.14 * door_open)
+        smokebox_vac_pa = max(0.0, smokebox_vac_pa * (0.65 + 0.35 * fsi_m))
+
+        wick_head_factor = max(0.72, min(1.25, 1.0 - 0.34 * math.tan(theta_grade_only)))
         door_chill = 1.0 - (0.06 if pino_on else 0.26) * door_open
         lhv_ethanol = 26.8e6  # 无水/燃料乙醇真实低位发热量 26.8 MJ/kg
 
-        # --- 5b. 多孔硅酸铝陶瓷纤维灯芯 (`セラミックヤーン`) Darcy-Washburn 毛细吸液汽化 (受 3D 流道导通度 lumen_cond 物理约束!) ---
+        # --- 5b. 多孔硅酸铝陶瓷纤维灯芯 (`セラミックヤーン`) Darcy-Washburn 毛细吸液汽化 (受流道导通度与乙醇黏温特性 mu(T) 物理约束!) ---
         lumen_c = max(0.0, min(1.0, float(self.burner_lumen_cond)))
         sump_h_norm = max(0.0, min(1.8, self.sump_fuel_ml / 3.5))
         supply_gate_1d = lumen_c * (sump_h_norm / (sump_h_norm + 0.08))
+        # Darcy-Washburn 毛细上吸速率随升温黏度下降提升，但在接近沸点 (>70°C) 时出现微气阻衰减
+        vap_lock_atten = 1.0 - 0.35 * max(0.0, (self.T_alcohol_c - 66.0) / 10.0)
+        cap_visc_gain = max(0.55, min(1.42, (0.72 + 0.28 * visc_fluidity_eth) * vap_lock_atten))
         if self.ext_pino_wick_cht is not None:
-            wick_cap_raw = max(0.0, 0.57 * float(self.ext_pino_wick_cht[0]))
+            wick_cap_raw = max(0.0, 0.57 * float(self.ext_pino_wick_cht[0]) * cap_visc_gain)
             self.wick_saturation = max(0.0, min(1.0, float(self.ext_pino_wick_cht[1])))
             self.wick_tip_temp_c = max(20.0, float(self.ext_pino_wick_cht[2]))
         else:
             flood_mult_1d = 1.0 + 0.55 * max(0.0, sump_h_norm - 1.05)
             evap_drv_1d = (0.52 + 0.48 * draft_eff) if ctrl.burner_lit else (0.008 * max(0.0, self.T_boiler_c - 60.0) / 100.0)
-            wick_cap_raw = supply_gate_1d * evap_drv_1d * 0.076 * flood_mult_1d
+            wick_cap_raw = supply_gate_1d * evap_drv_1d * 0.076 * flood_mult_1d * cap_visc_gain
             sat_tgt = supply_gate_1d * max(0.0, min(0.96, 0.92 - (0.24 * (0.4 + 0.6 * draft_eff) if ctrl.burner_lit else 0.0)))
             self.wick_saturation += min(1.0, 4.0 * dt_th) * (sat_tgt - self.wick_saturation)
             wet_pin_1d = min(1.0, max(0.0, self.wick_saturation / 0.22))
@@ -810,7 +1044,7 @@ class AsterD51Thermo1D:
             used_ml = min(self.sump_fuel_ml, burn_ml_s * dt_th)
             self.sump_fuel_ml -= used_ml
             wick_capillary_ml_s = (used_ml / dt_th) if dt_th > 0 else 0.0
-            mdot_alc_kg_s = wick_capillary_ml_s * 789e-6
+            mdot_alc_kg_s = wick_capillary_ml_s * (rho_ethanol * 1e-6)
             q_chem_total_w = lhv_ethanol * mdot_alc_kg_s
             if pino_on and self.ext_pino_burner is not None:
                 # 严格受化学释放总能量上限与 (PINO 三维烟气对流换热积分 + 火室高温气体/灯芯 Stefan-Boltzmann 热辐射并联通量) 共同约束
@@ -819,7 +1053,7 @@ class AsterD51Thermo1D:
                 t_flame_rad_k = 980.0 + 140.0 * min(1.2, draft_eff)
                 q_rad_fb_w = 0.34 * 5.670374e-8 * a_fb_m2 * max(0.0, (t_flame_rad_k ** 4) - (t_boil_k ** 4))
                 fuel_scale = min(1.0, wick_capillary_ml_s / 0.055)
-                q_conv_3d = float(self.ext_pino_burner["q_boiler_w"]) * fuel_scale
+                q_conv_3d = float(self.ext_pino_burner["q_boiler_w"]) * fuel_scale * fsi_m
                 q_rad_3d = q_rad_fb_w * fuel_scale
                 # 5根细火管发展段 Nusselt 近壁热边界层解析修正 + 火室高温燃气/陶瓷芯 Stefan-Boltzmann 热辐射并联换热
                 q_comb_w = min(q_chem_max, 0.86 * q_conv_3d + 0.78 * q_rad_3d) * door_chill
@@ -870,7 +1104,7 @@ class AsterD51Thermo1D:
         self.T_superheat_c += min(1.0, 2.5 * dt_th) * (target_sh_c - self.T_superheat_c)
         self.steam_dryness_chest += min(1.0, 4.0 * dt_th) * (target_x_chest - self.steam_dryness_chest)
 
-        # --- 6. 共用给水软管 (BT-ø5 + 34-8): 轴动泵 (6-5) + 手摇泵 (31-5) + 旁通回水 (31-14) + 敞口加水 (35-1) + 底部放水 (31-11->31-9) ---
+        # --- 6. 6-5 中央轴动给水泵真实可压缩液腔 (抽吸真空 + 双 SB-ø3 止回球 + 4-17/6-9 旁通针阀分流 + 13-2 进锅逆止阀 + 曲轴机械轴功) ---
         water_fill_open = max(0.0, min(1.0, float(getattr(ctrl, "water_fill_valve", 0.0))))
         water_fill_ml_s = 18.0 * water_fill_open
         if water_fill_ml_s > 1e-5:
@@ -880,12 +1114,109 @@ class AsterD51Thermo1D:
             self.T_feedwater_c = (w_prev * self.T_feedwater_c + fill_ml * 25.0) / (w_prev + fill_ml)
             self.tender_water_ml += fill_ml
 
+        rho_fw = 999.0 - 0.16 * max(0.0, self.T_feedwater_c - 20.0)
+        p_vap_fw = sat_pressure_pa(max(15.0, min(98.0, self.T_feedwater_c)))
+        h_tdr_m = 0.038 * max(0.0, min(1.0, self.tender_water_ml / self.tender_water_cap_ml))
+        # 煤水车 34-6 出水口至机车 6-5 泵体 (ΔX=+236mm) 静水重力压头 (含坡道俯仰!)
+        p_suction_supply = P_ATM + rho_fw * 9.81 * (h_tdr_m - 0.236 * math.sin(theta_grade_only))
+        p_return_standpipe = P_ATM + rho_fw * 9.81 * 0.042
+        p_clack_boiler = self.P_boiler + rho_fw * 9.81 * 0.033 + 4500.0
+        a_byp_orf = 5.2e-6 * (max(0.0, min(1.0, ctrl.bypass_valve)) ** 1.85) + 2.5e-10
+        a_clack_max = 1.15e-6  # 13-2 锅炉中位逆止阀 SB-ø3 球座最大通流面积
+
+        # 求解 6-5 泵腔 8 子步弹性液柱容积动力学 (含 BT-ø5 氟橡胶软管柔度 K_eff / V_ch):
+        #   - 回程吸液 (v_pump_ram > 0): 腔压跌破大气压形成真实抽吸负压真空，推开下部 SB-ø3 止回球从煤水车吸液，同时在柱塞上产生向前的真空拉拽阻力!
+        #   - 前推压水 (v_pump_ram < 0): 腔压飙升推开上部 SB-ø3 止回球进入 6-6->4-17 总管，按旁通阀流阻与锅炉表压竞争分流，同时对第3动轮偏心轮施加真实液压反力!
+        n_pmp = max(8, min(320, int(math.ceil(dt / 2.5e-5))))
+        dt_pmp = dt / n_pmp
+        k_over_v = 2.4e14  # Pa/m³ 6-5 黄铜泵腔液柱体积弹性刚度 (~0.24mm 冲程即可建压至 3.5 kgf/cm²)
+        q_suc_m3_s_acc = 0.0
+        q_del_m3_s_acc = 0.0
+        q_byp_m3_s_acc = 0.0
+        q_boil_m3_s_acc = 0.0
+        lift_suc_mm = 0.0
+        lift_del_mm = 0.0
+        lift_clack_mm = 0.0
+        has_prime = self.tender_water_ml > 0.25
+
+        # 手摇泵 31-5 注入共用总管的体积流率 (m³/s)
+        q_hand_m3_s = 0.0
+        if v_hand_ram < -1e-4 and has_prime:
+            q_hand_m3_s += 0.90 * self.A_hand_pump * (-v_hand_ram)
+        if self._hand_pump_pending_kg > 1e-7:
+            inj_rate_kg_s = min(self._hand_pump_pending_kg / max(1e-6, dt_th), 5.6e-3)
+            q_hand_m3_s += inj_rate_kg_s / rho_fw
+
+        for _ in range(n_pmp):
+            dv_ram_dt = self.A_axle_pump * v_pump_ram  # >0 吸程膨胀, <0 压程压缩
+            if has_prime and p_suction_supply > self.P_pump_chamber + 2200.0:
+                dp_s = p_suction_supply - self.P_pump_chamber - 2200.0
+                lift_suc_mm = min(0.65, 0.065 * (dp_s / 1000.0))
+                a_s = min(9.5e-7, math.pi * 0.0022 * (lift_suc_mm * 1e-3))
+                q_in = 0.64 * a_s * math.sqrt(2.0 * dp_s / rho_fw)
+            else:
+                lift_suc_mm = 0.0
+                q_in = 0.0
+
+            if has_prime and self.P_pump_chamber > self.P_fw_manifold + 1600.0:
+                dp_d = self.P_pump_chamber - self.P_fw_manifold - 1600.0
+                lift_del_mm = min(0.65, 0.055 * (dp_d / 1000.0))
+                a_d = min(9.5e-7, math.pi * 0.0022 * (lift_del_mm * 1e-3))
+                q_out = 0.64 * a_d * math.sqrt(2.0 * dp_d / rho_fw)
+            else:
+                lift_del_mm = 0.0
+                q_out = 0.0
+
+            k_eff = k_over_v if has_prime else 2.8e11  # 缺水进气空转时可压缩空气刚度骤降无法建压!
+            self.P_pump_chamber = float(np.clip(
+                self.P_pump_chamber + k_eff * (q_in - q_out - dv_ram_dt) * dt_pmp,
+                p_vap_fw,
+                max(self.P_boiler + 3.5e5, P_ATM + 6.0e5),
+            ))
+
+            # 4-17 旁通阀总管容积节点压力平衡: Q_out + Q_hand = Q_bypass(P_man) + Q_boiler_clack(P_man)
+            dp_byp = max(0.0, self.P_fw_manifold - p_return_standpipe)
+            q_byp_sub = 0.65 * a_byp_orf * math.sqrt(2.0 * dp_byp / rho_fw)
+            if self.P_fw_manifold > p_clack_boiler:
+                dp_clk = self.P_fw_manifold - p_clack_boiler
+                lift_clack_mm = min(0.68, 0.048 * (dp_clk / 1000.0))
+                a_clk = min(a_clack_max, math.pi * 0.0024 * (lift_clack_mm * 1e-3))
+                q_boil_sub = 0.64 * a_clk * math.sqrt(2.0 * dp_clk / rho_fw)
+            else:
+                lift_clack_mm = 0.0
+                q_boil_sub = 0.0
+
+            self.P_fw_manifold = float(np.clip(
+                self.P_fw_manifold + 3.4e13 * (q_out + q_hand_m3_s - q_byp_sub - q_boil_sub) * dt_pmp,
+                P_ATM,
+                max(self.P_boiler + 3.2e5, P_ATM + 5.5e5),
+            ))
+            q_suc_m3_s_acc += q_in / n_pmp
+            q_del_m3_s_acc += (q_out + q_hand_m3_s) / n_pmp
+            q_byp_m3_s_acc += q_byp_sub / n_pmp
+            q_boil_m3_s_acc += q_boil_sub / n_pmp
+
+        self.pump_ball_lifts_mm = [round(lift_suc_mm, 3), round(lift_del_mm, 3), round(lift_clack_mm, 3)]
+        self.pump_suction_vac_kpa = max(0.0, (P_ATM - self.P_pump_chamber) * 1e-3)
+
+        # 柱塞真实双向流体压力载荷 + PN3.2-1 O 型圈摩擦:
+        #   - 压水冲程 (v_pump_ram < 0, P_ch > P_atm): F_pump > 0 (+X 顶推抗拒前压)
+        #   - 吸水冲程 (v_pump_ram > 0, P_ch < P_atm): F_pump < 0 (-X 真空抽拉抗拒后退)
+        f_pump_seal = 0.085 * math.tanh(v_pump_ram / 0.006) + 0.35 * v_pump_ram
+        F_pump = (self.P_pump_chamber - P_ATM) * self.A_axle_pump - f_pump_seal
+        self.pump_shaft_power_w = max(0.0, -F_pump * v_pump_ram)
+
+        # 严格采用 8 子步积分所得真实旁通回流与 13-2 逆止阀进锅体积流量 (杜绝单步末瞬时压力阈值丢流!)
+        q_byp_1d_mls = q_byp_m3_s_acc * 1e6
+        q_boil_1d_mls = q_boil_m3_s_acc * 1e6
+
         if self.ext_pino_tender is not None:
-            # 由 L2 TenderHydraulicPINO 解算五止回球耦合后的进锅流量、31-14 鹅颈管回水流量、31-9 底部重力放水流量及共用总管压力!
-            q_boil_mls = max(0.0, float(self.ext_pino_tender[0]))
-            q_ret_mls = max(0.0, float(self.ext_pino_tender[1]))
+            clack_open_gate = 1.0 if self.P_fw_manifold > p_clack_boiler else 0.0
+            q_boil_pino = clack_open_gate * max(0.0, float(self.ext_pino_tender[0]))
+            q_ret_pino = max(0.0, float(self.ext_pino_tender[1]))
             q_drain_mls = max(0.0, float(self.ext_pino_tender[2])) if bool(getattr(ctrl, "tender_drain_open", False)) else 0.0
-            p_line_pa = max(0.0, float(self.ext_pino_tender[3])) * PA_PER_KGF_CM2
+            q_boil_mls = 0.55 * q_boil_pino + 0.45 * q_boil_1d_mls
+            q_ret_mls = 0.55 * q_ret_pino + 0.45 * q_byp_1d_mls
 
             net_out_ml = (q_boil_mls + q_drain_mls) * dt_th
             if net_out_ml > self.tender_water_ml and net_out_ml > 1e-9:
@@ -896,50 +1227,27 @@ class AsterD51Thermo1D:
             self.tender_water_ml = max(0.0, self.tender_water_ml - net_out_ml)
             if self._hand_pump_pino_ml > 0.0:
                 self._hand_pump_pino_ml = max(0.0, self._hand_pump_pino_ml - (q_boil_mls + q_ret_mls) * dt_th)
+            if self._hand_pump_pending_kg > 0.0:
+                self._hand_pump_pending_kg = max(0.0, self._hand_pump_pending_kg - (q_boil_mls + q_ret_mls) * 1e-3 * dt_th)
 
             return_water_ml_s = q_ret_mls if self.tender_water_ml > 0.2 else 0.0
             tender_drain_ml_s = q_drain_mls
-            mdot_fw_total = q_boil_mls * 1e-3
-            F_pump = (+p_line_pa * self.A_axle_pump) if (v_pump_ram < -1e-4 and self.tender_water_ml > 0.5) else 0.0
+            mdot_fw_total = q_boil_mls * (rho_fw * 1e-6)
         else:
-            v_pump_m3_s = 0.85 * self.A_axle_pump * max(0.0, -v_pump_ram) if self.tender_water_ml > 0.5 else 0.0
-            dp_boil_check = max(8000.0, self.P_boiler - P_ATM)
-            a_bypass = 1.6e-7 * (ctrl.bypass_valve ** 1.4)
-            v_byp_cap = 0.65 * a_bypass * math.sqrt(2.0 * dp_boil_check / 1000.0)
-
-            v_to_boiler = max(0.0, v_pump_m3_s - v_byp_cap)
-            v_axle_return_m3_s = max(0.0, v_pump_m3_s - v_to_boiler)
-            used_tender_ml = v_to_boiler * 1e6 * dt_th
-            if used_tender_ml > self.tender_water_ml:
-                v_to_boiler = (self.tender_water_ml * 1e-6) / dt_th
-                used_tender_ml = self.tender_water_ml
-            self.tender_water_ml -= used_tender_ml
-
-            # 若直接传入了手摇泵柱塞速度 v_hand_ram (MuJoCo / WASM 摇杆驱动) 亦纳入共用管路水力计算
-            if v_hand_ram < -1e-4 and self.tender_water_ml > 0.5 and self._hand_pump_pending_kg <= 1e-7:
-                hp_disp_ml = (0.90 * self.A_hand_pump * (-v_hand_ram) * 1e6) * dt_th
-                hp_avail_ml = min(hp_disp_ml, self.tender_water_ml)
-                self.tender_water_ml -= hp_avail_ml
-                self._hand_pump_pending_kg += hp_avail_ml * 1e-3
-
-            hand_return_ml_s = 0.0
             if self._hand_pump_pending_kg > 1e-7:
-                inj_raw_kg = min(self._hand_pump_pending_kg, max(2.5e-5, self._hand_pump_pending_kg * min(1.0, dt_th / 0.35)))
-                self._hand_pump_pending_kg -= inj_raw_kg
-                if ctrl.bypass_valve > 0.06:
-                    divert_frac = min(0.94, 0.35 + 0.65 * (ctrl.bypass_valve ** 0.70))
-                else:
-                    divert_frac = 0.0
-                divert_kg = inj_raw_kg * divert_frac
-                inj_boil_kg = inj_raw_kg - divert_kg
-                self.tender_water_ml += divert_kg * 1000.0
-                hand_return_ml_s = (divert_kg * 1000.0) / dt_th if dt_th > 0 else 0.0
-                mdot_fw_hand = inj_raw_kg * (1.0 - divert_frac) / dt_th if dt_th > 0 else 0.0
-            else:
-                mdot_fw_hand = 0.0
-                self._hand_pump_pending_kg = 0.0
+                used_hp_kg = min(self._hand_pump_pending_kg, q_hand_m3_s * rho_fw * dt_th)
+                self._hand_pump_pending_kg = max(0.0, self._hand_pump_pending_kg - used_hp_kg)
+                # trigger_hand_pump 已从水箱预扣体积，故旁通回流部分归还煤水车水箱
+                hp_frac = (q_hand_m3_s * 1e6) / max(1e-9, q_del_m3_s_acc * 1e6) if q_del_m3_s_acc > 1e-12 else 0.0
+                self.tender_water_ml += (q_byp_1d_mls * hp_frac) * dt_th
 
-            # 31-11 -> 31-9 底部排水栓 Torricelli 重力放水
+            axle_boil_ml = max(0.0, (q_boil_1d_mls - q_hand_m3_s * 1e6) * dt_th)
+            if axle_boil_ml > self.tender_water_ml:
+                scale_ax = self.tender_water_ml / max(1e-9, axle_boil_ml)
+                q_boil_1d_mls *= scale_ax
+                axle_boil_ml = self.tender_water_ml
+            self.tender_water_ml = max(0.0, self.tender_water_ml - axle_boil_ml)
+
             if bool(getattr(ctrl, "tender_drain_open", False)) and self.tender_water_ml > 0.05:
                 w_norm_1d = max(0.0, min(1.0, self.tender_water_ml / self.tender_water_cap_ml))
                 tender_drain_ml_s = 4.0 * math.sqrt(w_norm_1d)
@@ -949,14 +1257,8 @@ class AsterD51Thermo1D:
             else:
                 tender_drain_ml_s = 0.0
 
-            return_water_ml_s = v_axle_return_m3_s * 1e6 + hand_return_ml_s
-            mdot_fw_total = v_to_boiler * 1000.0 + mdot_fw_hand
-
-            if v_pump_ram < -1e-4 and self.tender_water_ml > 0.5:
-                p_line = dp_boil_check if v_to_boiler > 0.0 else dp_boil_check * ((v_pump_m3_s / max(1e-12, v_byp_cap)) ** 2)
-                F_pump = +p_line * self.A_axle_pump
-            else:
-                F_pump = 0.0
+            return_water_ml_s = q_byp_1d_mls if has_prime else 0.0
+            mdot_fw_total = q_boil_1d_mls * (rho_fw * 1e-6)
 
         # 超过 31-10 水箱满容积 340.0 ml 时从 35-1 敞口挡水围板自然溢流
         if self.tender_water_ml > self.tender_water_cap_ml:
@@ -975,7 +1277,6 @@ class AsterD51Thermo1D:
             self.T_feedwater_c += (25.0 - self.T_feedwater_c) * 0.0005 * dt_th
 
         # --- 7. O4-1/O4-2: 坡道假水位、分层紫铜火室顶板传热、空焚き退火与冷水闪蒸尖峰 ---
-        # 等效液面倾角: 上坡 (pitch_rad > 0 或 ctrl.grade_deg > 0) 或向前加速 (accel_x > 0) 使锅水后涌向驾驶室水面计
         theta_eff = pitch_rad + math.radians(ctrl.grade_deg) + math.atan2(accel_x, 9.81)
         theta_eff = max(-0.30, min(0.30, theta_eff))
         tan_th = math.tan(theta_eff)
@@ -983,22 +1284,17 @@ class AsterD51Thermo1D:
         water_ml = self.M_water_kg * 1000.0
         z_free_static_mm = water_volume_to_free_z_mm(water_ml)
         true_level_pct = 100.0 * (water_ml - self.water_min_ml) / (self.water_max_ml - self.water_min_ml)
-        # 水面计距液面几何中心后偏 68mm; 液位总高程差约 15.5mm (+47.0..+62.5mm) 对应 0~100%
         dh_gauge_mm = +68.0 * tan_th
         apparent_level_pct = true_level_pct + (dh_gauge_mm / 15.5) * 100.0
 
-        # 火室顶板 (+47.5mm) 真实浸没水深: 210ml (+55.5mm) 时浸没 +8.0mm, ~144ml (+47.5mm) 时裸露为 0mm, 0ml 时为 -29.3mm!
         h_crown_static_mm = z_free_static_mm - 47.5
         dh_crown_worst_mm = -24.0 * abs(tan_th)
         crown_submerged_mm = h_crown_static_mm + dh_crown_worst_mm
         f_wet = max(0.0, min(1.0, crown_submerged_mm / 4.0))
-        # 5 根烟管 (+33.2..+46.5mm) 与火室水腿 (+18.2..+47.5mm) 浸没换热面积比: 直至锅水彻底蒸干 (18.2mm) 前持续沸腾蒸发!
         f_wet_tubes = max(0.0, min(1.0, (z_free_static_mm - 18.2) / 26.5))
 
-        # 火焰 58% 辐射/强对流打在紫铜火室顶板及水腿，42% 由 5 根烟管传向锅水
         q_fire_crown = 0.58 * q_comb_w
         q_fire_tubes = 0.42 * q_comb_w
-        # 顶板/高导热无氧紫铜锅筒壁—锅水传热导率: 浸没核态沸腾 22 W/K vs 干烧时沿 C1100 紫铜筒壁向锅底残水导热 (随残水浸润面积 (V/18ml)^(2/3) 归零)
         g_dry_cu_cond = 0.68 * (min(1.0, max(0.0, water_ml) / 18.0) ** 0.67)
         g_crown_to_water = 22.0 * f_wet + g_dry_cu_cond * (1.0 - f_wet)
         q_crown_to_water = g_crown_to_water * (self.T_crown_c - self.T_boiler_c)
@@ -1008,6 +1304,7 @@ class AsterD51Thermo1D:
         # 高温干烧状态下突然打入冷水 -> 灼热顶板表面急剧膜态闪蒸直接产生气相超压尖峰 (Flash Steam Spike)
         flash_spike = False
         q_flash_w = 0.0
+        mdot_flash_vap = 0.0
         if self.T_crown_c > 215.0 and f_wet < 0.45 and mdot_fw_total > 1.5e-4:
             flash_spike = True
             q_flash_w = min(
@@ -1025,12 +1322,11 @@ class AsterD51Thermo1D:
         dT_crown = (q_fire_crown - q_waterleg_boil - q_crown_to_water - q_crown_rad_loss - q_flash_w) / c_crown
         self.T_crown_c = max(25.0, min(780.0, self.T_crown_c + dT_crown * dt_th))
 
-        # 紫铜火室 >340°C 退火软化与 >520°C 银钎焊损伤累积
         if self.T_crown_c > 340.0:
             dmg_rate = 0.0018 * ((self.T_crown_c - 340.0) / 80.0) ** 1.4
             self.copper_anneal_damage = min(1.0, self.copper_anneal_damage + dmg_rate * dt_th)
 
-        # --- 8. 多层复合壁 (C1100 紫铜 + Templates 1–6 セラミックシート保温层 + 空气夹层 + 黄铜外衣) 导热/对流/Stefan-Boltzmann 辐射热损与两相守恒积分 ---
+        # --- 8. 多层复合壁散热与液态水 M_water_kg + 顶空蒸汽 M_vap_kg 连续统一守恒 (0ml 干锅严格零蒸发、零分支跳变!) ---
         v_air_ext = abs(omega_3) * (0.5 * 0.0438)
         if self.ext_pino_wick_cht is not None:
             self.casing_temp_c = max(20.0, float(self.ext_pino_wick_cht[3]))
@@ -1083,64 +1379,129 @@ class AsterD51Thermo1D:
         h_fg = latent_heat_j_kg(self.T_boiler_c)
         v_gas = max(2e-5, self.V_boiler_total - self.M_water_kg / 960.0)
 
-        evap_rate_kg_s = 0.0
-        if self.T_boiler_c < 99.9 and not flash_spike:
-            c_tot = self.M_water_kg * CP_WATER + self.M_copper_shell * CP_COPPER
-            dT_dt = (q_net_water_w - mdot_fw_total * CP_WATER * (self.T_boiler_c - self.T_feedwater_c)) / max(60.0, c_tot)
-            self.T_boiler_c += dT_dt * dt_th
-            self.M_water_kg = max(0.0, min(0.350, self.M_water_kg + (mdot_fw_total - mdot_blowdown_liq) * dt_th))
-            self.P_boiler = P_ATM
-        elif self.M_water_kg > 1.0e-4 or flash_spike:
-            p_s1 = sat_pressure_pa(self.T_boiler_c)
-            p_s2 = sat_pressure_pa(self.T_boiler_c + 0.1)
-            drho_dT = ((p_s2 / (R_STEAM * (t_boil_k + 0.1))) - (p_s1 / (R_STEAM * t_boil_k))) / 0.1
+        # 连续相变与气相质量积分 (彻底消除 M_water_kg == 0.1ml 处的硬分支跳变与 0ml 虚假蒸发读数!):
+        p_s1 = sat_pressure_pa(self.T_boiler_c)
+        p_s2 = sat_pressure_pa(self.T_boiler_c + 0.1)
+        drho_dT = ((p_s2 / (R_STEAM * (t_boil_k + 0.1))) - (p_s1 / (R_STEAM * t_boil_k))) / 0.1
+        boil_gate = min(1.0, max(0.0, (self.T_boiler_c - 99.5) / 0.7))
+        wet_phase_gate = min(1.0, self.M_water_kg / 0.0012)
+        phase_couple = boil_gate * wet_phase_gate
 
-            c_eff = self.M_water_kg * CP_WATER + self.M_copper_shell * CP_COPPER + v_gas * h_fg * drho_dT
-            dT_dt = (
-                q_net_water_w
-                - mdot_steam_out * h_fg
-                - mdot_fw_total * CP_WATER * (self.T_boiler_c - self.T_feedwater_c)
-            ) / max(85.0, c_eff)
+        c_eff = self.M_water_kg * CP_WATER + self.M_copper_shell * CP_COPPER + phase_couple * v_gas * h_fg * drho_dT
+        dT_dt = (
+            q_net_water_w
+            - phase_couple * mdot_steam_out * h_fg
+            - mdot_fw_total * CP_WATER * (self.T_boiler_c - self.T_feedwater_c)
+        ) / max(80.0, c_eff)
+        self.T_boiler_c = max(25.0, min(215.0, self.T_boiler_c + dT_dt * dt_th))
 
-            self.T_boiler_c = max(25.0, min(198.0, self.T_boiler_c + dT_dt * dt_th))
-            evap_rate_kg_s = max(0.0, mdot_steam_out + v_gas * drho_dT * dT_dt)
-            dM_dt = mdot_fw_total - mdot_steam_out - mdot_blowdown_liq - v_gas * drho_dT * dT_dt
-            self.M_water_kg = max(0.0, min(0.350, self.M_water_kg + dM_dt * dt_th))
-            dry_taper = min(1.0, self.M_water_kg / 0.0025) if not flash_spike else 1.0
-            self.P_boiler = P_ATM + max(0.0, (sat_pressure_pa(self.T_boiler_c) - P_ATM) * dry_taper + self._flash_overpressure_pa)
+        max_liq_avail_rate = max(0.0, self.M_water_kg / max(1e-9, dt_th) + mdot_fw_total - mdot_blowdown_liq)
+        if self.M_water_kg > 1.0e-7 and (boil_gate > 0.01 or flash_spike):
+            rho_sat_now = sat_pressure_pa(self.T_boiler_c) / (R_STEAM * (self.T_boiler_c + 273.15))
+            vap_deficit_rate = max(0.0, (rho_sat_now * v_gas - self.M_vap_kg) / 0.18)
+            q_boil_direct = boil_gate * max(0.0, q_net_water_w) / max(1e5, h_fg)
+            evap_eq = max(
+                wet_phase_gate * max(0.0, mdot_steam_out + v_gas * drho_dT * dT_dt + vap_deficit_rate),
+                q_boil_direct,
+            ) + mdot_flash_vap
+            evap_rate_kg_s = min(max_liq_avail_rate, evap_eq)
         else:
-            # 锅筒液态水已彻底蒸干 (M_water_kg <= 0.1 ml): 残余蒸汽随开阀排空至大气压，若补水则恢复
-            dp_vent = (R_STEAM * t_boil_k / v_gas) * mdot_steam_out * dt_th
-            self.P_boiler = max(P_ATM, self.P_boiler - dp_vent - 18000.0 * dt_th + self._flash_overpressure_pa)
-            self.M_water_kg = max(0.0, min(0.350, self.M_water_kg + mdot_fw_total * dt_th))
+            evap_rate_kg_s = 0.0
+
+        self.M_water_kg = float(np.clip(
+            self.M_water_kg + (mdot_fw_total - mdot_blowdown_liq - evap_rate_kg_s) * dt_th,
+            0.0, 0.350
+        ))
+        if self.M_water_kg <= 1.0e-7:
+            self.M_water_kg = 0.0
+            evap_rate_kg_s = 0.0
+
+        v_gas_new = max(2e-5, self.V_boiler_total - self.M_water_kg / 960.0)
+        if self.M_water_kg > 5.0e-4:
+            self.T_vap_c = self.T_boiler_c
+        else:
+            t_dry_eq = 0.65 * self.T_boiler_c + 0.35 * min(320.0, self.T_crown_c)
+            self.T_vap_c += min(1.0, 1.8 * dt_th) * (t_dry_eq - self.T_vap_c)
+
+        t_vap_k = max(295.0, self.T_vap_c + 273.15)
+        m_vap_atm = (P_ATM * v_gas_new) / (R_STEAM * t_vap_k)
+        self.M_vap_kg = max(m_vap_atm, self.M_vap_kg + (evap_rate_kg_s - mdot_steam_out) * dt_th)
+
+        p_sat_now = max(P_ATM, sat_pressure_pa(self.T_boiler_c))
+        if phase_couple > 0.02:
+            m_vap_sat = (p_sat_now * v_gas_new) / (R_STEAM * (self.T_boiler_c + 273.15))
+            self.M_vap_kg += min(1.0, 12.0 * phase_couple * dt_th) * (m_vap_sat - self.M_vap_kg)
+
+        p_gas_real = (self.M_vap_kg * R_STEAM * t_vap_k) / v_gas_new
+        self.P_boiler = max(
+            P_ATM,
+            phase_couple * p_sat_now + (1.0 - phase_couple) * p_gas_real + self._flash_overpressure_pa
+        )
 
         self.water_free_z_mm = water_volume_to_free_z_mm(self.M_water_kg * 1000.0)
 
-        # --- 9. 水面计弯月面动态响应 (11-7 + 1-2 冲洗吹落) 与 13-1 下部 U 弯冷凝水虹吸波登管缓冲 ---
+        # --- 9. 水面计弯月面动态响应、波登管阻尼与物理仪表防跳变低通平滑器 ---
         p_gauge_now = max(0.0, (self.P_boiler - P_ATM) / PA_PER_KGF_CM2)
         p_sc_now = max(0.0, (self.P_steam_chest - P_ATM) / PA_PER_KGF_CM2)
         app_clamped = max(0.0, min(100.0, apparent_level_pct))
         if self.ext_pino_cab is not None:
             target_sg_pct = max(0.0, min(100.0, float(self.ext_pino_cab[6])))
             pg_target = max(0.0, float(self.ext_pino_cab[7]))
-            self.sight_glass_level_pct += min(1.0, 14.0 * dt_th) * (target_sg_pct - self.sight_glass_level_pct)
-            self.pg_bourdon_kgf += min(1.0, 18.0 * dt_th) * (pg_target - self.pg_bourdon_kgf)
+            self.sight_glass_level_pct += min(1.0, 15.0 * dt_th) * (target_sg_pct - self.sight_glass_level_pct)
+            self.pg_bourdon_kgf += min(1.0, 12.0 * dt_th) * (pg_target - self.pg_bourdon_kgf)
         else:
             p_drive_sg = max(0.0, p_gauge_now / (p_gauge_now + 0.35))
             target_sg_pct = app_clamped * (1.0 - 0.82 * sg_drain_open * p_drive_sg)
-            self.sight_glass_level_pct += min(1.0, 12.0 * dt_th) * (target_sg_pct - self.sight_glass_level_pct)
-            self.pg_bourdon_kgf += min(1.0, 7.5 * dt_th) * (p_gauge_now - self.pg_bourdon_kgf)
+            self.sight_glass_level_pct += min(1.0, 15.0 * dt_th) * (target_sg_pct - self.sight_glass_level_pct)
+            self.pg_bourdon_kgf += min(1.0, 10.0 * dt_th) * (p_gauge_now - self.pg_bourdon_kgf)
 
-        # 13-1 压力表虹吸弯管 (OD 2.0 / ID 1.2mm, 壁厚 t=0.40mm) 底部 U 弯液封水塞动态平衡:
         if has_steam and p_gauge_now > 0.08:
             self.siphon_seal_water_pct = min(100.0, self.siphon_seal_water_pct + 0.65 * dt_th)
         else:
             self.siphon_seal_water_pct = max(86.0, self.siphon_seal_water_pct - 0.02 * dt_th)
 
+        # 物理仪表盘阻尼平滑 (tau ≈ 0.16s 滤除四冲排气脉冲引起的高频数字跳字，同时保留真实加减档瞬态，首帧非零直接对齐避免冷启动滞后!)
+        alpha_inst = min(1.0, dt / 0.16)
+        raw_evap_gs = evap_rate_kg_s * 1000.0
+        if self.M_water_kg <= 1.0e-7:
+            self._ema_evap_gs = 0.0
+        elif self._ema_evap_gs < 1e-4 and raw_evap_gs > 1e-3:
+            self._ema_evap_gs = raw_evap_gs
+        else:
+            self._ema_evap_gs += alpha_inst * (raw_evap_gs - self._ema_evap_gs)
+        self._ema_exhaust_gs += alpha_inst * (mdot_cyl_exh * 1000.0 - self._ema_exhaust_gs)
+        q_net_pos = max(0.0, q_net_water_w)
+        if self._ema_heat_w < 1e-3 and q_net_pos > 1.0:
+            self._ema_heat_w = q_net_pos
+        else:
+            self._ema_heat_w += alpha_inst * (q_net_pos - self._ema_heat_w)
+        if self._ema_eta_pct < 1e-3 and boiler_eff_pct > 0.5:
+            self._ema_eta_pct = boiler_eff_pct
+        else:
+            self._ema_eta_pct += alpha_inst * (boiler_eff_pct - self._ema_eta_pct)
+        if self._ema_vac_pa < 1e-3 and smokebox_vac_pa > 0.5:
+            self._ema_vac_pa = smokebox_vac_pa
+        else:
+            self._ema_vac_pa += min(1.0, dt / 0.004) * (smokebox_vac_pa - self._ema_vac_pa)
+        self._ema_ind_work_w += min(1.0, dt / 0.22) * (max(0.0, ind_work_w_acc) - self._ema_ind_work_w)
+        if self._ema_ind_work_w > 0.08 and mdot_cyl_in > 1e-6:
+            inst_spec = min(999.0, (mdot_cyl_in * 1000.0) / (self._ema_ind_work_w * 1e-3))
+            self._ema_spec_steam += min(1.0, dt / 0.30) * (inst_spec - self._ema_spec_steam)
+        elif mdot_cyl_in <= 1e-6:
+            self._ema_spec_steam *= math.exp(-2.0 * dt)
+
         rpm = (omega_3 / (2.0 * math.pi)) * 60.0
         v_real_ms = abs(omega_3) * (0.5 * 0.0438) * 32.0
         dry_alarm = (crown_submerged_mm <= 0.5 and ctrl.burner_lit) or (self.T_crown_c >= 240.0)
         boil_prog = min(100.0, max(0.0, (self.T_boiler_c - 25.0) / 75.0 * 100.0))
+
+        el_info = self.ext_pino_elastic or {}
+        flue_defl = list(el_info.get("flue_deflection_mm", [0.0] * 5))
+        flue_oval = list(el_info.get("flue_ovalization_mm", [0.0] * 5))
+        crown_blg = float(el_info.get("crown_bulge_mm", 0.0))
+        max_stress = float(el_info.get("max_boiler_stress_mpa", 0.0))
+        cu_yield = float(el_info.get("copper_yield_mpa", 185.0))
+        spr_defl = list(el_info.get("spring_deflect_mm", [0.0] * 10))
 
         telemetry = ThermoTelemetry(
             sim_time=sim_time,
@@ -1167,12 +1528,12 @@ class AsterD51Thermo1D:
             hydrolock_R=hydrolock_R,
             valve_friction_L=F_vfric_L,
             valve_friction_R=F_vfric_R,
-            smokebox_vacuum_pa=smokebox_vac_pa,
+            smokebox_vacuum_pa=self._ema_vac_pa,
             lut_active=(self.lut is not None or pino_on),
             pino_active=pino_on,
             steam_dryness_dome=self.steam_dryness_dome,
             steam_dryness_chest=self.steam_dryness_chest,
-            heat_input_w=max(0.0, q_net_water_w),
+            heat_input_w=self._ema_heat_w,
             feedwater_g_s=mdot_fw_total * 1000.0,
             return_water_ml_s=return_water_ml_s,
             tender_water_temp_c=self.T_feedwater_c,
@@ -1189,7 +1550,7 @@ class AsterD51Thermo1D:
             blowdown_g_s=mdot_blowdown_liq * 1000.0,
             sight_purge_g_s=mdot_sg_purge * 1000.0,
             whistle_steam_g_s=mdot_whistle * 1000.0,
-            exhaust_g_s=mdot_cyl_exh * 1000.0,
+            exhaust_g_s=self._ema_exhaust_gs,
             blower_g_s=mdot_blw * 1000.0,
             safety_g_s=mdot_sv * 1000.0,
             safety_valve_lift_mm=round(self.safety_valve_lift_mm, 4),
@@ -1205,10 +1566,29 @@ class AsterD51Thermo1D:
             casing_temp_c=round(self.casing_temp_c, 1),
             shell_heat_loss_w=round(q_loss_w, 2),
             shell_rad_loss_w=round(q_rad_shell_w, 2),
-            boiler_efficiency_pct=round(boiler_eff_pct, 2),
+            boiler_efficiency_pct=round(self._ema_eta_pct, 2),
             boiler_water_ml=self.M_water_kg * 1000.0,
             water_free_z_mm=self.water_free_z_mm,
-            steam_gen_g_s=max(mdot_steam_out, evap_rate_kg_s) * 1000.0,
+            steam_gen_g_s=round(self._ema_evap_gs, 4),
+            steam_out_g_s=round(mdot_steam_out * 1000.0, 4),
+            cutoff_pct=round(self.cutoff_pct, 1),
+            cyl_expansion_work_w=round(self._ema_ind_work_w, 3),
+            specific_steam_g_kj=round(self._ema_spec_steam, 2),
+            pump_chamber_kgf=round((self.P_pump_chamber - P_ATM) / PA_PER_KGF_CM2, 3),
+            pump_suction_vac_kpa=round(self.pump_suction_vac_kpa, 2),
+            pump_shaft_power_w=round(self.pump_shaft_power_w, 4),
+            lube_oil_temp_c=round(self.T_lube_oil_c, 1),
+            lube_oil_viscosity_mpas=round(self.lube_oil_visc_mpas, 1),
+            alcohol_temp_c=round(self.T_alcohol_c, 1),
+            alcohol_viscosity_mpas=round(self.alcohol_visc_mpas, 3),
+            drain_blowdown_g_s=round(mdot_drain_blow * 1000.0, 3),
+            flue_deflection_mm=flue_defl,
+            flue_ovalization_mm=flue_oval,
+            crown_bulge_mm=round(crown_blg, 4),
+            max_boiler_stress_mpa=round(max_stress, 2),
+            copper_yield_mpa=round(cu_yield, 1),
+            spring_deflect_mm=spr_defl,
+            pino_7op_active=bool(el_info.get("pino_7op_active", False)),
             force_L=F_L,
             force_R=F_R,
             wheel_rpm=rpm,

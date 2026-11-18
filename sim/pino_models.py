@@ -1351,4 +1351,96 @@ def compute_boiler_wick_pde_residuals(scalars: torch.Tensor, cht_vec: torch.Tens
     return (res_block + res_energy + res_2nd_law).mean()
 
 
+class ThermoElasticStructPINO(nn.Module):
+    """
+    第 7 算子: 锅炉 5 烟管与紫铜火室顶板热—力—压耦合弹性/退火形变算子 (Stage 18 Item 14 & 16)
+    输入 scalars: [B, 6]
+      col0: p_ext_norm   = P_boiler_gauge_kgf / 5.0          ∈ [0, 1.2]
+      col1: t_flue_norm  = T_flue_peak_c / 700.0             ∈ [0, 1.2]
+      col2: t_crown_norm = T_crown_c / 700.0                 ∈ [0, 1.2]
+      col3: dry_frac     = 1.0 - wet_immersion_frac          ∈ [0, 1.0]
+      col4: r_mean_norm  = r_mean_mm / 5.0                   ∈ [0.5, 1.0]
+      col5: wall_t_mm    = wall_thickness_mm                 ∈ [0.4, 1.0]
+
+    内部构造 32 轴向节点一维谱卷积特征场 [B, width, 32]，输出 [B, 4]:
+      out0: elastic_bow_mm    [mm]  受限热膨胀压杆弯曲挠度 (>= 0, ΔT=0 & ΔP=0 时严格归零)
+      out1: elastic_oval_mm   [mm]  外压圆筒壳椭圆化扁平量 (>= 0, ΔP=0 时严格归零)
+      out2: von_mises_mpa     [MPa] 管壁最大等效应力
+      out3: fsi_resist_delta  [>=0] 流道缩径附加流阻增量 ((D0/Deff)^4 - 1)
+    """
+
+    def __init__(self, width: int = 36, modes: int = 10):
+        super().__init__()
+        self.width = width
+        self.modes = modes
+        self.in_proj = nn.Sequential(
+            nn.Conv1d(7, width, kernel_size=1),
+            nn.GELU(),
+            nn.Conv1d(width, width, kernel_size=3, padding=1),
+        )
+        scale = 1.0 / (width * width) ** 0.5
+        self.spec_r = nn.Parameter(scale * torch.randn(width, width, modes))
+        self.spec_i = nn.Parameter(scale * torch.randn(width, width, modes))
+        self.conv_loc = nn.Conv1d(width, width, kernel_size=3, padding=1)
+        self.norm = nn.GroupNorm(4, width)
+        self.head = nn.Sequential(
+            nn.Linear(width + 6, width),
+            nn.GELU(),
+            nn.Linear(width, 4),
+        )
+
+    def forward(self, scalars: torch.Tensor) -> torch.Tensor:
+        orig_dtype = scalars.dtype
+        B = scalars.shape[0]
+        xi = torch.linspace(0.0, 1.0, 32, device=scalars.device, dtype=orig_dtype).view(1, 1, 32).expand(B, 1, 32)
+        s_exp = scalars.unsqueeze(-1).expand(B, 6, 32)
+        x = self.in_proj(torch.cat([s_exp, torch.sin(torch.pi * xi)], dim=1))
+
+        xf = x.float()
+        ft = torch.fft.rfft(xf, dim=-1, norm="ortho")
+        m = min(self.modes, ft.shape[-1])
+        out_ft = torch.zeros_like(ft)
+        w = torch.complex(self.spec_r[:, :, :m].float(), self.spec_i[:, :, :m].float())
+        out_ft[:, :, :m] = torch.einsum("bcx,cdx->bdx", ft[:, :, :m], w)
+        x_spec = torch.fft.irfft(out_ft, n=32, dim=-1, norm="ortho").to(orig_dtype)
+        h = x + F.gelu(self.norm(x_spec + self.conv_loc(x)))
+
+        pooled = h.mean(dim=-1)
+        raw = self.head(torch.cat([pooled, scalars], dim=-1))
+
+        p_n = scalars[:, 0:1].clamp(min=0.0)
+        dt_n = F.relu(scalars[:, 1:2] - 0.04)
+        dry_n = scalars[:, 3:4].clamp(0.0, 1.0)
+
+        # 硬物理零载荷锚定边界: 零温升且零表压时弹性形变严格归零!
+        drive_bow = dt_n * (0.15 + 0.85 * dry_n) + 0.02 * p_n
+        bow_mm = drive_bow * (0.01 + 0.85 * F.softplus(raw[:, 0:1]))
+        oval_mm = p_n * (0.00008 + 0.025 * F.softplus(raw[:, 1:2]) * (0.15 + 0.85 * dry_n))
+        vm_mpa = (p_n * 28.0 + dt_n * 540.0) * F.softplus(raw[:, 2:3])
+        fsi_d = (oval_mm + 0.22 * bow_mm) * (0.15 + 0.65 * F.softplus(raw[:, 3:4]))
+        return torch.cat([bow_mm, oval_mm, vm_mpa, fsi_d], dim=-1)
+
+
+def compute_thermo_elastic_pde_residuals(scalars: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
+    """
+    锅炉烟管热弹性本构与薄壳外压稳定性 PINN 残差:
+      1) 零载荷锚定边界: p_ext == 0 -> oval_mm == 0; p_ext == 0 且 T <= 28°C -> bow_mm == 0
+      2) FSI 流阻非负单调耦合: fsi_delta >= 0 且随 oval_mm + 0.22*bow_mm 正向增长
+    """
+    p_n = scalars[:, 0].float()
+    dt_n = F.relu(scalars[:, 1].float() - 0.04)
+    bow = pred[:, 0].float()
+    oval = pred[:, 1].float()
+    vm = pred[:, 2].float()
+    fsi = pred[:, 3].float()
+
+    zero_p = (p_n < 1e-4).float()
+    zero_all = ((p_n < 1e-4) & (dt_n < 1e-4)).float()
+    res_zero = zero_p * (oval ** 2) + zero_all * (bow ** 2 + vm ** 2)
+    res_pos = F.relu(-bow) ** 2 + F.relu(-oval) ** 2 + F.relu(-fsi) ** 2
+    return (res_zero + res_pos).mean()
+
+
+
+
 

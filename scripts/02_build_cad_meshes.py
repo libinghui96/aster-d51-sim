@@ -57,6 +57,8 @@ from build123d import (
     RegularPolygon,
     Rot,
     SlotOverall,
+    Sphere,
+    Torus,
     Vector,
     Wire,
     export_step,
@@ -238,13 +240,73 @@ def make_banjo_eye(
     h_eye: float,
     hex_r: float,
 ):
-    """构建原厂圆柱形バンジョー环眼 + 4-15 六角中空管螺栓头总成 (零方块！)。"""
+    """构建原厂圆柱形バンジョー环眼 + 4-15 六角中空管螺栓头总成 (零方块，外六角端面实体封顶！)。"""
     ax = Vector(*axis_dir).normalized()
     p_base = Vector(*pos) - ax * (0.5 * h_eye)
     eye = extrude(Plane(origin=p_base, z_dir=ax) * Circle(r_eye), amount=h_eye)
     bolt_pos = Vector(*pos) + ax * (0.5 * h_eye + 0.45)
     bolt = make_hex_nut((bolt_pos.X, bolt_pos.Y, bolt_pos.Z), axis_dir, hex_r=hex_r, length=1.2)
     return eye + bolt
+
+
+def make_blind_hex_bolt(
+    pos: Tuple[float, float, float],
+    axis_dir: Tuple[float, float, float],
+    hex_r: float,
+    head_len: float,
+    collar_r: float = 0.0,
+    collar_len: float = 0.0,
+):
+    """构建外端面 100% 实心封顶的 (4-15) M5 中空管螺栓六角帽 / 闷头螺塞 (严禁被内孔布尔差集打穿顶面！)。"""
+    ax = Vector(*axis_dir).normalized()
+    part = make_hex_nut(pos, axis_dir, hex_r=hex_r, length=head_len)
+    if collar_r > 1e-4 and collar_len > 1e-4:
+        p_col = Vector(*pos) - ax * (0.5 * head_len + collar_len - 0.15)
+        part = part + extrude(Plane(origin=p_col, z_dir=ax) * Circle(collar_r), amount=collar_len + 0.15)
+    return part
+
+
+def make_coil_spring_stack(
+    center_xyz: Tuple[float, float, float],
+    r_coil: float,
+    r_wire: float,
+    height: float,
+    n_turns: int = 5,
+    r_core_rod: float = 0.0,
+):
+    """构建严格 Y 对称 (|com_y| == 0.0000mm)、零切向退化、单连通水密 (cc == 1) 的精密弹簧圈组与上下座垫。"""
+    cx, cy, cz = center_xyz
+    r_out = r_coil + r_wire
+    r_in = max(0.35, r_coil - r_wire)
+    z_bot = cz - 0.5 * height
+    z_top = cz + 0.5 * height
+    seat_h = max(0.55, 1.10 * r_wire)
+
+    bot_seat = Pos(cx, cy, z_bot + 0.5 * seat_h) * Cylinder(radius=r_out + 0.12, height=seat_h)
+    top_seat = Pos(cx, cy, z_top - 0.5 * seat_h) * Cylinder(radius=r_out + 0.12, height=seat_h)
+    spine_r = max(0.38, 0.58 * r_wire)
+    coil = (
+        bot_seat
+        + top_seat
+        + Pos(cx + r_coil, cy, cz) * Cylinder(radius=spine_r, height=height - 0.2)
+        + Pos(cx - r_coil, cy, cz) * Cylinder(radius=spine_r, height=height - 0.2)
+    )
+    usable_h = max(0.9, height - 1.5 * seat_h)
+    turn_h = min(1.65 * r_wire, 0.62 * (usable_h / max(1, n_turns)))
+    for k in range(n_turns):
+        zk = (cz - 0.5 * usable_h) + (k + 0.5) * (usable_h / max(1, n_turns))
+        ring_k = (
+            Pos(cx, cy, zk) * Cylinder(radius=r_out, height=turn_h)
+            + Pos(cx, cy, zk + 0.35 * turn_h) * Cone(bottom_radius=r_out, top_radius=r_out - 0.28 * r_wire, height=0.32 * turn_h)
+            + Pos(cx, cy, zk - 0.35 * turn_h) * Rot(180, 0, 0) * Cone(bottom_radius=r_out, top_radius=r_out - 0.28 * r_wire, height=0.32 * turn_h)
+        )
+        coil = coil + ring_k
+    if r_core_rod > 1e-4:
+        hollow = Pos(cx, cy, cz) * (Cylinder(radius=r_in, height=height + 1.2) - Cylinder(radius=r_core_rod, height=height + 2.0))
+        coil = (coil - hollow) + Pos(cx, cy, cz) * Cylinder(radius=r_core_rod, height=height + 0.5)
+    else:
+        coil = coil - Pos(cx, cy, cz) * Cylinder(radius=r_in, height=height + 1.2)
+    return coil
 
 
 def make_stepped_pin_L(
@@ -289,13 +351,16 @@ def make_connecting_bar_xy(
 def build_boxpok_wheel(cfg: Dict, phase_deg: float, is_left: bool, is_main_driver: bool = False):
     d_tread = float(cfg["wheels_and_axles"]["driving_wheel_diameter"])
     r_tread = 0.5 * d_tread
-    r_flange = r_tread + 1.00
+    # 严守四动轮 46.50mm 轴距几何上限: 2*(r_tread + h_flange) <= 45.90mm -> h_flange = 1.06mm (相邻动轮轮缘间距 >= 0.62mm > 0.50mm!)
+    r_flange = r_tread + 1.06
     r_rim_inner = r_tread - 2.4
     r_crank = float(cfg["cylinder_and_rods"]["crank_radius"])
-    w_tire, w_flange, w_web = 3.8, 1.0, (2.8 if is_main_driver else 2.4)
+    w_tire, w_flange, w_web = 3.9, 1.05, (2.8 if is_main_driver else 2.4)
 
     tire = Cylinder(radius=r_tread, height=w_tire)
-    flange = Pos(0, 0, -0.5 * w_tire + 0.5 * w_flange) * Cylinder(radius=r_flange, height=w_flange)
+    flange = Pos(0, 0, -0.5 * w_tire + 0.5 * w_flange) * Cone(
+        bottom_radius=r_flange, top_radius=r_tread + 0.35, height=w_flange
+    )
     wheel = tire + flange - Cylinder(radius=r_rim_inner, height=w_tire + 2.0)
 
     web = Cylinder(radius=r_rim_inner + 0.3, height=w_web)
@@ -976,26 +1041,26 @@ def build_drain_cock_linkage(cfg: Dict):
 
 def build_drain_pull_rod(cfg: Dict):
     """
-    8-5 右侧 (-Y=-17.8mm) 100% 全直水平排液拉杆 + 8-6 床下可调铰接套环 + P-M2.6-3 紧定螺钉 (イラスト 7, 8 & 図 8.1):
-      - 彻底删除虚构的车外床下大滚花鼓锤！8-7 排液手柄真实立于驾驶室内部右地板上方 (-133.5, -21.2)，
-        下端穿过 8-11 纵向槽与 8-10 支座，在 Z=+8.5mm 处铰接 8-6 套环驱动全直拉杆 8-5 直抵前部 7-1 摇臂 (+124.2, -17.8, +8.5)！
+    8-5 右侧 (-Y=-17.8mm) 100% 全直水平排液拉杆 + 床下隐蔽 8-10 铰接套环 (イラスト 7, 8 & 図 8.1):
+      - 彻底删除虚构的车外床下悬垂鼓锤，且零向上长杆！
+      - 8-6 纵向滚花黑圆柄真实位于驾驶室右地板上方室内 (-140.7, -21.0, +25.4mm)，斜穿右地板槽驱动本拉杆后端套环 (-133.5, -18.8, +8.5mm)！
     """
     x0, x1 = -135.2, +124.2
     rod_8_5 = Pos(0.5 * (x0 + x1), -17.8, 8.5) * Rot(0, 90, 0) * Cylinder(radius=0.62, height=x1 - x0)
-    collar_8_6 = (
-        Pos(-133.5, -18.8, 8.5) * Rot(0, 90, 0) * Cylinder(radius=1.65, height=4.4)
-        + Pos(-133.5, -19.5, 8.5) * Rot(90, 0, 0) * Cylinder(radius=1.35, height=3.8)
-        + Pos(-133.5, -17.8, 10.2) * Cylinder(radius=0.85, height=1.2)
+    collar_clevis = (
+        Pos(-133.5, -18.8, 8.5) * Rot(0, 90, 0) * Cylinder(radius=1.55, height=4.2)
+        + Pos(-133.5, -19.6, 8.5) * Rot(90, 0, 0) * Cylinder(radius=1.30, height=3.8)
+        + Pos(-133.5, -17.8, 10.1) * Cylinder(radius=0.78, height=1.1)
     )
     front_clevis = Pos(+124.2, -17.8, 8.5) * Rot(90, 0, 0) * Cylinder(radius=1.32, height=1.8)
-    return rod_8_5 + collar_8_6 + front_clevis
+    return rod_8_5 + collar_clevis + front_clevis
 
 
 # ==================== 3B. 驾驶室 1:1 原厂全功能内构与煤水车全功能可动阀件网格 ====================
 
 def build_cab_backhead_plate():
     """
-    11-9 ボイラバックプレート + 12-5 x3 压板 + 12-2 观火孔框与底铰耳 + 前折排水阀侧翼 (イラスト 11, 12 & p45, 100% Y 对称, cc=1)。
+    11-9 ボイラバックプレート + 12-5 x3 压板 + 12-2 浮雕拱门观火框与双下铰耳 + 前折排水阀侧翼 (イラスト 11, 12 & p45, 100% Y 对称, cc=1)。
     """
     lower_skirt = Pos(-113.2, 0.0, 32.5) * Box(2.2, 53.6, 25.0)
     upper_arch = Pos(-113.2, 0.0, 44.5) * Rot(0, 90, 0) * Cylinder(radius=26.8, height=2.2)
@@ -1008,19 +1073,23 @@ def build_cab_backhead_plate():
     clamp_top = Pos(-113.6, 0.0, 69.6) * Rot(0, 90, 0) * Cylinder(radius=2.4, height=3.0)
     clamp_l = Pos(-113.6, +23.8, 28.0) * Rot(0, 90, 0) * Cylinder(radius=2.3, height=3.0)
     clamp_r = Pos(-113.6, -23.8, 28.0) * Rot(0, 90, 0) * Cylinder(radius=2.3, height=3.0)
-    shield_12_2 = (
-        Pos(-114.2, 0.0, 28.8) * Box(1.6, 13.8, 13.4)
-        + Pos(-115.1, +5.0, 22.0) * Rot(90, 0, 0) * Cylinder(radius=1.40, height=2.0)
-        + Pos(-115.1, -5.0, 22.0) * Rot(90, 0, 0) * Cylinder(radius=1.40, height=2.0)
-        + Pos(-115.0, 0.0, 35.8) * Box(1.8, 2.8, 1.4)
+    # 12-2 原厂铸造凹槽拱顶观火门框 + 左右双耳铰座 + 底部灰唇托盘 + 上锁鼻
+    frame_bezel_12_2 = (
+        Pos(-114.2, 0.0, 28.6) * Box(1.7, 15.2, 14.0)
+        + Pos(-114.3, 0.0, 32.6) * Rot(0, 90, 0) * Cylinder(radius=7.6, height=1.9)
+        - Pos(-115.0, 0.0, 28.8) * Box(1.4, 12.6, 11.4)
+        + Pos(-115.2, +5.2, 21.8) * Rot(90, 0, 0) * Cylinder(radius=1.45, height=1.9)
+        + Pos(-115.2, -5.2, 21.8) * Rot(90, 0, 0) * Cylinder(radius=1.45, height=1.9)
+        + Pos(-115.1, 0.0, 21.1) * Box(2.2, 14.2, 1.2)
+        + Pos(-115.1, 0.0, 36.2) * Box(2.1, 3.0, 1.5)
     )
-    firehole_cut = Pos(-113.5, 0.0, 28.8) * Rot(0, 90, 0) * Cylinder(radius=4.4, height=8.0)
-    return (lower_skirt + upper_arch + underfloor_flanges + clamp_top + clamp_l + clamp_r + shield_12_2) - firehole_cut
+    firehole_cut = Pos(-113.5, 0.0, 28.8) * Rot(0, 90, 0) * Cylinder(radius=4.5, height=8.0)
+    return (lower_skirt + upper_arch + underfloor_flanges + clamp_top + clamp_l + clamp_r + frame_bezel_12_2) - firehole_cut
 
 
 def build_cab_deck_and_mounts():
     """
-    8-11 運転室床 (宽 76.4mm, Z_top=+20.0mm, 带右侧室内 8-7 排液立杆纵向通槽) + 8-21 左前延长片 + 4-6/4-7 折弯梁 + 6-12 后横梁 + 8-10 ドレンねじスタンド支座 + 4-8 横置旁通支座 (イラスト 4, 6, 8, 図 8.1 & p45, cc=1)。
+    8-11 運転室床 (宽 76.4mm, Z_top=+20.0mm, 带左地板 6-9 旁通孔与右地板 8-6 斜拉旋钮孔) + 8-21 左前延长片 + 4-6/4-7 折弯梁 + 6-12 后横梁 + 8-10 ドレンねじスタンド支座 + 4-8 横置旁通支座 (イラスト 4, 6, 8, 図 8.1 & p45, cc=1)。
     """
     deck_8_11 = (
         Pos(-130.75, 0.0, 19.35) * Box(34.5, 76.4, 1.3)
@@ -1035,18 +1104,18 @@ def build_cab_deck_and_mounts():
         Pos(-144.2, 0.0, 14.8) * Box(1.6, 44.0, 8.2)
         - Pos(-144.2, 0.0, 14.8) * Box(4.0, 20.5, 4.8)
     )
-    bypass_hole = Pos(-136.5, +6.8, 19.5) * Cylinder(radius=1.45, height=6.0)
+    bypass_hole = Pos(-135.5, +8.5, 19.5) * Cylinder(radius=1.55, height=6.0)
     riser_6_8_slot = Pos(-115.8, -11.8, 19.35) * Box(4.4, 4.0, 5.0)
-    drain_lever_slot = Pos(-133.5, -21.2, 19.35) * Box(7.4, 2.5, 4.0)
+    drain_lever_slot = Pos(-136.2, -21.0, 19.35) * Box(6.8, 2.6, 4.0)
     stand_8_10 = (
-        Pos(-133.5, -23.1, 18.4) * Box(6.8, 2.2, 1.2)
-        + Pos(-133.5, -23.1, 16.2) * Box(3.6, 1.4, 4.6)
-        + Pos(-133.5, -22.5, 15.0) * Rot(90, 0, 0) * Cylinder(radius=1.55, height=1.6)
+        Pos(-133.5, -22.9, 18.4) * Box(6.8, 2.2, 1.2)
+        + Pos(-133.5, -22.9, 16.2) * Box(3.6, 1.4, 4.6)
+        + Pos(-133.5, -22.3, 15.0) * Rot(90, 0, 0) * Cylinder(radius=1.55, height=1.6)
         + Pos(-121.0, -17.8, 13.8) * Box(1.3, 3.6, 11.4)
         + Pos(-119.8, -17.8, 18.4) * Box(3.4, 3.6, 1.2)
         - Pos(-121.0, -17.8, 8.5) * Rot(0, 90, 0) * Cylinder(radius=1.05, height=4.0)
     )
-    stand_4_8 = Pos(-136.5, 0.0, 18.1) * Box(4.6, 20.0, 2.4)
+    stand_4_8 = Pos(-135.5, 0.0, 18.1) * Box(4.6, 22.0, 2.4)
     return (deck_8_11 + strip_8_21 + channels_4_6_7 + rear_beam_6_12 + stand_8_10 + stand_4_8) - bypass_hole - riser_6_8_slot - drain_lever_slot
 
 
@@ -1203,61 +1272,143 @@ def build_cab_blowdown_screw():
 
 def build_cab_firebox_door():
     """
-    12-1/12-2 驾驶室低位中下底铰蝴蝶式铸造火室门 + 内衬 Template 3 隔热护盾座 (イラスト 12 & p45)。
+    12-1 (双叶对开浮雕铸造蝴蝶火室门 + 中缝 + 4 孔二次风配风口 + 双斜铰链带 + 顶卡扣) + 12-2 凹陷隔热盾框 + Template 3 陶瓷衬垫 + 12-3 底铰销 (イラスト 12, Manual p.28 & p45, cc=1):
+      - 局部原点 (0,0,0) 位于 12-3 底铰横销中心 (-115.4, 0.0, +21.8mm, axis='0 -1 0')；
+      - 闭合时两叶铸造门板紧贴 12-2 门框，4 个二次风圆孔通过门背 0.8mm 隔热挡板间隙精确节流助燃空气；翻开时绕 12-3 受重力自然落向定位卡肩！
     """
-    pin_12_3 = Rot(90, 0, 0) * Cylinder(radius=1.12, height=12.6)
-    door_plate = (
-        Pos(-0.6, 0.0, +6.7) * Box(1.5, 12.2, 13.0)
-        + Pos(-0.6, 0.0, +6.8) * Rot(0, 90, 0) * Cylinder(radius=5.6, height=1.6)
-        + Pos(+0.45, 0.0, +6.8) * Box(0.8, 10.6, 11.2)
+    pin_12_3 = (
+        Rot(90, 0, 0) * Cylinder(radius=1.08, height=13.2)
+        + Pos(0.0, +6.2, 0.0) * Rot(90, 0, 0) * Cylinder(radius=1.42, height=0.8)
+        + Pos(0.0, -6.2, 0.0) * Rot(90, 0, 0) * Cylinder(radius=1.42, height=0.8)
     )
-    boss_ring = Pos(-1.35, 0.0, +6.8) * Rot(0, 90, 0) * (Cylinder(radius=3.8, height=0.8) - Cylinder(radius=2.2, height=1.2))
-    top_latch = Pos(-1.2, 0.0, +13.4) * Box(1.8, 2.4, 1.4)
-    return pin_12_3 + door_plate + boss_ring + top_latch
+    # 左右双斜铰链臂 (自 z=0 底铰耳连向双叶铸门外缘)
+    strap_L = (
+        Pos(-0.75, +3.6, +3.4) * Rot(+16, 0, 0) * Box(1.3, 1.7, 7.2)
+        + Pos(0.0, +3.6, 0.0) * Rot(90, 0, 0) * Cylinder(radius=1.48, height=1.8)
+    )
+    hinge_straps = strap_L + mirror(strap_L, about=Plane.XZ)
+
+    # 12-1 铸造双翼圆角八边门扇主体 + 外周凸缘加强筋 + 中央对开分缝凹槽 + 4 个二次风进气圆孔
+    wing_base = (
+        Pos(-0.55, 0.0, +7.0) * Box(1.4, 11.8, 11.2)
+        + Pos(-0.65, 0.0, +7.0) * Rot(0, 90, 0) * Cylinder(radius=5.85, height=1.55)
+    )
+    wing_rim = (
+        Pos(-1.15, 0.0, +7.0) * Rot(0, 90, 0) * (Cylinder(radius=5.55, height=0.75) - Cylinder(radius=4.55, height=1.4))
+        + Pos(-1.20, +2.35, +7.0) * Rot(0, 90, 0) * Cylinder(radius=2.15, height=0.70)
+        + Pos(-1.20, -2.35, +7.0) * Rot(0, 90, 0) * Cylinder(radius=2.15, height=0.70)
+    )
+    center_split_groove = Pos(-1.35, 0.0, +7.0) * Box(0.85, 0.62, 11.4)
+    draft_holes = None
+    for sy in (-2.35, +2.35):
+        for sz in (+5.45, +8.55):
+            dh = Pos(-1.05, sy, sz) * Rot(0, 90, 0) * Cylinder(radius=0.58, height=1.8)
+            draft_holes = dh if draft_holes is None else (draft_holes + dh)
+
+    # 向火面 (+X) 12-2 内凹防火盾盘 + Template 3 セラミックシート 隔热块 (保留周边导风阶梯)
+    baffle_shield_inner = (
+        Pos(+0.35, 0.0, +7.0) * Box(0.85, 9.6, 9.6)
+        + Pos(+0.92, 0.0, +7.0) * Box(0.75, 8.2, 8.2)
+        + Pos(+0.35, +3.2, +7.0) * Rot(0, 90, 0) * Cylinder(radius=0.75, height=1.35)
+        + Pos(+0.35, -3.2, +7.0) * Rot(0, 90, 0) * Cylinder(radius=0.75, height=1.35)
+    )
+    top_latch = (
+        Pos(-1.15, 0.0, +13.1) * Box(1.9, 2.5, 1.5)
+        + Pos(-1.65, +1.8, +12.6) * Rot(0, 90, 0) * Cylinder(radius=0.65, height=1.1)
+    )
+    return (pin_12_3 + hinge_straps + wing_base + wing_rim + baffle_shield_inner + top_latch) - center_split_groove - draft_holes
 
 
 def build_cab_bypass_lever():
     """
-    6-9 驾驶室左地板 (+Y=+6.8mm, X=-136.5mm, Z=+23.2mm) 同轴给水旁通针阀立杆与水平拨柄 (イラスト 6, 図 8.1 & p45)。
+    6-9 + 8-7 驾驶室左地板 (+Y=+8.5mm, X=-135.5mm, Z=+22.4mm) 开口夹紧抱箍式给水旁通针阀总成 (イラスト 6, 8, 図 8.1 & p45 多图联立真值, cc=1):
+      - 同轴下伸 6-9 黄铜针阀杆 (带中心微凸圆顶露于夹紧抱箍顶孔中央 + 下部锥形节流阀针探入床下 4-17)；
+      - 8-7 上部还原为原厂开槽圆筒抱箍头 (OD 5.4x4.6mm，后侧夹紧窄缝 + 侧面横向内六角锁紧螺钉孔凸耳) + 车削双防滑环槽锥形拨杆！
     """
-    stem_6_9 = Pos(0.0, 0.0, -4.0) * Cylinder(radius=1.05, height=8.4)
-    collar = Pos(0.0, 0.0, -2.6) * Cylinder(radius=1.85, height=1.8)
-    hub = Cylinder(radius=1.85, height=2.2)
-    handle_arm = Pos(-2.2, +3.8, +0.2) * Rot(0, 0, +120) * Rot(0, -90, 0) * Cone(bottom_radius=0.95, top_radius=0.68, height=8.2)
-    ball_tip = Pos(-4.2, +7.2, +0.2) * Cylinder(radius=1.15, height=1.8)
-    return stem_6_9 + collar + hub + handle_arm + ball_tip
+    stem_6_9 = (
+        Pos(0.0, 0.0, -3.4) * Cylinder(radius=1.08, height=7.6)
+        + Pos(0.0, 0.0, -7.6) * Rot(180, 0, 0) * Cone(bottom_radius=1.08, top_radius=0.32, height=1.4)
+        + Pos(0.0, 0.0, +2.35) * Cylinder(radius=1.18, height=0.65)
+    )
+    floor_gland = (
+        Pos(0.0, 0.0, -2.35) * Cylinder(radius=1.95, height=1.6)
+        + make_hex_nut((0.0, 0.0, -1.75), (0.0, 0.0, 1.0), hex_r=2.15, length=1.1)
+    )
+    # 8-7 开口夹紧圆筒毂 + 横向锁紧螺钉耳与沉孔
+    split_hub = (
+        Pos(0.0, 0.0, +0.45) * Cylinder(radius=2.70, height=4.1)
+        + Pos(+1.65, +0.95, +0.45) * Box(2.4, 3.4, 3.6)
+        - Pos(+2.25, +0.05, +0.45) * Box(2.2, 0.48, 4.6)
+        - Pos(+1.75, +2.35, +0.45) * Rot(90, 0, 0) * Cylinder(radius=0.82, height=1.2)
+    )
+    clamp_screw = Pos(+1.75, -0.85, +0.45) * Rot(90, 0, 0) * Cylinder(radius=0.92, height=1.2)
+
+    # 车削双环槽锥形径向长拨杆 (沿 (-0.42, +0.91) 左后斜向伸出 L=12.6mm，全程高于地板且零干涉)
+    ang_deg = +115.0
+    arm_dir = Rot(0, 0, ang_deg) * Rot(0, -90, 0)
+    arm_main = Pos(0.0, 0.0, +0.55) * arm_dir * Pos(0.0, 0.0, -6.3) * Cone(bottom_radius=1.22, top_radius=0.82, height=12.6)
+    ring_1 = Pos(0.0, 0.0, +0.55) * arm_dir * Pos(0.0, 0.0, -8.4) * Torus(major_radius=0.98, minor_radius=0.22)
+    ring_2 = Pos(0.0, 0.0, +0.55) * arm_dir * Pos(0.0, 0.0, -10.2) * Torus(major_radius=0.92, minor_radius=0.22)
+    tip_ball = Pos(0.0, 0.0, +0.55) * arm_dir * Pos(0.0, 0.0, -12.6) * Cylinder(radius=1.12, height=1.5)
+    return stem_6_9 + floor_gland + split_hub + clamp_screw + arm_main + ring_1 + ring_2 + tip_ball
 
 
 def build_cab_drain_lever():
     """
-    8-7 ドレンレバー (Group 8 BOM p.5, イラスト 8, Manual p.24 図 8.1 & p45 驾驶室后视实拍真值):
-      - 排液手柄真实竖立于【驾驶室内部】右地板 8-11 上方 (-133.5, -21.2mm)，顶端球形握球高 Z=+37.2mm (高于地板 +17.2mm)！
-      - 局部原点 (0,0,0) 位于床下 8-10 支座枢轴 (-133.5, -21.2, +15.0mm, axis='0 1 0')，下端眼环 z=-6.5mm (Z=+8.5mm) 驱动 8-6/8-5 拉杆！
+    8-6 ドレンツマミ + 床下斜连杆 (イラスト 8, Manual p.24 図 8.1 & p45 驾驶室后视实拍多图联立真值, cc=1):
+      - 彻底删除虚构的 Z=+37.2mm 高耸垂直立杆，同时严禁悬垂于驾驶室底板下方！
+      - 局部原点 (0,0,0) 位于床下 8-10 支座枢轴 (-133.5, -21.0, +15.0mm, axis='0 1 0')：
+        1) 下摆臂 z=-6.5mm (Z_world=+8.5mm) 在床下隐蔽驱动 8-5 水平拉杆；
+        2) 不锈钢斜拉芯杆自 (0,0,0) 向后上方斜穿右地板 8-11 槽口至驾驶室内部右地板上方 (-7.2, 0.0, +10.4mm -> Z_world=+25.4mm)；
+        3) 顶端同轴装配原厂黑色纵向直纹滚花圆柱推拉旋钮 8-6 (OD 6.4x9.4mm, 16 道纵向防滑滚花槽 + 端面沉孔中心螺钉头，Z_top≈+28.8mm)！
     """
-    pivot_boss = Rot(90, 0, 0) * Cylinder(radius=1.55, height=2.4)
+    pivot_boss = Rot(90, 0, 0) * Cylinder(radius=1.55, height=2.3)
     lower_arm = (
-        Pos(0.0, 0.0, -3.25) * Box(2.0, 1.1, 6.5)
-        + Pos(0.0, +0.4, -6.5) * Rot(90, 0, 0) * Cylinder(radius=1.35, height=1.8)
+        Pos(0.0, 0.0, -3.25) * Box(1.9, 1.15, 6.5)
+        + Pos(0.0, +0.45, -6.5) * Rot(90, 0, 0) * Cylinder(radius=1.32, height=1.8)
     )
-    upper_shaft = Pos(0.0, 0.0, +10.2) * Cone(bottom_radius=1.05, top_radius=0.76, height=20.4)
-    top_knob = (
-        Pos(0.0, 0.0, +21.1) * Cylinder(radius=1.68, height=2.2)
-        + Pos(0.0, 0.0, +19.8) * Cylinder(radius=1.18, height=1.0)
+    # 自枢轴 (0,0,0) 斜向后上方穿过地板槽口 (-2.6, 0, +4.4) 进入室内右地板上方 (-7.2, 0, +10.4)
+    dx_k, dz_k = -7.2, +10.4
+    L_shaft = math.hypot(dx_k, dz_k)
+    pitch_deg = math.degrees(math.atan2(dx_k, dz_k))  # ~ -34.7° (向后 -X 仰起)
+    slanted_shaft = (
+        Pos(0.5 * dx_k, 0.0, 0.5 * dz_k)
+        * Rot(0, pitch_deg, 0)
+        * Cylinder(radius=0.92, height=L_shaft + 1.0)
     )
-    return pivot_boss + lower_arm + upper_shaft + top_knob
+    # 8-6 室内右地板上方纵向直纹滚花黑圆柱握柄 + 前端锥领 + 后端沉孔锁紧螺钉
+    knob_frame = Pos(dx_k, 0.0, dz_k) * Rot(0, pitch_deg, 0)
+    knob_core = (
+        knob_frame * Pos(0.0, 0.0, -4.1) * Cone(bottom_radius=1.35, top_radius=3.15, height=1.8)
+        + knob_frame * Pos(0.0, 0.0, +0.2) * Cylinder(radius=3.18, height=7.2)
+    )
+    flutes = None
+    for k_f in range(16):
+        ang_f = math.radians(k_f * (360.0 / 16.0))
+        fx, fy = 3.22 * math.cos(ang_f), 3.22 * math.sin(ang_f)
+        fl = knob_frame * Pos(fx, fy, +0.25) * Cylinder(radius=0.34, height=6.8)
+        flutes = fl if flutes is None else (flutes + fl)
+    end_recess = knob_frame * Pos(0.0, 0.0, +3.55) * Cylinder(radius=1.75, height=0.9)
+    end_screw = (
+        knob_frame * Pos(0.0, 0.0, +3.35) * Cylinder(radius=1.22, height=0.7)
+        - knob_frame * Pos(0.0, 0.0, +3.72) * Box(2.6, 0.42, 0.45)
+    )
+    knob_8_6 = ((knob_core - flutes) - end_recess) + end_screw
+    return pivot_boss + lower_arm + slanted_shaft + knob_8_6
 
 
 def build_dome_lid_29_12():
     """
     29-12 ドームのフタ + 29-13 軸 (イラスト 29 & Manual p.36 Step 29 原厂钢丝铰接可开启汽包/砂箱前盖, cc=1):
-      - 局部原点 (0,0,0) 位于盖前端横向钢丝铰链 29-13 (世界系 X=+62.2, Y=0.0, Z=+91.85mm, axis='0 -1 0')，向后覆盖 X∈[+50.2, +62.2]mm！
+      - 局部原点 (0,0,0) 位于盖前端横向钢丝铰链 29-13 (世界系 X=+62.4, Y=0.0, Z=+91.85mm, axis='0 1 0')，向后严密密封 X∈[+50.2, +62.4]mm 沉孔井！
     """
-    wire_29_13 = Rot(90, 0, 0) * Cylinder(radius=0.48, height=9.6)
-    hinge_lug = Pos(-0.8, 0.0, +0.2) * Box(2.0, 5.4, 1.1)
+    wire_29_13 = Rot(90, 0, 0) * Cylinder(radius=0.50, height=9.6)
+    hinge_lug = Pos(-0.85, 0.0, +0.18) * Box(2.1, 5.6, 1.05)
     lid_disc = (
-        Pos(-6.0, 0.0, +0.35) * Cylinder(radius=6.05, height=0.85)
-        + Pos(-6.0, 0.0, +0.92) * Cone(bottom_radius=5.75, top_radius=3.60, height=0.55)
-        + Pos(-11.6, 0.0, +0.35) * Box(1.8, 2.6, 0.85)
+        Pos(-6.0, 0.0, +0.15) * Cylinder(radius=6.35, height=0.95)
+        + Pos(-6.0, 0.0, -0.35) * Cylinder(radius=4.42, height=0.80)
+        + Pos(-6.0, 0.0, +0.82) * Cone(bottom_radius=6.05, top_radius=3.80, height=0.55)
+        + Pos(-11.8, 0.0, +0.25) * Box(1.9, 2.8, 0.85)
     )
     return wire_29_13 + hinge_lug + lid_disc
 
@@ -1472,8 +1623,10 @@ def build_umb_hose_return(cfg: Dict, is_r2m: bool = False):
 
 def build_chassis_equalizer_brakes(cfg: Dict):
     """
-    イラスト 3 & イラスト 5 真值均衡梁板簧与四轴前挂闸瓦总成 (5-1~5-4 + 5-12/5-13):
-      - 严格修正首轴闸瓦装反错误！全部 4 对闸瓦吊杆 (5-1~5-4) 均位于第 1~4 动轮前方 (+X = ax + 19.0mm)，第 4 动轮后方增设 5-12/5-13 斜拉制动均衡臂！
+    イラスト 3 & イラスト 5 真值多片叠板簧 (3-5 x8 + 5-15 x2)、均衡梁支座 (3-4 x6 动态摇臂独立分件!) 与四轴前挂闸瓦总成 (5-1~5-4 + 5-12/5-13):
+      - 4 对动轮轴箱上方完整还原 4 层阶梯叠片板簧 (3-5 x8) + 中央 3-6 弹簧箍 + 吊挂扁销，以及第 4 动轮后方 5-15 x2 尾部副板簧；
+      - 3 跨共 6 根 3-4 跷跷板均衡梁作为独立动态刚体 equalizer_lever_3_4 挂载于 MuJoCo，本网格保留其 3 对车架中心支点座；
+      - 全部 4 对闸瓦吊杆 (5-1~5-4) 位于第 1~4 动轮前方 (+X = ax + 19.0mm)，第 4 动轮后方配 5-12/5-13 斜拉制动均衡臂！
     """
     w_cfg = cfg["wheels_and_axles"]
     ax_xs = [
@@ -1484,24 +1637,42 @@ def build_chassis_equalizer_brakes(cfg: Dict):
     ]
 
     tie_f = Pos(0.5 * (ax_xs[0] + ax_xs[1]), 0.0, 13.2) * Box(4.0, 29.6, 2.2)
+    tie_m = Pos(0.5 * (ax_xs[1] + ax_xs[2]), 0.0, 13.2) * Box(4.0, 29.6, 2.2)
     tie_r = Pos(0.5 * (ax_xs[2] + ax_xs[3]), 0.0, 13.2) * Box(4.0, 29.6, 2.2)
-    assy = tie_f + tie_r
+    assy = tie_f + tie_m + tie_r
 
     for sgn in (-1.0, 1.0):
         y_eq = sgn * 10.7
         y_frame_out = sgn * 15.6
 
+        # 3-5 x8 四层阶梯叠板簧 + 3-6 中央抱箍 + 两端弹簧吊耳销
         for ax in ax_xs:
-            sp1 = Pos(ax, y_eq, 12.8) * Box(18.0, 1.5, 1.6)
-            sp2 = Pos(ax, y_eq, 14.0) * Box(12.5, 1.5, 1.4)
-            buckle = Pos(ax, y_eq, 13.3) * Box(3.2, 2.0, 3.0)
-            spring_lug = Pos(ax, sgn * 12.45, 12.9) * Box(3.2, 4.8, 1.9)
-            assy += sp1 + sp2 + buckle + spring_lug
+            sp1 = Pos(ax, y_eq, 12.6) * Box(21.0, 1.65, 0.85)
+            sp2 = Pos(ax, y_eq, 13.35) * Box(16.6, 1.65, 0.80)
+            sp3 = Pos(ax, y_eq, 14.05) * Box(12.2, 1.65, 0.78)
+            sp4 = Pos(ax, y_eq, 14.70) * Box(8.0, 1.65, 0.72)
+            buckle_3_6 = Pos(ax, y_eq, 13.65) * Box(3.4, 2.25, 3.3)
+            hanger_f = Pos(ax + 9.8, y_eq, 11.9) * Box(1.4, 1.85, 2.2)
+            hanger_r = Pos(ax - 9.8, y_eq, 11.9) * Box(1.4, 1.85, 2.2)
+            spring_lug = Pos(ax, sgn * 12.45, 12.9) * Box(3.4, 4.8, 1.9)
+            assy += sp1 + sp2 + sp3 + sp4 + buckle_3_6 + hanger_f + hanger_r + spring_lug
 
-        for xm in (0.5 * (ax_xs[0] + ax_xs[1]), 0.5 * (ax_xs[2] + ax_xs[3])):
-            rocker = Pos(xm, y_eq, 12.1) * Box(31.0, 1.4, 2.4)
-            fulcrum = Pos(xm, y_eq, 12.9) * Rot(90, 0, 0) * Cylinder(radius=1.8, height=2.2)
-            assy += rocker + fulcrum
+        # 5-15 x2 第 4 动轮后方尾部副板簧 (イラスト 5)
+        x_sp_rear = ax_xs[3] - 20.5
+        sp_5_15 = (
+            Pos(x_sp_rear, sgn * 12.6, 13.1) * Box(13.6, 1.6, 0.90)
+            + Pos(x_sp_rear, sgn * 12.6, 13.9) * Box(9.4, 1.6, 0.80)
+            + Pos(x_sp_rear, sgn * 13.4, 13.3) * Box(3.0, 3.2, 2.4)
+        )
+        assy += sp_5_15
+
+        # 3 对车架侧均衡梁支点耳座 (配合 3-4 x6 动态跷跷板均衡梁!)
+        for xm in (0.5 * (ax_xs[0] + ax_xs[1]), 0.5 * (ax_xs[1] + ax_xs[2]), 0.5 * (ax_xs[2] + ax_xs[3])):
+            fulcrum_pad = (
+                Pos(xm, sgn * 12.2, 12.6) * Box(4.2, 2.8, 2.6)
+                + Pos(xm, y_eq, 12.1) * Rot(90, 0, 0) * Cylinder(radius=1.45, height=2.2)
+            )
+            assy += fulcrum_pad
 
         hanger_xs = []
         for ax in ax_xs:
@@ -1528,6 +1699,52 @@ def build_chassis_equalizer_brakes(cfg: Dict):
     return assy
 
 
+def build_equalizer_lever_3_4():
+    """
+    3-4 イコライザー (イラスト 3 原厂动轮间跷跷板均衡梁摇臂, 6 件实例挂载于左右 3 跨动轮轴间, cc=1):
+      - 孔距 L_pin = 27.0mm (跨越相邻动轮 3-5 板簧内侧吊耳销)，中央设 ø3.8mm 车架支点枢轴毂，随相邻动轮垂向悬挂差 (z_k - z_{k+1}) 真实翘动！
+    """
+    L_pin = 27.0
+    half_L = 0.5 * L_pin
+    beam = (
+        Box(L_pin, 1.35, 2.3)
+        + Pos(0.0, 0.0, -0.35) * Box(10.0, 1.35, 2.8)
+        + Rot(90, 0, 0) * Cylinder(radius=1.95, height=1.95)
+        + Pos(+half_L, 0.0, +0.35) * Rot(90, 0, 0) * Cylinder(radius=1.45, height=1.65)
+        + Pos(-half_L, 0.0, +0.35) * Rot(90, 0, 0) * Cylinder(radius=1.45, height=1.65)
+    )
+    bores = (
+        Rot(90, 0, 0) * Cylinder(radius=0.82, height=4.0)
+        + Pos(+half_L, 0.0, +0.35) * Rot(90, 0, 0) * Cylinder(radius=0.62, height=4.0)
+        + Pos(-half_L, 0.0, +0.35) * Rot(90, 0, 0) * Cylinder(radius=0.62, height=4.0)
+    )
+    return beam - bores
+
+
+def build_axle_pump_ram(cfg: Dict):
+    """
+    6-1 中央轴动给水泵精密黄铜实心柱塞 + 前端连接叉耳与 PN3.2-1 密封环槽 (イラスト 6 & Manual p.23, cc=1):
+      - 局部原点 (0,0,0) 位于前端与 6-2 偏心叉杆铰接销中心 (X_world=-22.0mm)；
+      - ø3.20mm 抛光实心黄铜柱塞向后伸至 x_local=-17.2mm (X_world∈[-42.7,-35.7]mm)，在整个 ±3.5mm 冲程内 100% 严密填满 6-5 泵膛，彻底根除空膛伪影！
+    """
+    clevis_head = (
+        Pos(-1.6, 0.0, 0.0) * Rot(0, 90, 0) * Cylinder(radius=2.15, height=4.6)
+        + Rot(90, 0, 0) * Cylinder(radius=1.95, height=1.95)
+        - Rot(90, 0, 0) * Cylinder(radius=0.96, height=4.0)
+    )
+    plunger_6_1 = Pos(-10.3, 0.0, 0.0) * Rot(0, 90, 0) * Cylinder(radius=1.60, height=13.8)
+    oring_groove = Pos(-15.4, 0.0, 0.0) * Rot(0, 90, 0) * (
+        Cylinder(radius=1.70, height=0.85) - Cylinder(radius=1.22, height=1.2)
+    )
+    chamfer_tip = Pos(-17.4, 0.0, 0.0) * Rot(0, -90, 0) * Cone(bottom_radius=1.60, top_radius=1.25, height=0.5)
+    return (clevis_head + plunger_6_1 + chamfer_tip) - oring_groove
+
+
+def build_pump_check_ball():
+    """SB-ø3 不锈钢精密止回钢球 (ø3.00mm, 挂载于 6-5 轴动给水泵下吸上排双阀腔内随液压差真实跳动, cc=1)。"""
+    return Sphere(radius=1.50)
+
+
 def build_axle_pump_eccentric(cfg: Dict):
     b_cfg = cfg["boiler_and_aux"]
     L_rod = abs(float(b_cfg["axle_pump_x"]) - float(b_cfg["axle_pump_eccentric"]))
@@ -1544,11 +1761,25 @@ def build_axle_pump_eccentric(cfg: Dict):
 
 
 def build_leading_truck_frame(cfg: Dict):
+    """
+    イラスト 19 Fig.1 真值先导台车总成:
+      - 19-2 铸铁台车架 + 20-6 R2m/R3m 前后双孔支点舌板 + 19-1 前纵向侧倾轴销 + 19-3 x2 横向滑移导杆 + 19-8 中央立式螺旋压簧 (100% Y 对称, cc=1)。
+    """
     y_in = 0.5 * float(cfg["meta"]["track_gauge"]) - 5.2
-    cross_bolster = Box(9.0, 2.0 * y_in + 4.0, 4.6)
+    cross_bolster = Box(9.4, 2.0 * y_in + 4.0, 4.8)
+    # 19-3 x2 横向摇枕双导杆 + 19-1 纵向摆动销座
+    bolster_guides_19_3 = (
+        Pos(+2.2, 0.0, +3.6) * Rot(90, 0, 0) * Cylinder(radius=0.95, height=22.0)
+        + Pos(-2.2, 0.0, +3.6) * Rot(90, 0, 0) * Cylinder(radius=0.95, height=22.0)
+        + Pos(0.0, +10.2, +3.2) * Box(6.6, 2.0, 3.2)
+        + Pos(0.0, -10.2, +3.2) * Box(6.6, 2.0, 3.2)
+        + Pos(+4.2, 0.0, +1.8) * Rot(0, 90, 0) * Cylinder(radius=1.35, height=4.2)
+    )
     pivot_tongue = Pos(-57.0, 0, 0) * Box(20.0, 11.0, 4.2)
     boss_r2m = Pos(-52.0, 0, 0) * Cylinder(radius=3.6, height=5.2)
     boss_r3m = Pos(-62.0, 0, 0) * Cylinder(radius=3.6, height=5.2)
+    # 19-8 先导台车中央螺旋压簧 (OD 5.6mm, 线径 0.85mm, 位于支点座上方承受前部轴重)
+    coil_19_8 = make_coil_spring_stack((-52.0, 0.0, +5.4), r_coil=2.35, r_wire=0.45, height=6.2, n_turns=4)
 
     arms = None
     for sgn in (-1.0, 1.0):
@@ -1560,14 +1791,18 @@ def build_leading_truck_frame(cfg: Dict):
         sub = jbox + beam
         arms = sub if arms is None else (arms + sub)
 
-    frame = cross_bolster + pivot_tongue + boss_r2m + boss_r3m + arms
-    frame -= Pos(-52.0, 0, 0) * Cylinder(radius=1.6, height=8.0)
+    frame = cross_bolster + bolster_guides_19_3 + pivot_tongue + boss_r2m + boss_r3m + coil_19_8 + arms
+    frame -= Pos(-52.0, 0, 0) * Cylinder(radius=1.6, height=18.0)
     frame -= Pos(-62.0, 0, 0) * Cylinder(radius=1.6, height=8.0)
     frame -= Rot(90, 0, 0) * Cylinder(radius=2.1, height=2.0 * y_in + 8.0)
     return frame
 
 
 def build_trailing_truck_frame(cfg: Dict):
+    """
+    イラスト 19 Fig.2 真值从轮 Delta 台车总成:
+      - 19-11 外置式铸铁从台车架 + 19-12 x2 立式轴箱导杆 + 19-15 x2 同轴螺旋压簧 + 顶部弹簧帽 (100% Y 对称, cc=1)。
+    """
     dx_ax = -54.0
     y_out = 0.5 * float(cfg["meta"]["track_gauge"]) + 5.3
     pivot_nose = Cylinder(radius=4.5, height=5.0) + Pos(-6.5, 0, 0) * Box(13.0, 10.0, 4.4)
@@ -1577,15 +1812,16 @@ def build_trailing_truck_frame(cfg: Dict):
     for sgn in (-1.0, 1.0):
         flare_arm = Pos(-21.0, sgn * 15.8, 0.5) * Rot(0, 0, sgn * -42.7) * Box(39.0, 3.4, 4.2)
         side_beam = Pos(-47.0, sgn * y_out, 0.5) * Box(28.0, 3.4, 4.2)
-        leaf_19_15 = (
-            Pos(dx_ax, sgn * (y_out + 1.1), 6.0) * Box(17.8, 2.2, 2.4)
-            + Pos(dx_ax, sgn * (y_out + 1.1), 7.6) * Box(11.8, 2.2, 1.4)
-            + Pos(dx_ax, sgn * (y_out + 1.1), 6.2) * Box(3.2, 2.8, 3.4)
+        y_sp = sgn * (y_out + 1.15)
+        coil_assy_19_15 = (
+            make_coil_spring_stack((dx_ax, y_sp, +7.6), r_coil=2.05, r_wire=0.42, height=5.8, n_turns=5, r_core_rod=0.85)
+            + Pos(dx_ax, y_sp, +10.8) * Cylinder(radius=2.65, height=1.1)
+            + Pos(dx_ax, sgn * (y_out + 0.5), +10.6) * Box(4.2, 3.2, 1.2)
         )
         abox = (
             Pos(dx_ax, sgn * y_out, 0.4) * Box(10.0, 4.4, 9.2)
-            + Pos(dx_ax, sgn * (y_out + 1.2), 3.6) * Box(12.0, 3.6, 3.0)
-            + leaf_19_15
+            + Pos(dx_ax, sgn * (y_out + 1.2), 3.9) * Box(12.0, 3.6, 2.6)
+            + coil_assy_19_15
             - Pos(dx_ax, sgn * y_out, 0) * Rot(90, 0, 0) * Cylinder(radius=2.0, height=7.0)
         )
         sub = flare_arm + side_beam + abox
@@ -1783,32 +2019,36 @@ def build_boiler_superstructure(cfg: Dict, heavy_equipped: bool = True):
     for bx in [74.0, 38.0, -14.0, -58.0]:
         barrel += Pos(bx, 0, z_axis) * Rot(0, 90, 0) * Cylinder(radius=r_barrel + 0.55, height=1.8)
 
-    # 3. 标准型 JNR D51 カマボコ形流线砂箱/蒸汽包罩 29-11 (85.8mm 全长 X∈[-14.8,+71.0], Z_top=+91.8mm 齐平烟囱, 钝圆前鼻 + 24.8mm S形长尾 + 6根砂管 29-14~19, イラスト 29 & p43/p46)
+    # 3. 标准型 JNR D51 カマボコ形流线砂箱/蒸汽包罩 29-11 (86.4mm 全长 X∈[-14.8,+71.6], Z_top=+91.85mm 全封闭零破洞顶面 + 29-12 实体沉孔螺钉座 + 极坐标零下陷 6 砂管 29-14~19, イラスト 29 & p43/p46)
     dome_profile_table = [
-        (-14.8, 73.70, 5.40, 2.2),
-        (-12.5, 74.95, 7.60, 3.0),
-        (-9.0, 77.30, 9.60, 4.0),
-        (-5.0, 80.70, 10.90, 4.8),
-        (-1.0, 84.50, 11.65, 5.4),
-        (+3.0, 87.90, 12.10, 5.8),
-        (+7.0, 90.35, 12.32, 6.0),
-        (+10.5, 91.45, 12.40, 6.2),
-        (+15.0, 91.80, 12.40, 6.2),
-        (+26.0, 91.80, 12.40, 6.2),
-        (+38.0, 91.80, 12.40, 6.2),
-        (+50.0, 91.80, 12.40, 6.2),
-        (+58.0, 91.75, 12.35, 6.2),
-        (+61.5, 91.35, 12.05, 6.0),
-        (+64.5, 90.20, 11.35, 5.5),
-        (+67.0, 87.80, 10.10, 4.8),
-        (+69.0, 83.60, 8.20, 3.8),
-        (+70.3, 78.80, 6.20, 2.8),
-        (+71.0, 73.70, 4.40, 1.9),
+        (-14.8, 69.80, 2.20, 0.9),
+        (-13.6, 73.80, 5.60, 2.3),
+        (-11.5, 75.60, 8.10, 3.3),
+        (-8.5, 78.10, 9.90, 4.2),
+        (-4.5, 81.60, 11.10, 5.0),
+        (-0.5, 85.40, 11.80, 5.5),
+        (+3.5, 88.60, 12.18, 5.9),
+        (+7.5, 90.75, 12.35, 6.1),
+        (+11.5, 91.65, 12.40, 6.2),
+        (+16.0, 91.85, 12.40, 6.2),
+        (+28.0, 91.85, 12.40, 6.2),
+        (+40.0, 91.85, 12.40, 6.2),
+        (+52.0, 91.85, 12.40, 6.2),
+        (+60.0, 91.85, 12.40, 6.2),
+        (+62.8, 91.75, 12.30, 6.1),
+        (+64.6, 91.05, 11.85, 5.8),
+        (+66.2, 89.65, 11.10, 5.4),
+        (+67.6, 87.60, 10.05, 4.8),
+        (+68.8, 84.90, 8.75, 4.1),
+        (+69.8, 81.60, 7.25, 3.3),
+        (+70.6, 77.90, 5.60, 2.5),
+        (+71.2, 74.20, 3.85, 1.7),
+        (+71.6, 70.20, 2.10, 0.9),
     ]
     dome_secs = []
-    z_dome_root = 68.4
+    z_dome_root = 67.6
     for dx_s, z_top_s, hw_s, r_crn in dome_profile_table:
-        z_sh = max(z_dome_root + 1.2, z_top_s - r_crn)
+        z_sh = max(z_dome_root + 0.9, z_top_s - r_crn)
         w_sec = Wire([
             Edge.make_line(Vector(dx_s, -hw_s, z_dome_root), Vector(dx_s, -hw_s, z_sh)),
             Edge.make_spline(
@@ -1824,28 +2064,50 @@ def build_boiler_superstructure(cfg: Dict, heavy_equipped: bool = True):
             Edge.make_line(Vector(dx_s, +hw_s, z_dome_root), Vector(dx_s, -hw_s, z_dome_root)),
         ])
         dome_secs.append(Face(w_sec))
-    dome_29_11 = (
-        loft(dome_secs, ruled=True)
-        + Pos(56.2, 0.0, 91.55) * (Cylinder(radius=5.75, height=0.8) - Cylinder(radius=4.55, height=2.2))
-        + Pos(62.2, +3.8, 91.75) * Box(1.8, 1.2, 1.1)
-        + Pos(62.2, -3.8, 91.75) * Box(1.8, 1.2, 1.1)
-        + Pos(32.0, 0.0, 91.85) * Cylinder(radius=3.4, height=0.9)
-        + Pos(11.0, 0.0, 91.65) * Cylinder(radius=2.8, height=0.9)
+
+    # 29-12 掀盖下方真实封闭沉孔安装井 + C-M2-14 内六角固定螺钉头 (イラスト 29, 严禁贯穿切破前鼻!)
+    dome_well_recess = Pos(56.4, 0.0, 90.6) * Cylinder(radius=4.55, height=3.2)
+    screw_cm2_14 = (
+        Pos(56.4, 0.0, 89.65) * Cylinder(radius=1.85, height=1.7)
+        - Pos(56.4, 0.0, 90.25) * extrude(RegularPolygon(radius=0.95, side_count=6), amount=0.8)
     )
+    dome_29_11 = (
+        (
+            loft(dome_secs, ruled=True)
+            + Pos(56.4, 0.0, 91.75) * (Cylinder(radius=5.85, height=0.7) - Cylinder(radius=4.55, height=2.0))
+            + Pos(62.4, +3.8, 91.80) * Box(1.8, 1.2, 1.0)
+            + Pos(62.4, -3.8, 91.80) * Box(1.8, 1.2, 1.0)
+            + Pos(34.0, 0.0, 91.90) * Cylinder(radius=3.4, height=0.85)
+            + Pos(13.0, 0.0, 91.85) * Cylinder(radius=2.8, height=0.85)
+        )
+        - dome_well_recess
+        + screw_cm2_14
+    )
+
+    # 29-14~19 左右各 3 根砂管: 严格沿极坐标 R_pipe = 31.68mm (> 30.75mm 锅带半径!) 8 点圆弧贴锅筒外表面下引，100% 根除弦割下陷！
+    r_sand_polar = 31.68
+    phi_degs = [20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 89.0]
     sand_pipes_L = None
-    for sp_x, sp_end_x in [(44.0, 52.0), (31.0, 31.0), (18.0, 10.0)]:
+    for sp_x, sp_end_x in [(46.0, 53.0), (32.0, 32.0), (18.0, 10.0)]:
+        pts_sp = []
+        for idx_p, deg_p in enumerate(phi_degs):
+            u_s = idx_p / float(len(phi_degs) - 1)
+            rad_p = math.radians(deg_p)
+            px_s = sp_x + (sp_end_x - sp_x) * (3.0 * u_s * u_s - 2.0 * u_s * u_s * u_s)
+            py_s = r_sand_polar * math.sin(rad_p)
+            pz_s = z_axis + r_sand_polar * math.cos(rad_p)
+            pts_sp.append((px_s, +py_s, pz_s))
+        pts_sp.insert(0, (sp_x, +9.6, z_axis + r_sand_polar * math.cos(math.radians(phi_degs[0]))))
+        pts_sp.append((sp_end_x, +31.55, 31.0))
+
+        rad_mid = math.radians(55.0)
+        xm_clip = 0.5 * (sp_x + sp_end_x)
+        ym_clip = (r_sand_polar - 0.95) * math.sin(rad_mid)
+        zm_clip = z_axis + (r_sand_polar - 0.95) * math.cos(rad_mid)
         sp_one = (
-            Pos(sp_x, +11.4, 75.5) * Rot(90, 0, 0) * Cylinder(radius=1.25, height=2.4)
-            + make_swept_tube(
-                [
-                    (sp_x, +11.6, 75.5),
-                    (0.5 * (sp_x + sp_end_x), +23.8, 63.0),
-                    (sp_end_x, +30.4, 46.0),
-                    (sp_end_x, +30.2, 31.2),
-                ],
-                r_tube=0.68,
-                bend_r=6.0,
-            )
+            Pos(sp_x, +11.2, z_axis + r_sand_polar * math.cos(math.radians(phi_degs[0]))) * Rot(90, 0, 0) * Cylinder(radius=1.22, height=2.6)
+            + Pos(xm_clip, +ym_clip, zm_clip) * Box(1.8, 2.4, 2.4)
+            + make_swept_tube(pts_sp, r_tube=0.68, bend_r=4.2)
         )
         sand_pipes_L = sp_one if sand_pipes_L is None else (sand_pipes_L + sp_one)
     dome_29_11 = dome_29_11 + sand_pipes_L + mirror(sand_pipes_L, about=Plane.XZ)
@@ -2036,9 +2298,20 @@ def build_boiler_superstructure(cfg: Dict, heavy_equipped: bool = True):
         + make_swept_tube([(-95.5, +13.5, z_axis + r_barrel - 0.2), (-110.5, +13.5, z_axis + r_barrel - 0.8)], r_tube=0.45, bend_r=1.5)
     )
     reg_rod_30_7 = (
-        make_swept_tube([(-110.5, +21.5, 65.5), (+16.0, +21.5, 65.5), (+16.0, +11.5, 68.5)], r_tube=0.55, bend_r=2.5)
-        + Pos(-48.0, +19.5, 65.5) * Rot(90, 0, 0) * Cylinder(radius=0.8, height=5.0)
-        + Pos(-4.0, +19.5, 65.5) * Rot(90, 0, 0) * Cylinder(radius=0.8, height=5.0)
+        make_swept_tube(
+            [
+                (-110.5, +23.6, 65.8),
+                (+16.0, +23.6, 65.8),
+                (+16.0, +19.5, 70.8),
+                (+16.0, +14.2, 74.8),
+                (+16.0, +10.6, 76.2),
+            ],
+            r_tube=0.55,
+            bend_r=2.4,
+        )
+        + Pos(-48.0, +21.2, 65.8) * Rot(90, 0, 0) * Cylinder(radius=0.80, height=5.8)
+        + Pos(-4.0, +21.2, 65.8) * Rot(90, 0, 0) * Cylinder(radius=0.80, height=5.8)
+        + Pos(+16.0, +14.2, 73.2) * Box(2.0, 2.2, 3.6)
     )
     gen_15_8 = (
         Pos(-86.5, -24.5, 64.2) * Rot(0, 90, 0) * Cylinder(radius=3.1, height=9.8)
@@ -2084,8 +2357,7 @@ def build_boiler_superstructure(cfg: Dict, heavy_equipped: bool = True):
         + Pos(0.5 * (x_fb_front + x_fb_rear), 0, 40.0) * Box(fb_l - 2.0, 45.4, 38.0)
     )
     bore_dome_cab = (
-        Pos(22.0, 0, 74.0) * Box(68.0, 19.6, 22.0)
-        + Pos(56.2, 0.0, 88.0) * Cylinder(radius=4.55, height=10.0)
+        Pos(34.0, 0, 73.5) * Box(36.0, 14.8, 16.0)
         + Pos(cab_x - 1.8, 0, z_axis + 24.0) * Box(cab_len - 3.5, 58.0, 16.0)
         + Pos(136.0, 0, 21.5) * Box(31.0, 21.0, 10.0)
         + Pos(123.5, 0.0, 18.5) * Rot(90, 0, 0) * Cylinder(radius=4.1, height=30.0)
@@ -2513,62 +2785,77 @@ def build_safety_valve_poppet():
 
 def build_feedwater_piping(cfg: Dict, pip_cfg: Dict):
     """
-    原厂全真壁厚空心给水闭环 + 床下中央横置圆筒 4-17 旁通阀 + 垂直 6-8 立管 + 左右平行尾梁口金 (イラスト 4, 6, 8, 13, 37, cc=1):
+    原厂全真壁厚空心给水闭环 + 实心封底/盲头 6-5 中央轴动泵 + 精密阶梯圆筒 4-17 旁通阀 + 垂直 6-8 立管 + 左右平行尾梁口金 (イラスト 4, 6, 8, 13, 37, cc=1):
       - 动轮区 (X >= -130mm) 100% 收于车架内侧 (|Y| <= 10.5mm, 车轮外侧零管线!)；
-      - 右后 (-Y=-19.2mm) 6-11 空心外螺纹口金 -> 空心 6-10 (OD 2.4 / ID 1.6mm) -> 空心 6-5 中央轴动泵 (ø3.2mm 膛孔 + 双 SB-ø3 阀腔)；
-      - 空心 6-6 向后直入驾驶室地板下方横置圆筒 4-17 旁通阀 (-136.5, Y∈[-11.8,+11.8], +15.0, +Y=+6.8mm 设 6-9 立轴孔)；
-      - 4-17 右端 (-Y=-11.8mm) 接空心 6-8 垂直立管直插后封头火室冠板上方中位 13-2 逆止阀底口 (Z=+43.2mm)；
-      - 4-17 左端 (+Y=+9.5mm) 接空心 4-16 回水管通往左后 (+Y=+19.2mm) 宝塔尾嘴！
+      - 6-5 轴动泵 (X_tw=-38.8mm, Y=0.0): 后端 [-43.2,-41.4]mm 100% 实心黄铜盲底封死，前端 ø3.24mm 盲膛容纳全长 6-1 柱塞，上下吸排口采用实心盲顶 (4-15) 六角管螺栓锁紧 Banjo 环眼 (彻底根除上下与后方空洞！)；
+      - 4-17 旁通阀 (-135.5, Y∈[-12.6,+12.6], +15.0mm): 还原阶梯车削圆筒阀体 + 左右实心六角端塞 + 左上 (+Y=+8.5mm) 6-9 填料压盖座 + 右端 6-8 / 左端 4-16 中空 Banjo！
     """
     fw = pip_cfg["feedwater_piping_topology"]
     ax_loop = fw["axle_and_shared_hand_pump_loop"]
-    x_pump = float(ax_loop["pump_x_mm"])
-    x_tw = x_pump - 16.8  # -38.8 mm
+    x_pump = float(ax_loop["pump_x_mm"])  # -22.0 mm
+    x_tw = x_pump - 16.8                  # -38.8 mm
 
-    pump_barrel = Pos(x_pump - 15.0, 0.0, 0.0) * Rot(0, 90, 0) * Cylinder(radius=3.6, height=7.2)
-    gland_nut = make_hex_nut((x_pump - 11.4, 0.0, 0.0), (1.0, 0.0, 0.0), hex_r=4.1, length=2.0)
-    check_tower = Pos(x_tw, 0.0, 1.5) * Cylinder(radius=3.0, height=16.5)
-    top_hex_cap = make_hex_nut((x_tw, 0.0, 10.4), (0.0, 0.0, 1.0), hex_r=3.7, length=2.2)
-    bot_hex_cap = make_hex_nut((x_tw, 0.0, -7.4), (0.0, 0.0, 1.0), hex_r=3.7, length=2.0)
-    pump_bracket = Pos(x_pump - 15.0, 0.0, 4.2) * Box(5.4, 21.0, 2.4)
-    pump_outer = pump_barrel + gland_nut + check_tower + top_hex_cap + bot_hex_cap + pump_bracket
+    # 6-5 轴动泵主体: 实心封闭后底 + 前柱塞筒 + 前填料六角螺母 (X_max=-32.5mm, 距 BDC 偏心叉 -31.3mm 留足 1.2mm 净空!)
+    pump_barrel = (
+        Pos(-38.0, 0.0, 0.0) * Rot(0, 90, 0) * Cylinder(radius=3.65, height=10.8)
+        + Pos(-34.4, 0.0, 0.0) * Rot(0, 90, 0) * Cylinder(radius=3.95, height=2.0)
+    )
+    gland_nut = make_hex_nut((-33.5, 0.0, 0.0), (1.0, 0.0, 0.0), hex_r=4.10, length=2.0)
+    check_tower = (
+        Pos(x_tw, 0.0, 1.4) * Cylinder(radius=3.25, height=15.6)
+        + Pos(x_tw, 0.0, +9.4) * Cylinder(radius=2.95, height=2.6)
+        + Pos(x_tw, 0.0, -6.6) * Cylinder(radius=2.95, height=2.6)
+    )
+    top_blind_bolt = make_blind_hex_bolt((x_tw, 0.0, +11.65), (0.0, 0.0, 1.0), hex_r=3.65, head_len=1.9)
+    bot_blind_bolt = make_blind_hex_bolt((x_tw, 0.0, -8.85), (0.0, 0.0, -1.0), hex_r=3.65, head_len=1.9)
+    pump_bracket_6_7 = (
+        Pos(-36.2, 0.0, 4.4) * Box(5.8, 20.8, 2.4)
+        + Pos(-36.2, +9.0, 6.0) * Cylinder(radius=0.85, height=1.2)
+        + Pos(-36.2, -9.0, 6.0) * Cylinder(radius=0.85, height=1.2)
+    )
+    pump_outer = pump_barrel + gland_nut + check_tower + top_blind_bolt + bot_blind_bolt + pump_bracket_6_7
 
     pts_6_10 = [
         (-150.8, -19.2, -8.5),
         (-142.5, -19.2, -8.5),
         (-136.0, -8.2, +8.5),
         (x_tw, -8.2, +8.5),
-        (x_tw, -8.2, -5.2),
-        (x_tw, 0.0, -5.2),
+        (x_tw, -8.2, -6.2),
+        (x_tw, 0.0, -6.2),
     ]
     stud_6_11 = (
         Pos(-149.0, -19.2, -8.5) * Rot(0, 90, 0) * Cylinder(radius=2.15, height=4.2)
         + make_hex_nut((-146.8, -19.2, -8.5), (1.0, 0.0, 0.0), hex_r=2.55, length=1.8)
     )
 
-    bx, bz = -136.5, 15.0
+    bx, bz = -135.5, 15.0
     pts_6_6 = [
-        (x_tw, 0.0, +10.0),
+        (x_tw, 0.0, +9.6),
         (x_tw, -3.5, +13.5),
         (-128.0, -3.5, +15.0),
         (bx, -3.5, bz),
     ]
     valve_4_17 = (
-        Pos(bx, 0.0, bz) * Rot(90, 0, 0) * Cylinder(radius=3.05, height=23.6)
-        + Pos(bx, +6.8, bz + 2.4) * Cylinder(radius=1.95, height=5.8)
-        + make_banjo_eye((bx, -11.8, bz), (0.0, -1.0, 0.0), r_eye=2.05, h_eye=2.0, hex_r=1.55)
-        + make_banjo_eye((bx, +9.6, bz - 1.2), (0.0, 0.0, -1.0), r_eye=1.95, h_eye=1.8, hex_r=1.50)
+        Pos(bx, 0.0, bz) * Rot(90, 0, 0) * Cylinder(radius=3.10, height=21.6)
+        + Pos(bx, -10.2, bz) * Rot(90, 0, 0) * Cylinder(radius=3.40, height=2.8)
+        + Pos(bx, +10.2, bz) * Rot(90, 0, 0) * Cylinder(radius=3.40, height=2.8)
+        + make_blind_hex_bolt((bx, -12.35, bz), (0.0, -1.0, 0.0), hex_r=2.85, head_len=1.5)
+        + make_blind_hex_bolt((bx, +12.35, bz), (0.0, +1.0, 0.0), hex_r=2.85, head_len=1.5)
+        + Pos(bx, +8.5, bz + 2.65) * Cylinder(radius=2.05, height=5.3)
+        + make_hex_nut((bx, +8.5, bz + 4.4), (0.0, 0.0, 1.0), hex_r=2.25, length=1.2)
+        + make_banjo_eye((bx, -11.4, bz), (0.0, -1.0, 0.0), r_eye=2.10, h_eye=1.9, hex_r=1.55)
+        + make_banjo_eye((bx, +10.0, bz - 1.2), (0.0, 0.0, -1.0), r_eye=1.98, h_eye=1.8, hex_r=1.50)
     )
 
     pts_6_8 = [
-        (bx, -11.8, bz),
+        (bx, -11.4, bz),
         (-115.8, -11.8, +16.2),
         (-115.8, -11.8, +43.4),
     ]
     nut_6_8_top = make_hex_nut((-115.8, -11.8, +42.4), (0.0, 0.0, 1.0), hex_r=1.85, length=2.0)
 
     pts_4_16 = [
-        (bx, +9.6, bz - 1.2),
+        (bx, +10.0, bz - 1.2),
         (-141.0, +19.2, +5.5),
         (-144.5, +19.2, -8.5),
         (-150.8, +19.2, -8.5),
@@ -2586,20 +2873,20 @@ def build_feedwater_piping(cfg: Dict, pip_cfg: Dict):
         + make_swept_tube(pts_6_8, r_tube=1.20, bend_r=2.4, r_ref=1.20) + nut_6_8_top
         + make_swept_tube(pts_4_16, r_tube=1.20, bend_r=2.6, r_ref=1.20) + barb_4_16
     )
+    # 泵膛盲孔严格终止于 X=-41.4mm (保留 1.8mm 实心黄铜底壁)，上下阀腔严格终止于 Z∈[-7.4,+10.4]mm (保留上下实心六角帽！)
     bore_fw = (
-        Pos(x_pump - 14.0, 0.0, 0.0) * Rot(0, 90, 0) * Cylinder(radius=1.62, height=13.5)
-        + Pos(x_tw, 0.0, 1.5) * Cylinder(radius=1.70, height=15.6)
+        Pos(-35.4, 0.0, 0.0) * Rot(0, 90, 0) * Cylinder(radius=1.62, height=12.0)
+        + Pos(x_tw, 0.0, 1.5) * Cylinder(radius=1.68, height=17.8)
         # 6-5 内部双 SB-ø3 止回球锥形阀座喉口台阶
-        - (Pos(x_tw, 0.0, -2.8) * (Cylinder(radius=1.72, height=0.9) - Cylinder(radius=1.18, height=1.2)))
-        - (Pos(x_tw, 0.0, +4.8) * (Cylinder(radius=1.72, height=0.9) - Cylinder(radius=1.18, height=1.2)))
+        - (Pos(x_tw, 0.0, -3.2) * (Cylinder(radius=1.72, height=0.9) - Cylinder(radius=1.16, height=1.2)))
+        - (Pos(x_tw, 0.0, +5.2) * (Cylinder(radius=1.72, height=0.9) - Cylinder(radius=1.16, height=1.2)))
         + make_swept_tube(_extend_polyline_ends(pts_6_10, 0.55, 0.40), r_tube=0.80, bend_r=2.8, r_ref=1.22)
         + make_swept_tube(_extend_polyline_ends(pts_6_6, 0.40, 0.40), r_tube=0.80, bend_r=2.6, r_ref=1.20)
-        + Pos(bx, 0.0, bz) * Rot(90, 0, 0) * Cylinder(radius=1.65, height=22.4)
-        # 4-17 右端 (-Y=-11.8mm) 空心 Banjo 横向汇流全圆通孔 (彻底消除月牙缩颈!)
-        + Pos(bx, -11.2, bz) * Rot(90, 0, 0) * Cylinder(radius=0.88, height=3.8)
-        + Pos(bx, +6.8, bz + 2.6) * Cylinder(radius=0.88, height=6.6)
-        + make_swept_tube(_extend_polyline_ends(pts_6_8, 0.40, 0.55), r_tube=0.80, bend_r=2.4, r_ref=1.20)
-        + make_swept_tube(_extend_polyline_ends(pts_4_16, 0.40, 0.55), r_tube=0.80, bend_r=2.6, r_ref=1.20)
+        # 4-17 横向主阀腔严格盲止于 Y∈[-11.6,+11.6]mm (保留左右两端实心六角闷塞!)
+        + Pos(bx, 0.0, bz) * Rot(90, 0, 0) * Cylinder(radius=1.65, height=23.0)
+        + Pos(bx, +8.5, bz + 2.8) * Cylinder(radius=0.92, height=6.4)
+        + make_swept_tube(_extend_polyline_ends(pts_6_8, 0.45, 0.55), r_tube=0.80, bend_r=2.4, r_ref=1.20)
+        + make_swept_tube(_extend_polyline_ends(pts_4_16, 0.45, 0.55), r_tube=0.80, bend_r=2.6, r_ref=1.20)
     )
     return outer_fw - bore_fw
 
@@ -2668,34 +2955,34 @@ def build_boiler_aux_valves(cfg: Dict, pip_cfg: Dict):
         + Pos(x_ring, 0.0, 58.0) * Box(1.8, 6.4, 22.0)
     )
 
-    pts_13_4 = [(-98.5, 0.0, 73.2), (-102.5, 0.0, 73.2), (-111.5, 0.0, 69.5), (-116.5, 0.0, 69.5)]
+    pts_13_4 = [(-98.5, 0.0, 73.2), (-102.5, 0.0, 73.2), (-111.5, 0.0, 69.8), (-116.5, 0.0, 69.8)]
     jumper_13_4 = (
         make_swept_tube(pts_13_4, r_tube=1.50, bend_r=2.8, r_ref=1.50)
         + make_banjo_eye((-98.5, 0.0, 73.2), (0.0, 0.0, 1.0), r_eye=2.7, h_eye=2.3, hex_r=2.0)
-        + make_banjo_eye((-116.5, 0.0, 69.5), (0.0, 0.0, 1.0), r_eye=2.5, h_eye=2.4, hex_r=1.9)
+        + make_banjo_eye((-116.5, 0.0, 69.8), (0.0, 0.0, 1.0), r_eye=2.5, h_eye=2.2, hex_r=1.9)
     )
 
+    # 11-15 原厂横向矩形黄铜蒸汽分配长条块 (6.6mm X × 23.0mm Y [Y∈[-9.0,+14.0]mm] × 6.6mm Z, イラスト 11, 13, 14 & p45 标定真值!)
     manifold_11_15 = (
-        Pos(-116.8, +0.4, 66.5) * Box(8.2, 8.8, 6.0)
-        + Pos(-121.0, 0.0, 66.5) * Rot(0, 90, 0) * Cylinder(radius=1.85, height=2.6)
+        Pos(-116.8, +2.5, 66.5) * Box(6.6, 23.0, 6.6)
+        + Pos(-120.7, 0.0, 66.5) * Rot(0, 90, 0) * Cylinder(radius=1.95, height=2.2)
+        + make_blind_hex_bolt((-116.8, -9.8, 66.5), (0.0, -1.0, 0.0), hex_r=2.75, head_len=1.8)
     )
     gland_collar_11_10 = (
-        Pos(-119.2, +5.4, 66.5) * Box(5.8, 1.8, 3.2)
-        + Pos(-119.2, +6.6, 66.5) * Rot(90, 0, 0) * Cylinder(radius=1.95, height=2.2)
-        + Pos(-121.4, +6.2, 66.5) * Rot(90, 0, 0) * Cylinder(radius=0.85, height=1.2)
-        + Pos(-117.0, +6.2, 66.5) * Rot(90, 0, 0) * Cylinder(radius=0.85, height=1.2)
+        Pos(-119.2, +8.2, 66.5) * Rot(90, 0, 0) * Cylinder(radius=2.10, height=3.2)
+        + make_hex_nut((-119.2, +9.4, 66.5), (0.0, 1.0, 0.0), hex_r=2.05, length=1.2)
     )
 
-    pts_13_8 = [(-116.5, +2.6, 63.8), (-116.5, +2.6, 48.0), (-112.8, +2.6, 48.0)]
+    pts_13_8 = [(-116.5, +2.6, 63.4), (-116.5, +2.6, 48.0), (-112.8, +2.6, 48.0)]
     blower_13_8 = (
-        make_hex_nut((-116.5, +2.6, 63.0), (0.0, 0.0, 1.0), hex_r=1.75, length=1.6)
+        make_hex_nut((-116.5, +2.6, 62.5), (0.0, 0.0, 1.0), hex_r=1.85, length=1.8)
         + make_swept_tube(pts_13_8, r_tube=1.20, bend_r=2.0, r_ref=1.20)
         + make_hex_nut((-114.2, +2.6, 48.0), (1.0, 0.0, 0.0), hex_r=1.80, length=1.8)
     )
 
-    pts_13_9 = [(-115.6, -3.6, 65.2), (-117.4, -3.6, 65.2), (-117.4, -3.6, 48.0), (-112.8, -3.6, 48.0)]
+    pts_13_9 = [(-116.8, -3.6, 63.4), (-116.8, -3.6, 48.0), (-112.8, -3.6, 48.0)]
     jumper_13_9 = (
-        make_banjo_eye((-115.6, -3.6, 65.2), (0.0, -1.0, 0.0), r_eye=2.1, h_eye=1.9, hex_r=1.60)
+        make_hex_nut((-116.8, -3.6, 62.5), (0.0, 0.0, 1.0), hex_r=1.95, length=1.8)
         + make_swept_tube(pts_13_9, r_tube=1.50, bend_r=2.2, r_ref=1.50)
         + make_hex_nut((-114.2, -3.6, 48.0), (1.0, 0.0, 0.0), hex_r=1.95, length=1.8)
     )
@@ -2714,14 +3001,14 @@ def build_boiler_aux_valves(cfg: Dict, pip_cfg: Dict):
         - Pos(-123.6, yp, zp) * Rot(0, 90, 0) * Cylinder(radius=8.45, height=2.4)
     )
     pts_13_1 = [
-        (-119.2, -3.6, 65.4),
-        (-120.2, -5.8, 43.2),
+        (-116.8, -7.8, 63.4),
+        (-119.8, -7.8, 43.2),
         (-121.0, -11.8, 39.0),
         (-122.0, yp, 43.2),
         (-122.0, yp, 57.5),
     ]
     siphon_13_1 = (
-        make_banjo_eye((-119.2, -3.6, 65.4), (0.0, -1.0, 0.0), r_eye=1.75, h_eye=1.6, hex_r=1.35)
+        make_hex_nut((-116.8, -7.8, 62.6), (0.0, 0.0, 1.0), hex_r=1.75, length=1.6)
         + make_swept_tube(pts_13_1, r_tube=1.00, bend_r=3.8, r_ref=1.00)
         + make_hex_nut((-122.0, yp, 55.2), (0.0, 0.0, 1.0), hex_r=1.80, length=2.0)
     )
@@ -2746,14 +3033,13 @@ def build_boiler_aux_valves(cfg: Dict, pip_cfg: Dict):
     )
 
     wh_valve_11_1 = (
-        Pos(-115.6, +14.8, 66.5) * Box(4.4, 5.0, 8.8)
-        + Pos(-115.6, +8.8, 66.5) * Rot(90, 0, 0) * Cylinder(radius=1.85, height=8.4)
-        + make_hex_nut((-115.6, +6.2, 66.5), (0.0, 1.0, 0.0), hex_r=2.15, length=1.6)
-        + Pos(-115.6, +14.8, 71.5) * Cylinder(radius=1.85, height=1.6)
-        - Pos(-115.6, +14.8, 72.2) * Box(3.8, 0.55, 0.6)
+        Pos(-115.6, +15.5, 66.5) * Box(4.6, 4.6, 8.8)
+        + Pos(-115.6, +13.6, 66.5) * Rot(90, 0, 0) * Cylinder(radius=2.15, height=2.4)
+        + Pos(-115.6, +15.5, 71.5) * Cylinder(radius=1.85, height=1.6)
+        - Pos(-115.6, +15.5, 72.2) * Box(3.8, 0.55, 0.6)
     )
     pts_13_3 = [
-        (-115.6, +14.8, 65.5),
+        (-115.6, +15.5, 65.5),
         (-118.0, +19.2, 65.5),
         (-118.0, +19.2, 25.5),
         (-113.5, +20.2, 25.5),
@@ -2793,18 +3079,17 @@ def build_boiler_aux_valves(cfg: Dict, pip_cfg: Dict):
         + wg_top + wg_bot + wh_valve_11_1 + pipe_13_3 + whistle_11_8 + blowdown_11_16_and_13_11
     )
     bore_aux = (
-        make_swept_tube(_extend_polyline_ends(pts_13_4, 1.5, 1.5), r_tube=0.95, bend_r=2.8, r_ref=1.50)
-        + Pos(-98.5, 0.0, 72.5) * Cylinder(radius=0.95, height=4.8)
-        + Pos(-116.5, 0.0, 68.0) * Cylinder(radius=0.95, height=5.8)
-        + Pos(-117.5, 0.0, 66.5) * Rot(0, 90, 0) * Cylinder(radius=0.95, height=11.0)
-        # 11-15 角形蒸汽分配器全阀腔真连通内孔 (通往 13-8 通风针阀座、11-10 横向旋转盘式加减阀室 -> 13-9、13-1 虹吸管及 11-1 弹簧汽笛阀座!)
-        + Pos(-116.5, +1.3, 66.5) * Rot(90, 0, 0) * Cylinder(radius=0.78, height=3.6)
-        + Pos(-116.5, +2.6, 65.1) * Cylinder(radius=0.75, height=3.4)
-        + Pos(-119.2, +1.4, 66.5) * Rot(90, 0, 0) * Cylinder(radius=0.92, height=11.6)
-        + Pos(-117.4, -3.6, 65.9) * Cylinder(radius=0.88, height=2.2)
-        + Pos(-119.2, -3.6, 65.9) * Cylinder(radius=0.65, height=2.2)
-        + Pos(-115.6, +7.4, 66.5) * Rot(90, 0, 0) * Cylinder(radius=0.82, height=15.6)
-        + Pos(-115.6, +14.8, 67.2) * Cylinder(radius=1.05, height=5.2)
+        make_swept_tube(_extend_polyline_ends(pts_13_4, 1.5, 0.8), r_tube=0.95, bend_r=2.8, r_ref=1.50)
+        + Pos(-98.5, 0.0, 72.5) * Cylinder(radius=0.95, height=3.8)
+        + Pos(-116.5, 0.0, 68.2) * Cylinder(radius=0.95, height=3.6)
+        + Pos(-118.4, 0.0, 66.5) * Rot(0, 90, 0) * Cylinder(radius=0.90, height=5.8)
+        # 11-15 23.0mm 横向长方体蒸汽分配器全长真连通内孔 (Y∈[-8.8,+15.8]mm 盲端封死，贯通 13-8、11-10->13-9、13-1 虹吸管及 11-1 弹簧汽笛阀座!)
+        + Pos(-116.8, +3.5, 66.5) * Rot(90, 0, 0) * Cylinder(radius=1.02, height=24.2)
+        + Pos(-116.5, +2.6, 64.9) * Cylinder(radius=0.78, height=3.6)
+        + Pos(-118.0, +8.2, 66.5) * Box(3.2, 2.2, 2.0)
+        + Pos(-116.8, -3.6, 64.9) * Cylinder(radius=0.92, height=3.6)
+        + Pos(-116.8, -7.8, 64.9) * Cylinder(radius=0.62, height=3.6)
+        + Pos(-115.6, +15.5, 67.2) * Cylinder(radius=1.05, height=5.2)
         + make_swept_tube(_extend_polyline_ends(pts_13_8, 1.2, 1.5), r_tube=0.75, bend_r=2.0, r_ref=1.20)
         + make_swept_tube(_extend_polyline_ends(pts_13_9, 1.2, 1.5), r_tube=0.95, bend_r=2.2, r_ref=1.50)
         # 13-2 逆止阀腔 (底部承接 6-8 + 内部 SB-ø3 止回球阀座台阶 + 顶部 13-7 六角闷盖盲孔密封 Z_max=51.8 < 53.35!)
@@ -3206,7 +3491,7 @@ def build_tender_internals(cfg: Dict):
 
 
 def build_tender_bogie_frame(cfg: Dict):
-    """イラスト 31 & 36: 31-26 铸铁侧架 + 31-24x4 下封口护板 + 31-27 三长圆孔端梁 + 31-29 枕梁 + 36-3 心皿座金 + 31-25 板簧 + 31-28 螺旋弹簧 (100% Y 对称)。"""
+    """イラスト 31 & 36: 31-26 铸铁侧架 + 31-24x4 下封口护板 + 31-27 三长圆孔端梁 + 31-29 枕梁 + 36-3 心皿座金 + 31-25 x8 轴箱顶叠板簧 + 31-28 x8 螺旋压簧 (100% Y 对称, cc=1)。"""
     wb = float(cfg["tender_and_track"]["bogie_wheelbase"])
     half_wb = 0.5 * wb
     y_frame = 0.5 * float(cfg["tender_and_track"].get("track_gauge", cfg["meta"]["track_gauge"])) + 5.2
@@ -3224,34 +3509,37 @@ def build_tender_bogie_frame(cfg: Dict):
             eb -= Pos(ex, yh, 1.5) * Rot(0, 90, 0) * Rot(0, 0, 90) * extrude(SlotOverall(width=5.8, height=2.4), amount=4.0, both=True)
         end_beams_31_27 = eb if end_beams_31_27 is None else (end_beams_31_27 + eb)
 
-    sides = None
-    for sgn in (-1.0, 1.0):
-        yf = sgn * y_frame
-        leaf_31_25 = (
-            Pos(0, sgn * (y_frame + 1.3), -1.2) * Box(21.0, 2.3, 3.8)
-            + Pos(0, sgn * (y_frame + 1.6), -2.6) * Box(14.0, 2.3, 1.6)
-            + Pos(0, sgn * (y_frame + 1.5), -1.2) * Box(3.2, 2.8, 4.4)
+    bolster_leaf_L = (
+        Pos(0, +(y_frame + 1.3), -1.2) * Box(20.0, 2.2, 2.6)
+        + Pos(0, +(y_frame + 1.5), -2.4) * Box(13.2, 2.2, 1.3)
+        + Pos(0, +(y_frame + 1.4), -1.3) * Box(3.0, 2.7, 3.6)
+    )
+    side_L = Pos(0, +y_frame, 1.5) * Box(wb + 17.4, 2.4, 5.5) + bolster_leaf_L
+    for ax_x in (-half_wb, +half_wb):
+        leaf_31_25_ax = (
+            Pos(ax_x, +(y_frame + 1.25), +4.05) * Box(13.6, 2.1, 0.80)
+            + Pos(ax_x, +(y_frame + 1.25), +4.75) * Box(9.8, 2.1, 0.72)
+            + Pos(ax_x, +(y_frame + 1.25), +5.38) * Box(6.4, 2.1, 0.68)
+            + Pos(ax_x, +(y_frame + 1.25), +4.65) * Box(2.6, 2.55, 2.3)
         )
-        side_part = Pos(0, yf, 1.5) * Box(wb + 17.4, 2.4, 5.5) + leaf_31_25
-        for ax_x in (-half_wb, +half_wb):
-            side_part += Pos(ax_x, sgn * (y_frame + 1.4), 0.0) * Box(7.5, 4.2, 8.2)
-            side_part += Pos(ax_x, sgn * (y_frame + 1.2), 2.8) * Box(12.2, 3.4, 1.8)
-            side_part += Pos(ax_x - 4.8, sgn * (y_frame + 1.2), -1.2) * Cylinder(radius=1.45, height=5.8)
-            side_part += Pos(ax_x + 4.8, sgn * (y_frame + 1.2), -1.2) * Cylinder(radius=1.45, height=5.8)
-            # 31-24 轴箱导框底部保持扁铁 (イラスト 31)
-            side_part += Pos(ax_x, sgn * (y_frame + 1.3), -3.9) * Box(11.6, 3.6, 1.1)
-            side_part -= Pos(ax_x, yf, 0) * Rot(90, 0, 0) * Cylinder(radius=2.0, height=10.0)
-        sides = side_part if sides is None else (sides + side_part)
+        coil_f = make_coil_spring_stack((ax_x + 4.8, +(y_frame + 1.2), -0.95), r_coil=1.18, r_wire=0.34, height=4.4, n_turns=4, r_core_rod=0.72)
+        coil_r = make_coil_spring_stack((ax_x - 4.8, +(y_frame + 1.2), -0.95), r_coil=1.18, r_wire=0.34, height=4.4, n_turns=4, r_core_rod=0.72)
+        side_L += Pos(ax_x, +(y_frame + 1.4), 0.0) * Box(7.5, 4.2, 8.2)
+        side_L += Pos(ax_x, +(y_frame + 1.2), 2.8) * Box(12.6, 3.4, 1.8)
+        side_L += leaf_31_25_ax + coil_f + coil_r
+        side_L += Pos(ax_x, +(y_frame + 1.3), -3.9) * Box(11.6, 3.6, 1.1)
+        side_L -= Pos(ax_x, +y_frame, 0) * Rot(90, 0, 0) * Cylinder(radius=2.0, height=10.0)
+    sides = side_L + mirror(side_L, about=Plane.XZ)
     return bolster + end_beams_31_27 + sides
 
 
 def build_spoked_truck_wheel(cfg: Dict, is_left: bool = True):
-    """イラスト 20, 24 & 31: 10 辐条放射镂空导轮/从轮/煤水车车轮。"""
+    """イラスト 20, 24 & 31: 10 辐条放射镂空导轮/从轮/煤水车车轮 (Gauge-1 标准锥形轮缘防脱轨型面)。"""
     r_tread = 0.5 * float(cfg["wheels_and_axles"]["leading_wheel_diameter"])
-    w_tire = 3.4
+    w_tire, w_flange = 3.38, 0.90
     rim = (
         Cylinder(radius=r_tread, height=w_tire)
-        + Pos(0, 0, -0.5 * w_tire + 0.45) * Cylinder(radius=r_tread + 1.3, height=0.9)
+        + Pos(0, 0, -0.5 * w_tire + 0.5 * w_flange) * Cone(bottom_radius=r_tread + 1.24, top_radius=r_tread + 0.30, height=w_flange)
         - Cylinder(radius=r_tread - 1.9, height=w_tire + 2.0)
     )
     spokes = None
@@ -3443,7 +3731,10 @@ def main():
         ("umb_hose_return", 0.018, RHO_VITON, lambda: build_umb_hose_return(cfg, False)),
         ("umb_hose_return_r2m", 0.018, RHO_VITON, lambda: build_umb_hose_return(cfg, True)),
         ("chassis_equalizer_brakes", 0.025, RHO_CAST_IRON, lambda: build_chassis_equalizer_brakes(cfg)),
+        ("equalizer_lever_3_4", 0.016, RHO_CAST_IRON, build_equalizer_lever_3_4),
         ("axle_pump_eccentric", 0.016, RHO_BRASS, lambda: build_axle_pump_eccentric(cfg)),
+        ("axle_pump_ram", 0.012, RHO_BRASS, lambda: build_axle_pump_ram(cfg)),
+        ("pump_check_ball", 0.008, RHO_STAINLESS, build_pump_check_ball),
         ("leading_truck_frame", 0.022, RHO_CAST_IRON, lambda: build_leading_truck_frame(cfg)),
         ("trailing_truck_frame", 0.022, RHO_CAST_IRON, lambda: build_trailing_truck_frame(cfg)),
         ("piston_crosshead_L", 0.018, RHO_COMPOSITE_PISTON, lambda: build_piston_crosshead(cfg, True)),

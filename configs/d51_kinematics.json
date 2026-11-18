@@ -26,7 +26,33 @@
     },
     "leading_pivot_r2m_offset": 10.0,
     "quartering_deg_R_minus_L": -90.0,
-    "coupling_knuckle_offset": 8.5
+    "coupling_knuckle_offset": 8.5,
+    "wheel_rail_gauge1": {
+      "back_to_back_mm": 40.0,
+      "flange_height_mm": 1.55,
+      "driving_flange_thick_mm": 1.80,
+      "truck_flange_thick_mm": 1.70,
+      "driving_tire_width_mm": 4.80,
+      "truck_tire_width_mm": 4.50,
+      "axlebox_inner_span_mm": {
+        "drive_1": 8.5,
+        "drive_2_4": 6.5
+      }
+    },
+    "suspension_specs": {
+      "equalizer_3_4_count": 6,
+      "equalizer_fulcrum_x_mm": [69.75, 23.25, -23.25],
+      "leaf_spring_3_5_count": 8,
+      "rear_leaf_5_15_count": 2,
+      "driving_leaf_stiffness_n_m": 1150.0,
+      "leading_coil_19_8_stiffness_n_m": 620.0,
+      "leading_bolster_lat_play_mm": 2.0,
+      "leading_roll_limit_deg": 4.5,
+      "trailing_coil_19_15_stiffness_n_m": 680.0,
+      "tender_leaf_31_25_count": 8,
+      "tender_coil_31_28_count": 8,
+      "tender_axlebox_stiffness_n_m": 780.0
+    }
   },
   "cylinder_and_rods": {
     "bore": 15.0,

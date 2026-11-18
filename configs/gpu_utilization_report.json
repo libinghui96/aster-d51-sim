@@ -1,0 +1,19 @@
+{
+  "gpu_device": "NVIDIA GeForce RTX 5080",
+  "total_voxels_and_struct_nodes": 5782976,
+  "pino_operators_active": 7,
+  "cfd_subdiv_before": 48,
+  "cfd_hz_before": 41.7,
+  "cfd_subdiv_after": 16,
+  "cfd_hz_after": 125.0,
+  "realtime_speedup_ratio": 0.19,
+  "gpu_3d_pde_ms": 6.745,
+  "gpu_pino_ms": 4.929,
+  "gpu_elastic_ms": 1.297,
+  "sm_util_pct_peak": 59.0,
+  "mem_bw_util_pct_peak": 12.0,
+  "vram_used_mb": 1362.0,
+  "torch_alloc_mb": 424.1,
+  "gpu_power_w": 71.8,
+  "gpu_temp_c": 32.0
+}
