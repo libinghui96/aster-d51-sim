@@ -75,6 +75,19 @@
       border-radius: 6px; padding: 5px 9px; font-size: 11.5px; color: #f0f6fc;
       box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55); white-space: nowrap;
     }
+    #pipe-labels-layer {
+      position: fixed; inset: 0; pointer-events: none; z-index: 40; overflow: hidden;
+    }
+    .pipe-callout {
+      position: absolute; transform: translate(-50%, -100%);
+      background: rgba(11, 15, 22, 0.86); backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 255, 255, 0.16); border-left-width: 3px;
+      border-radius: 5px; padding: 2.5px 6.5px; font-size: 10.5px; line-height: 1.28;
+      color: #e6edf3; white-space: nowrap; box-shadow: 0 3px 10px rgba(0,0,0,0.5);
+    }
+    .pipe-callout .pc-head { font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .pipe-callout .pc-flow { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #8b949e; margin-left: 4px; }
+    .pipe-callout.flowing .pc-flow { color: #f0f6fc; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -83,6 +96,7 @@
   </div>
 
   <div id="canvas-container"></div>
+  <div id="pipe-labels-layer"></div>
   <div id="part-tooltip"></div>
 
   <div id="scene-toolbar" class="hud-panel">
@@ -97,6 +111,8 @@
       <option value="cab">運転室・炭水車 3D直感操作視点</option>
       <option value="chase">R2m 整列侧前动态追车视角</option>
     </select>
+    <button id="btn-flow-dir" title="透視モードで全35系統配管の液体・気体・蒸気・油・アルコールの実物理流向矢印を表示">🌊 流体/気体流向</button>
+    <button id="btn-pipe-labels" title="炭水車内・機関車・ボイラ・運転室・シリンダ全配管の名称と実流量ラベルを表示">🏷️ 全配管標注</button>
     <button id="btn-hot-preset" class="active">3.8kg/cm² 热炉即发</button>
     <button id="btn-cold-reset">冷炉整备重置</button>
     <button id="btn-gpu-mon" title="可选开启 RTX 5080 SM 利用率、显存、功耗与三维 PDE/PINO 核耗时监控">📊 GPU 監視</button>
@@ -198,7 +214,7 @@
     <div class="btn-row">
       <button id="btn-burner" class="active">23-1 点火</button>
       <button id="btn-fan">煙突通風機</button>
-      <button id="btn-drain" class="active" title="運転室右床面 8-6 室内ローレットドレンノブ → 8-5 引き棒 → 1-19 シリンダ排液コック">8-6 室内ドレン弁</button>
+      <button id="btn-drain" class="active" title="運転室右床面 8-6 100%水平スライドローレットドレンノブ → 8-5 水平引き棒 → 1-19 シリンダ排液コック">8-6 水平ドレン弁</button>
       <button id="btn-whistle" title="押している間 11-3 後方引き3穴レバー→11-1→13-3→11-8 車底真鍮汽笛吹鳴">11-3 汽笛</button>
       <button id="btn-sightdrain" title="11-7 パイレックス水面計の下部 1-2 吹抜コック洗浄">1-2 水面計吹抜</button>
       <button id="btn-firedoor">12-1 火室扉</button>

@@ -222,24 +222,28 @@
         "11-12",
         "13-9"
       ],
-      "jp_name": "蒸気分配器 (11-15 横長 23.0mm 真鍮角棒 Y∈[-9.0,+14.0]mm) & 加減弁 (11-10~12 左側 +Y 横軸挿入) & 主蒸気供給管 (13-4) & 加減管 (13-9)",
-      "location": "Cab Backhead Top-Center 11-15 23.0x6.6x6.6mm Horizontal Transverse Bar (11-10/11-12 on +Y=+10.2mm Left End; 11-11 Flat Lever Points Rearward -X Closed per Manual p.29 -> Swings Up in XZ Plane)",
+      "jp_name": "蒸気分配器 (11-15 前後長 18.0mm 真鍮角ブロック X∈[-131.6,-113.6]mm, 長辺車軸方向一致!) & 加減弁 (11-10~12 左側 +Y 横軸挿入) & 主蒸気供給管 (13-4) & 加減管 (13-9)",
+      "location": "Cab Backhead Top-Left-Inboard 11-15 18.0x7.2x7.2mm Longitudinal Fore-and-Aft Bar (11-10/11-12 at X=-126.8, Y=+14.4mm; 11-1/11-3 Whistle Forward at X=-117.6, Y=+15.2mm; 11-13 Blower Wheel on -X Rear Face at X=-133.2, Y=+8.2mm)",
       "turret_11_15_dims_xyz_mm": [
-        6.6,
-        23.0,
-        6.6
+        18.0,
+        7.2,
+        7.2
+      ],
+      "turret_11_15_x_range_mm": [
+        -131.6,
+        -113.6
       ],
       "turret_11_15_y_range_mm": [
-        -9.0,
-        14.0
+        4.6,
+        11.8
       ],
       "xyz_mm": [
-        -119.2,
-        10.2,
+        -126.8,
+        14.4,
         66.5
       ],
-      "main_supply_jumper_part": "13-4 主蒸気供給管 (4-15x2 M5 Banjo Jumper: Boiler Rear-Top Boss (-98.5, 0, +73.2) -> 11-15 Top (-116.8, +2.2, +69.8), OD 3.0 / ID 2.0mm)",
-      "backhead_jumper_part": "13-9 加減管 (4-15 Banjo on Right -Y=-3.6mm Bottom/Front of 11-15 (-116.8, -3.6, +63.2) -> Right Center Backhead Stud (-112.8, -3.6, +48.0), OD 3.0 / ID 2.0mm)",
+      "main_supply_jumper_part": "13-4 主蒸気供給管 (4-15x2 M5 Banjo Jumper: Boiler Rear-Top Boss (-98.5, 0, +72.4) -> 11-15 Top (-118.5, +8.2, +67.2), OD 3.0 / ID 1.9mm)",
+      "backhead_jumper_part": "13-9 加減管 (4-15 Banjo on Right -Y=-3.6mm Hollow Cross-Bolt of 11-15 (-124.5, -3.6, +66.5) -> Right Center Backhead Stud (-112.8, -3.6, +48.0), OD 3.0 / ID 1.96mm)",
       "internal_pipe_part": "13-9 Internal Dry Pipe (100% Inside Copper Barrel Z=+58.8mm -> Front Tubeplate (+92.0, 0, +58.8) -> 17-7/17-8, OD 4.0 / ID 2.8mm)",
       "internal_pipe_z_mm": 58.8,
       "internal_pipe_od_mm": 4.0,
@@ -312,11 +316,11 @@
           "1-3"
         ],
         "valve_xyz_mm": [
-          -115.6,
-          14.8,
+          -117.6,
+          15.2,
           66.5
         ],
-        "pipe_part": "13-3 汽笛管 (13-12x2 M3 Banjo 100%直立降下管 Y=+19.2, Z=+65.5->+25.5, OD 2.0 / ID 1.2mm)",
+        "pipe_part": "13-3 汽笛管 (13-12x2 M3 Banjo 100%直立降下管 Y=+20.2, Z=+65.5->+25.5, OD 2.0 / ID 1.2mm)",
         "whistle_part": "11-8 汽笛 (ø6.4x44.4mm Stepped Hollow Brass Resonator + LN6-8A)",
         "location": "Horizontally Forward Along Left (+Y=+20.2mm) Lower Firebox Cheek Inside Cleading (イラスト 11, 12, 13, 14)",
         "whistle_xyz_mm": [
@@ -356,13 +360,13 @@
           "11-13",
           "11-14"
         ],
-        "knob_spec": "ø9.2mm 4-Spoke Circular Brass Handwheel on -X Rear Face of 23.0mm Horizontal 11-15 Bar (Y=+2.2mm, イラスト 11, 14 & p45)",
+        "knob_spec": "ø7.4mm 3-Spoke Circular Brass Handwheel on -X Rear Face of Longitudinal 18.0mm 11-15 Bar (X=-133.2, Y=+8.2, Z=+66.5mm, イラスト 11, 14 & p45)",
         "knob_xyz_mm": [
-          -121.6,
-          2.2,
+          -133.2,
+          8.2,
           66.5
         ],
-        "pipe_part": "13-8 通風管 (Bottom Nipple of 11-15 (-116.8,+2.6,+63.2)->(-112.8,+2.6,+48.0) -> Internal Stay -> (+93.5,+4.0,+40.5) -> 17-3, OD 2.4/2.0, ID 1.6/1.2mm)"
+        "pipe_part": "13-8 通風管 (Bottom Nipple of 11-15 (-128.0,+8.2,+63.2)->(-112.8,+2.6,+48.0) -> Internal Stay Z=+48.8mm -> (+93.5,+4.0,+40.5) -> 17-3, OD 2.4/2.0, ID 1.5/1.2mm)"
       }
     }
   },
@@ -604,14 +608,15 @@
       },
       "cab_floor_8_11": {
         "parts": [
-          "8-11 運転室床 (with -Y=-21.2mm 7.0x2.4mm Drain Lever Slot)",
-          "8-21 左前延長ストリップ",
+          "8-11 U字段付運転室床 (+20.0mm 中央床 & +25.5mm 左右翼部・側壁隙間ゼロ!)",
+          "8-21 左前縦向き延長ストリップ (14.0x3.8x1.2mm, 長辺車軸X方向一致!)",
           "4-6",
           "4-7",
-          "8-10 床下ドレンねじスタンド",
+          "8-10 右床面双耳水平ガイドスタンド (Y=-19.0, Z=+22.2mm)",
           "4-8 床下バイパス支座"
         ],
-        "z_top_mm": 20.0
+        "z_top_mm": 20.0,
+        "z_side_wing_mm": 25.5
       },
       "roof_ventilator_21_15": {
         "parts": [
@@ -626,7 +631,7 @@
     },
     "controls": {
       "reverser_8_12_20": {
-        "side": "+Y Left Window-Height JNR Screw Reverser (8-12 Front Column + 2-Hole 8-13 Rear U-Pedestal + Single Outboard 8-15 Latch Bar + 8-14 Leadscrew @ Z=+44.0mm + 8-16 Double-Handled Crank Bar + 8-17 Travelling Nut + Horizontal 8-20x2 Links -> Straight 80% Flat-Blade 8-18 -> Cranked 4-12)",
+        "side": "+Y Left Raised Wing (+25.5mm) JNR Screw Reverser (8-12 Front Column + Longitudinal 8-13 Rear Cap + Longitudinal 8-15 Latch Bar + 8-14 Leadscrew @ Z=+44.0mm + 8-16 Double-Handled Crank Bar + Longitudinal 8-17 Nut + Horizontal 8-20x2 Links -> Longitudinal 8-21 -> Straight 80% 8-18 -> Cranked 4-12)",
         "parts": [
           "8-12",
           "8-13",
@@ -636,6 +641,7 @@
           "8-17",
           "8-19",
           "8-20",
+          "8-21",
           "8-18",
           "2-18",
           "4-12",
@@ -648,7 +654,7 @@
         ]
       },
       "regulator_11_10_11": {
-        "side": "+Y=+10.2mm Left End of 23.0mm Horizontal 11-15 Bar (11-10 2-Ear Gland + PF3-1.9 + Y-Axis 11-12 Spindle; 11-11 Pierced Flat Lever + Outboard +Y Finger Pin Horizontal -X Closed -> Swings Up in XZ Plane)",
+        "side": "+Y=+14.4mm Rear-Left Gland on Longitudinal 18.0mm 11-15 Block (11-10 2-Ear Gland + PF3-1.9 + Y-Axis 11-12 Spindle; 11-11 Pierced Flat Lever Horizontal -X Closed -> Swings Up in XZ Plane)",
         "parts": [
           "13-4",
           "11-10",
@@ -658,13 +664,13 @@
           "13-9"
         ],
         "pivot_xyz_mm": [
-          -119.2,
-          10.2,
+          -126.8,
+          14.4,
           66.5
         ]
       },
       "blower_11_13_14": {
-        "side": "-X Rear Face of 23.0mm Horizontal 11-15 Bar at Y=+2.2mm (Straight -X Needle Stem 11-14 + PF2-1.5 + ø9.2mm 4-Spoke Handwheel 11-13 -> 13-8 Left-Center Jumper (+2.6) -> Internal Stay -> 17-3)",
+        "side": "-X Rear Face of Longitudinal 18.0mm 11-15 Block at Y=+8.2mm (Straight -X Needle Stem 11-14 + PF2-1.5 + ø7.4mm 3-Spoke Handwheel 11-13 -> 13-8 Jumper -> Coaxial Z=+48.8mm Internal Stay -> 17-3)",
         "parts": [
           "11-13",
           "11-14",
@@ -672,13 +678,13 @@
           "17-3"
         ],
         "wheel_xyz_mm": [
-          -121.6,
-          2.2,
+          -133.2,
+          8.2,
           66.5
         ]
       },
       "water_gauge_11_4_7": {
-        "side": "-Y Outboard Right of PG-20 (GN8-6Ax2 + PN6-1x2 + Coaxial 13-5#1/#3 Banjos + 13-6/13-10 + Coaxial M4-6 Slotted Drain Screw)",
+        "side": "-Y Outboard Right of PG-20 (GN8-6Ax2 + PN6-1x2 + Coaxial 13-6 Steam Pipe to Z=+60.5mm Dome & 100% Horizontal Z=+32.6mm 13-10 Water Pipe to X=-43.2mm Wet Barrel + Non-Blocking Coaxial Drain Screw)",
         "parts": [
           "11-4",
           "11-5",
@@ -696,7 +702,7 @@
         ]
       },
       "pressure_gauge_pg20": {
-        "side": "-Y Inboard Upper-Right (ø20mm Strictly Vertical Dial Facing -X, 0.0 deg Tilt + 13-1 180-deg Vertical U-Loop Siphon from 11-15 Right End Y=-8.0mm Passing Below 13-2)",
+        "side": "-Y Inboard Upper-Right (ø20mm Strictly Vertical Dial Facing -X, 0.0 deg Tilt + 13-1 180-deg Vertical U-Loop Siphon from 11-15 4-15 Cross-Manifold Passing Below 13-2)",
         "parts": [
           "PG-ø20",
           "13-1",
@@ -709,7 +715,7 @@
         ]
       },
       "whistle_11_1_3": {
-        "side": "+Y Far-Left Port of 11-15 (11-1 Momentary Poppet Valve with 1-1/1-2/1-3 + PN2.2-0.8 + 11-2 Push-Pin PN1-1x2 + XZ-Plane Rearward Concave-Up 3-Hole 11-3 Trigger Lever -> Straight Vertical 13-3 @ Y=+19.2 -> Closed-Bell 11-8)",
+        "side": "+Y Front-Left Port of Longitudinal 11-15 (X=-117.6, Y=+15.2, Z=+66.5mm: 11-1 Momentary Poppet Valve + XZ-Plane Rearward Concave-Up 3-Hole 11-3 Trigger Lever -> Straight Vertical 13-3 @ Y=+20.2 -> Closed-Bell 11-8)",
         "parts": [
           "11-1",
           "11-2",
@@ -722,8 +728,8 @@
           "11-8"
         ],
         "pivot_xyz_mm": [
-          -115.6,
-          15.5,
+          -117.6,
+          15.2,
           62.2
         ],
         "axis_xyz": [
@@ -775,7 +781,7 @@
         ]
       },
       "bypass_lever_6_9": {
-        "side": "+Y=+8.8mm Left Cab Floor Inboard of Screw Reverser (Coaxial 6-9 Needle Stem + PS2-1.5 + Split-Clamp Cylindrical Hub with Pinch-Bolt Bore + Ring-Turned Tapered Radial Lever 8-7 -> Stepped Transverse Brass 4-17 Cylinder Under Center Floor)",
+        "side": "+Y=+8.8mm Left Cab Floor Inboard of Screw Reverser (Coaxial 6-9 Needle Stem + PS2-1.5 + Smooth Low Blackened Cylindrical Hub OD5.6x4.0mm with Radial Headless Set-Screw + Ring-Turned Tapered Radial Lever 8-7 -> Stepped Transverse Brass 4-17 Cylinder Under Center Floor)",
         "parts": [
           "4-17",
           "6-9",
@@ -789,7 +795,7 @@
         ]
       },
       "drain_cock_knob_8_6": {
-        "side": "-Y=-21.0mm Inside Right Cab Floor (Slanted Push-Pull Shaft Through 8-11 Right Floor Opening with Longitudinally-Knurled Black Cylindrical Knob 8-6 & Silver Center Screw @ (-141.5,-21.0,+22.4mm) Above Floor, Zero Fake Upright Stick! -> 8-10 Under-Floor Rocker -> Straight 8-5 Shaft @ Y=-17.8, Z=+8.5 -> 7-1~6 -> Half-Lapped 1-19x4 -> 1-18x4 -> 1-16x4 Spring Poppet Drain Cocks)",
+        "side": "-Y=-19.0mm Inside Right Cab Floor (100% Horizontal Coaxial X-Slide pitch=0.0 deg! Longitudinally-Fluted Black Cylindrical Knob 8-6 @ (-140.0,-19.0,+22.2mm) -> 8-10 Twin-Ear Horizontal Guide Saddle -> Horizontal 8-5 Shaft Through 11-9 -> Outer-Firebox Step to Y=-17.8, Z=+8.5 -> 7-1~6 -> 1-19x4 -> 1-18x4 -> 1-16x4 Spring Poppet Drain Cocks)",
         "parts": [
           "8-6",
           "8-10",
@@ -803,9 +809,9 @@
           "1-3"
         ],
         "knob_xyz_mm": [
-          -141.5,
-          -21.0,
-          22.4
+          -140.0,
+          -19.0,
+          22.2
         ]
       }
     }
@@ -1604,14 +1610,104 @@
           "roi_a_local_mm": null,
           "roi_b_local_mm": [
             [
-              -137.5,
+              -145.0,
               -24.0,
-              6.0
+              18.5
             ],
             [
-              -128.0,
-              -15.5,
-              16.5
+              -130.0,
+              -17.5,
+              26.0
+            ]
+          ]
+        },
+        {
+          "id": "sight_glass_top_13_6_to_boiler_steam_dome",
+          "fluid_loop": "sight_glass_two_phase",
+          "geom_a": "boiler_aux_valves_vis",
+          "geom_b": "boiler_copper_core_vis",
+          "roi_a_local_mm": [
+            [
+              -110.5,
+              -21.0,
+              56.5
+            ],
+            [
+              -103.5,
+              -13.5,
+              63.5
+            ]
+          ]
+        },
+        {
+          "id": "sight_glass_bot_13_10_to_boiler_wet_barrel",
+          "fluid_loop": "sight_glass_two_phase",
+          "geom_a": "boiler_aux_valves_vis",
+          "geom_b": "boiler_copper_core_vis",
+          "roi_a_local_mm": [
+            [
+              -50.0,
+              -24.5,
+              29.0
+            ],
+            [
+              -44.0,
+              -17.0,
+              36.5
+            ]
+          ]
+        },
+        {
+          "id": "leading_truck_spring_19_8_to_frame_hanger_4_4",
+          "fluid_loop": "mechanical_leading_truck_suspension",
+          "geom_a": "lead_frame_vis",
+          "geom_b": "chassis_equalizer_brakes_vis",
+          "roi_a_local_mm": [
+            [
+              -90.0,
+              -9.0,
+              -1.0
+            ],
+            [
+              -80.0,
+              9.0,
+              18.0
+            ]
+          ]
+        },
+        {
+          "id": "leading_truck_pivot_19_6_to_frame_bolster_4_10",
+          "fluid_loop": "mechanical_leading_truck_suspension",
+          "geom_a": "lead_frame_vis",
+          "geom_b": "chassis_equalizer_brakes_vis",
+          "roi_a_local_mm": [
+            [
+              -63.0,
+              -10.0,
+              -2.0
+            ],
+            [
+              -51.0,
+              10.0,
+              10.0
+            ]
+          ]
+        },
+        {
+          "id": "trailing_truck_pivot_19_13_to_frame_post_4_14",
+          "fluid_loop": "mechanical_trailing_truck_suspension",
+          "geom_a": "trail_frame_vis",
+          "geom_b": "chassis_equalizer_brakes_vis",
+          "roi_a_local_mm": [
+            [
+              -6.5,
+              -9.0,
+              0.0
+            ],
+            [
+              6.5,
+              9.0,
+              14.0
             ]
           ]
         },

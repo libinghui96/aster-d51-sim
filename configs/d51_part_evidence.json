@@ -1,24 +1,24 @@
 {
   "meta": {
     "locomotive": "Aster Hobby JNR D51 (1/32 Gauge 1)",
-    "stage": "Stage 18 Multi-Physics Mechanical/Fluid/Thermo-Elastic Digital Twin & Blueprint Calibration",
+    "stage": "Stage 19 Blueprint Cab/Truck Reconstruction, Coaxial Backhead Piping, Communicating Sight-Glass & Full 32-Pipe X-Ray Flow Vectors",
     "coordinate_convention": "+X forward (smokebox), +Y left (JNR driver side), -Y right (fireman side), +Z upward"
   },
   "parts": [
     {
       "part_no": "11-15/11-13/11-14",
-      "name": "23.0mm Horizontal Transverse Brass Steam Turret Bar & 4-Spoke Blower Handwheel (蒸気分配器・通風弁)",
+      "name": "18.0mm Fore-and-Aft Longitudinal Brass Steam Turret Block & 3-Spoke Blower Handwheel (蒸気分配器・通風弁)",
       "joint_type": "hinge",
       "axis_xyz": [1.0, 0.0, 0.0],
-      "mating_parent": "11-15 horizontal bar (Y∈[-9.0,+14.0]mm, Z=+66.5mm); 11-13 wheel at Y=+2.2mm, Z=+66.5mm",
-      "verified_views": ["イラスト 11 item 13/14/15 (rotated 90deg CW)", "イラスト 13", "p45 cab rear photo"]
+      "mating_parent": "11-15 longitudinal block (X∈[-131.6,-113.6], Y∈[+4.6,+11.8], Z=+66.5mm); 11-13 wheel on -X rear face at (-133.2, +8.2, +66.5mm)",
+      "verified_views": ["イラスト 11 item 13/14/15", "イラスト 13", "p45 cab rear photo"]
     },
     {
       "part_no": "11-10/11-11/11-12",
       "name": "Regulator Gland, Pierced Lever (+Y Finger Pin) & Y-Axis Spindle (加減弁)",
       "joint_type": "hinge",
       "axis_xyz": [0.0, -1.0, 0.0],
-      "mating_parent": "11-15 left +Y end (Y=+10.2, Z=+66.5mm, -X horizontal closed)",
+      "mating_parent": "11-15 rear +Y port (-126.8, +14.4, +66.5mm, -X horizontal closed)",
       "verified_views": ["イラスト 11 item 10/11/12", "イラスト 13", "Manual p.29 horizontal closed text"]
     },
     {
@@ -26,7 +26,7 @@
       "name": "Whistle Poppet Valve & XZ-Plane Rearward Concave-Up 3-Hole Trigger Lever (気笛弁レバー)",
       "joint_type": "hinge",
       "axis_xyz": [0.0, -1.0, 0.0],
-      "mating_parent": "11-1 bottom clevis lug (-115.6, +15.5, +62.2mm), pointing -X rearward in XZ plane",
+      "mating_parent": "11-1 bottom clevis lug (-117.6, +15.2, +62.2mm), pointing -X rearward in XZ plane",
       "verified_views": ["イラスト 11 Fig.1", "イラスト 13", "イラスト 14 Whistle Valve", "p45 cab rear photo"]
     },
     {
@@ -56,18 +56,18 @@
     },
     {
       "part_no": "4-17/6-9/8-7",
-      "name": "Stepped Under-Floor Brass Bypass Valve, Left-Floor Needle Stem & Split-Clamp Ring-Turned Radial Handle (バイパスバルブ・給水ニードル)",
+      "name": "Stepped Under-Floor Brass Bypass Valve, Left-Floor Needle Stem & Smooth Low Blackened Hub Handle (バイパスバルブ・給水ニードル)",
       "joint_type": "hinge",
       "axis_xyz": [0.0, 0.0, 1.0],
-      "mating_parent": "4-8 cradle under 8-11 center floor (-135.5, 0.0, +15.0mm); 6-9 vertical needle & split-clamp lever at (-135.5, +8.8, +24.2mm)",
+      "mating_parent": "4-8 cradle under 8-11 center floor (-135.5, 0.0, +15.0mm); 6-9 vertical needle & blackened cylindrical hub lever at (-135.5, +8.8, +24.2mm)",
       "verified_views": ["イラスト 4 item 17", "イラスト 6 item 9", "イラスト 8", "p45 cab rear photo"]
     },
     {
       "part_no": "8-5/8-6/8-10/1-16~19",
-      "name": "Cab-Interior Right-Floor Slanted Knurled Drain Pull-Knob (Zero Upright Stick!), Under-Floor Rocker & 4-Port Spring-Poppet Cylinder Drain Linkage (ドレンバルブ)",
+      "name": "Cab-Interior Right-Floor 100% Horizontal Coaxial Fluted Drain Pull-Knob (pitch=0.0 deg!), 8-10 Twin-Ear Guide & 4-Port Spring-Poppet Cylinder Drain Linkage (ドレンバルブ)",
       "joint_type": "slide",
-      "axis_xyz": [-0.927, 0.0, 0.375],
-      "mating_parent": "8-11 right cab floor opening (-133.0, -21.0, +20.0mm) with knurled knob 8-6 above floor (-141.5, -21.0, +22.4mm) -> 8-10 -> straight 8-5 (Z=+8.5mm)",
+      "axis_xyz": [1.0, 0.0, 0.0],
+      "mating_parent": "8-11 right cab floor rear notch (-140.0, -19.0, +22.2mm) -> 8-10 twin-ear horizontal guide -> coaxial horizontal 8-5 through 11-9 -> outer-firebox step to Z=+8.5mm",
       "verified_views": ["Group 8 BOM p.4", "イラスト 1 Fig.1", "イラスト 8 item 5/6/10", "Manual p.24 図 8.1", "p45 cab rear photo"]
     },
     {
@@ -80,19 +80,19 @@
     },
     {
       "part_no": "21-15/21-28",
-      "name": "Fixed Bolted Cab Roof Ventilator & Trimmed Front-Half Cab Side Sill (ベンチレーター・運転室)",
+      "name": "Fixed Bolted Cab Roof Ventilator & Unbroken Horizontal Cab Side Sill (ベンチレーター・運転室)",
       "joint_type": "static",
       "dummy": true,
-      "mating_parent": "21-28 solid arched cab roof (+M2-2.5 & +M2-6 screws, zero roof hatch hinge); front side sill Z_min=+30.05mm over trailing truck",
+      "mating_parent": "21-28 solid arched cab roof (+M2-2.5 & +M2-6 screws, zero roof hatch hinge); unbroken horizontal cab side sill Z_min=+25.0mm sealed to 8-11 raised wings (+25.5mm)",
       "verified_views": ["Group 21 BOM p.5", "イラスト 21", "Manual p.34 Step 21", "p43 ortho side photos"]
     },
     {
-      "part_no": "8-12~20",
-      "name": "Window-Height JNR Left Screw Reverser (Z=+44.0mm Horizontal 8-20x2 + Straight 80% 8-18 Reach Rod)",
+      "part_no": "8-12~21",
+      "name": "Window-Height JNR Left Screw Reverser (Longitudinal 8-13/8-15/8-17 + Horizontal 8-20x2 + Longitudinal 8-21 + Straight 80% 8-18 Reach Rod)",
       "joint_type": "hinge",
       "axis_xyz": [1.0, 0.0, 0.0],
-      "mating_parent": "8-11 left floor (-127.5, +32.5, +20.0mm), leadscrew Z=+44.0mm, straight horizontal 8-18 to X=-5mm then front curve to (+25.5,+32.5,+33.5)",
-      "verified_views": ["イラスト 8 item 12~20", "Manual p.25 図 9.1", "p43 SideB ortho photo", "p44 TopView"]
+      "mating_parent": "8-11 left raised wing (-127.5, +32.5, +25.5mm), leadscrew Z=+44.0mm, longitudinal 8-21 (14.0x3.8x1.2mm) & straight horizontal 8-18",
+      "verified_views": ["イラスト 8 item 12~21", "Manual p.25 図 9.1", "p43 SideB ortho photo", "p44 TopView"]
     },
     {
       "part_no": "29-11/29-12/29-13/29-14~19",
@@ -111,12 +111,12 @@
       "verified_views": ["Group 3 BOM p.3", "イラスト 3", "イラスト 5", "Manual p.19 図 3.1"]
     },
     {
-      "part_no": "19-1~9/19-10~17/31-25x8/31-28x8",
-      "name": "3-DOF Leading Bissel Truck (Roll 19-1 + Lateral Swing 19-3 + Coil 19-8), Coil-Sprung Trailing Delta Truck (19-12/15) & 8-Axlebox Sprung Tender Bogies",
+      "part_no": "19-1~9/4-4/4-5/4-10/19-10~17/4-14/31-25x8/31-28x8",
+      "name": "3-DOF Leading Bissel Truck (19-4x2 Seesaw Levers + 19-8 Extension Spring Anchored to 4-4/4-5 + 19-6/4-10 Bolster), Torsion-Sprung Trailing Delta Truck (19-10 Solid-Top Axleboxes + Internal 19-15x2 Wire Torsion Springs + 19-13/4-14 Pivot) & 8-Axlebox Sprung Tender Bogies",
       "joint_type": "slide",
       "axis_xyz": [0.0, 0.0, 1.0],
-      "mating_parent": "loco_frame leading pivot (+116/+106mm) & trailing pivot (-64mm); tender_bogie_1/2 ax_dx=±24.2mm",
-      "verified_views": ["Groups 19 & 31 BOM pp.6-7", "イラスト 19, 20, 31", "Manual p.33 図 20.1", "p46 tender side photo"]
+      "mating_parent": "loco_frame 4-10 bolster (+116/+106mm), 4-4/4-5 spring hanger (+83mm), 4-14 trailing post (-64mm); tender_bogie_1/2 ax_dx=±24.2mm",
+      "verified_views": ["Groups 4, 5, 19 & 31 BOM pp.3-7", "イラスト 4, 5, 19, 20, 31", "Manual p.33 図 20.1", "p46 tender side photo"]
     },
     {
       "part_no": "23-1/23-2/4-9/セラミックヤーン",

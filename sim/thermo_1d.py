@@ -165,6 +165,9 @@ class ThermoTelemetry:
     derailed: bool = False                 # 轮轨脱线落枕告警标志
     derail_reason: str = ""                # 脱轨车轴与物理原因描述
     pino_7op_active: bool = False          # 七算子 PINO (含热弹性形变算子) 在线标志
+    sight_glass_lumen_connected: bool = True   # 13-6 蒸汽管 & 13-10 下水管 -> 11-7 Pyrex 水面计三维全通标志
+    sight_glass_meniscus_z_mm: float = 55.5    # 11-7 Pyrex 水面计连通器真实物理液柱高度 Z (mm)
+    sight_glass_vel_mm_s: float = 0.0          # 11-7 水面计连通器液柱实时升降速度 (mm/s)
     gpu_monitor: Dict[str, Any] = field(default_factory=dict)
     force_L: float = 0.0
     force_R: float = 0.0
@@ -192,6 +195,18 @@ def water_volume_to_free_z_mm(water_ml: float) -> float:
             t = (v - v0) / max(1e-9, v1 - v0)
             return knots_z[i] + t * (knots_z[i + 1] - knots_z[i])
     return knots_z[-1]
+
+
+def free_z_mm_to_sight_pct(z_mm: float) -> float:
+    """11-7 Pyrex 透明硼硅玻璃水面计物理弯月面高度 Z (mm) -> 可视水位百分比 (47.0mm=0%, 55.5mm=50%, 62.5mm=100%)。"""
+    z = float(z_mm)
+    if z <= 47.0:
+        return 0.0
+    if z <= 55.5:
+        return 50.0 * (z - 47.0) / 8.5
+    if z <= 62.5:
+        return 50.0 + 50.0 * (z - 55.5) / 7.0
+    return 100.0
 
 
 def sat_pressure_pa(temp_c: float) -> float:
@@ -363,6 +378,12 @@ class AsterD51Thermo1D:
         self._hand_pump_pino_ml = 0.0
         self.pg_bourdon_kgf = 0.0
         self.sight_glass_level_pct = 50.0
+        self.sg_meniscus_z_mm = 55.5
+        self.sg_vel_m_s = 0.0
+        self.P_sg_top = P_ATM
+        self._sg_trapped_pa_mm = P_ATM * (61.5 - 55.5)
+        self.sg_steam_lumen_cond: float = 1.0
+        self.sg_water_lumen_cond: float = 1.0
         self.turret_pressure_kgf = 0.0
         self.mariotte_headspace_kpa = 2.50
         self.steam_dryness_dome = 0.96
@@ -393,6 +414,8 @@ class AsterD51Thermo1D:
         v_gas_h = max(2e-5, self.V_boiler_total - self.M_water_kg / 960.0)
         self.M_vap_kg = (self.P_boiler * v_gas_h) / (R_STEAM * (self.T_boiler_c + 273.15))
         self.P_steam_chest = P_ATM
+        self.P_sg_top = self.P_boiler
+        self._sg_trapped_pa_mm = self.P_boiler * (61.5 - self.sg_meniscus_z_mm)
         self.pg_bourdon_kgf = max(0.0, (self.P_boiler - P_ATM) / PA_PER_KGF_CM2)
         self.turret_pressure_kgf = self.pg_bourdon_kgf
         self.T_superheat_c = 165.0
@@ -1440,19 +1463,67 @@ class AsterD51Thermo1D:
 
         self.water_free_z_mm = water_volume_to_free_z_mm(self.M_water_kg * 1000.0)
 
-        # --- 9. 水面计弯月面动态响应、波登管阻尼与物理仪表防跳变低通平滑器 ---
+        # --- 9. 13-6/11-7/13-10 真实二阶连通器流体力学微分方程、波登管阻尼与物理仪表防跳变平滑 ---
         p_gauge_now = max(0.0, (self.P_boiler - P_ATM) / PA_PER_KGF_CM2)
         p_sc_now = max(0.0, (self.P_steam_chest - P_ATM) / PA_PER_KGF_CM2)
         app_clamped = max(0.0, min(100.0, apparent_level_pct))
+
+        # 连通器双侧物理物性：锅筒沸腾气液混合密度 vs 舱外自然对流微冷 Pyrex 玻璃管液柱密度 + ID 2.30mm 毛细弯月面升力
+        z_port_bot = 32.6  # 13-10 水平下水管轴线 Z=+32.6mm (穿入湿锅筒喉部 X=-43.2mm)
+        z_boil_at_sg = max(18.2, z_free_static_mm + dh_gauge_mm)
+        raw_evap_now_gs = evap_rate_kg_s * 1000.0
+        void_alpha = min(0.042, 0.016 * raw_evap_now_gs)
+        rho_boil = max(840.0, 1000.0 - 0.085 * (self.T_boiler_c - 20.0) - 0.0028 * ((self.T_boiler_c - 20.0) ** 2)) * (1.0 - void_alpha)
+        t_sg_c = 25.0 + 0.68 * max(0.0, self.T_boiler_c - 25.0)
+        rho_sg = max(860.0, 1000.0 - 0.085 * (t_sg_c - 20.0) - 0.0028 * ((t_sg_c - 20.0) ** 2))
+        sigma_sg = max(0.042, 0.0728 - 0.000165 * max(0.0, t_sg_c - 20.0))
+        dp_cap = (2.0 * sigma_sg * 0.208) / 1.15e-3  # 热态硼硅玻璃真实接触角 (θ≈78°) 毛细升压 (~18..24 Pa ≈ +1.9mm, 恰与管外温降增密平衡!)
+
+        g_top = max(0.0, min(1.0, float(self.sg_steam_lumen_cond)))
+        g_bot = max(0.0, min(1.0, float(self.sg_water_lumen_cond)))
+        mu_sg = 2.414e-5 * (10.0 ** (247.8 / (t_sg_c + 133.15)))
+        # ID 1.56mm, L=86mm 13-10 水平下水管 Hagen-Poiseuille 黏性流阻折算至 ID 2.30mm 玻璃液柱速度 + 弯头局部阻尼
+        r_poiseuille = (32.0 * mu_sg * 0.086 / ((1.56e-3) ** 2)) * 2.174
+        r_lin = (r_poiseuille + 2150.0) / max(0.04, g_bot)
+        dt_sg = dt_th / 4.0
+        for _ in range(4):
+            if g_top > 1.0e-4:
+                p_sg_eq = P_ATM + (self.P_boiler - P_ATM) * (g_top / (g_top + 0.08 * sg_drain_open))
+                # 13-6 (ID 1.56mm, L=25.5mm) 蒸汽导入 0.06ml 玻璃顶腔的真实 Poiseuille 气相均压速率 (~3200 s^-1, 严防升温 dP/dt 滞后推翻 9.4Pa/mm 静水压头!)
+                self.P_sg_top += min(1.0, 3200.0 * g_top * dt_sg) * (p_sg_eq - self.P_sg_top)
+                self._sg_trapped_pa_mm = self.P_sg_top * max(0.8, 61.5 - self.sg_meniscus_z_mm)
+            else:
+                # 若上蒸汽管 13-6 三维流道堵塞 (g_top == 0)，11-7 盲顶封闭气体等温压缩背压阻止液面自由升降!
+                self.P_sg_top = self._sg_trapped_pa_mm / max(0.8, 61.5 - self.sg_meniscus_z_mm)
+
+            if g_bot <= 1.0e-4:
+                self.sg_vel_m_s = 0.0
+            else:
+                p_boil_port = self.P_boiler + rho_boil * 9.81 * max(0.0, z_boil_at_sg - z_port_bot) * 1e-3
+                dp_drain_vent = sg_drain_open * (
+                    0.82 * max(0.0, self.P_boiler - P_ATM)
+                    + rho_boil * 9.81 * max(0.0, z_boil_at_sg - 34.5) * 1e-3
+                )
+                p_sg_col_base = self.P_sg_top + rho_sg * 9.81 * max(0.0, self.sg_meniscus_z_mm - z_port_bot) * 1e-3 - dp_cap
+                dp_drive = (p_boil_port - dp_drain_vent) - p_sg_col_base
+                accel_sg = (dp_drive - r_lin * self.sg_vel_m_s - 2600.0 * abs(self.sg_vel_m_s) * self.sg_vel_m_s) / (0.21 * rho_sg)
+                self.sg_vel_m_s = float(np.clip(self.sg_vel_m_s + accel_sg * dt_sg, -1.5, 1.5))
+                new_z = self.sg_meniscus_z_mm + self.sg_vel_m_s * 1000.0 * dt_sg
+                if new_z <= z_port_bot:
+                    new_z = z_port_bot
+                    if self.sg_vel_m_s < 0.0:
+                        self.sg_vel_m_s = 0.0
+                elif new_z >= 63.2:
+                    new_z = 63.2
+                    if self.sg_vel_m_s > 0.0:
+                        self.sg_vel_m_s = 0.0
+                self.sg_meniscus_z_mm = float(new_z)
+
+        self.sight_glass_level_pct = free_z_mm_to_sight_pct(self.sg_meniscus_z_mm)
         if self.ext_pino_cab is not None:
-            target_sg_pct = max(0.0, min(100.0, float(self.ext_pino_cab[6])))
             pg_target = max(0.0, float(self.ext_pino_cab[7]))
-            self.sight_glass_level_pct += min(1.0, 15.0 * dt_th) * (target_sg_pct - self.sight_glass_level_pct)
             self.pg_bourdon_kgf += min(1.0, 12.0 * dt_th) * (pg_target - self.pg_bourdon_kgf)
         else:
-            p_drive_sg = max(0.0, p_gauge_now / (p_gauge_now + 0.35))
-            target_sg_pct = app_clamped * (1.0 - 0.82 * sg_drain_open * p_drive_sg)
-            self.sight_glass_level_pct += min(1.0, 15.0 * dt_th) * (target_sg_pct - self.sight_glass_level_pct)
             self.pg_bourdon_kgf += min(1.0, 10.0 * dt_th) * (p_gauge_now - self.pg_bourdon_kgf)
 
         if has_steam and p_gauge_now > 0.08:
@@ -1589,6 +1660,9 @@ class AsterD51Thermo1D:
             copper_yield_mpa=round(cu_yield, 1),
             spring_deflect_mm=spr_defl,
             pino_7op_active=bool(el_info.get("pino_7op_active", False)),
+            sight_glass_lumen_connected=bool(self.sg_steam_lumen_cond > 0.25 and self.sg_water_lumen_cond > 0.25),
+            sight_glass_meniscus_z_mm=round(self.sg_meniscus_z_mm, 2),
+            sight_glass_vel_mm_s=round(self.sg_vel_m_s * 1000.0, 2),
             force_L=F_L,
             force_R=F_R,
             wheel_rpm=rpm,

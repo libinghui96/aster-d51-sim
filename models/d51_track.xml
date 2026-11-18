@@ -337,7 +337,7 @@
     <geom name="sleeper_trk_206" type="box" pos="5.392000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
     <body name="loco_frame" pos="0.000000 0.000000 0.026100">
       <freejoint name="loco_free"/>
-      <inertial pos="0.022812 0.000053 0.036457" mass="3.949141" fullinertia="3.889870904e-03 3.772830350e-02 3.683541849e-02 1.408560830e-05 1.829928666e-03 9.447600943e-06"/>
+      <inertial pos="0.032408 0.000065 0.037204" mass="3.441878" fullinertia="3.632377843e-03 3.362328972e-02 3.265514453e-02 1.857489220e-05 1.952037257e-03 7.952924519e-06"/>
       <geom name="main_chassis_L" type="box" pos="0.056 0.013500 0.004" size="0.122 0.00175 0.008" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="rear_chassis_L" type="box" pos="-0.103 0.013500 0.0092" size="0.043 0.00175 0.0040" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="motion_bracket_vis_L" type="mesh" mesh="m_motion_bracket_L" material="mat_black_iron" pos="0.046500 0.036000 0.015500" mass="0" contype="0" conaffinity="0"/>
@@ -365,7 +365,7 @@
       <geom name="cab_deck_and_mounts_vis" type="mesh" mesh="m_cab_deck_and_mounts" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="cab_sight_glass_tube_vis" type="mesh" mesh="m_cab_sight_glass_tube" material="mat_pyrex_glass" pos="-0.118500 -0.031300 0.046000" mass="0" contype="0" conaffinity="0"/>
       <geom name="cab_pg_dial_vis" type="mesh" mesh="m_cab_pg_dial" material="mat_gauge_dial" pos="-0.122500 -0.016500 0.066800" mass="0" contype="0" conaffinity="0"/>
-      <geom name="cab_reverser_stand_vis" type="mesh" mesh="m_cab_reverser_stand" material="mat_black_iron" pos="-0.127500 0.032500 0.020000" mass="0" contype="0" conaffinity="0"/>
+      <geom name="cab_reverser_stand_vis" type="mesh" mesh="m_cab_reverser_stand" material="mat_black_iron" pos="-0.127500 0.032500 0.025500" mass="0" contype="0" conaffinity="0"/>
       <geom name="boiler_Super_vis" type="mesh" mesh="m_boiler_superstructure" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <body name="axlebox_1" pos="0.093000 0 0">
         <inertial pos="0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 4.120193964e-21 -1.750421357e-25 -9.044771781e-22"/>
@@ -592,7 +592,7 @@
       </body>
       <body name="leading_truck_arm" pos="0.106000 0 -0.008500">
         <joint name="j_leading_yaw" type="hinge" axis="0 0 1" limited="true" range="-0.30 0.30" stiffness="0.20" damping="0.16"/>
-        <inertial pos="0.039218 -0.000000 0.000311" mass="0.027729" fullinertia="2.930145161e-06 1.643547519e-05 1.918372518e-05 1.619263354e-16 -7.972004066e-08 3.088749426e-17"/>
+        <inertial pos="0.032053 -0.000000 0.000344" mass="0.029236" fullinertia="2.380555554e-06 2.854365877e-05 3.071415847e-05 3.418233891e-16 4.974553583e-09 5.624708048e-17"/>
         <joint name="j_leading_susp" type="slide" axis="0 0 1" springref="-0.0069" limited="true" range="-0.0045 0.0045" stiffness="1050" damping="16"/>
         <joint name="j_leading_roll" type="hinge" axis="1 0 0" limited="true" range="-0.045 0.045" armature="0.0006" stiffness="0.35" damping="0.04"/>
         <joint name="j_leading_lat" type="slide" axis="0 1 0" limited="true" range="-0.00022 0.00022" armature="0.002" stiffness="650" damping="8.0"/>
@@ -615,7 +615,7 @@
       </body>
       <body name="trailing_truck_arm" pos="-0.064000 0 -0.008500">
         <joint name="j_trailing_yaw" type="hinge" axis="0 0 1" limited="true" range="-0.26 0.26" stiffness="0.40" damping="0.05"/>
-        <inertial pos="-0.032234 0.000000 0.000815" mass="0.028551" fullinertia="1.233315266e-05 9.641520254e-06 2.164809097e-05 -1.547000100e-18 3.155474936e-07 4.280101658e-19"/>
+        <inertial pos="-0.040990 -0.000000 0.000645" mass="0.036763" fullinertia="1.700889444e-05 1.817105995e-05 3.494876578e-05 -2.321834176e-13 2.515290615e-07 1.134348384e-14"/>
         <joint name="j_trailing_susp" type="slide" axis="0 0 1" springref="-0.0055" limited="true" range="-0.004 0.004" stiffness="1050" damping="16"/>
         <geom name="trail_frame_vis" type="mesh" mesh="m_trailing_truck_frame" material="mat_black_iron" pos="0 0 0" contype="0" conaffinity="0" mass="0"/>
         <body name="trailing_wheelset" pos="-0.054000 0 0">
@@ -629,7 +629,7 @@
           <geom name="trail_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="trail_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="trail_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
-          <geom name="trail_axle_rod_vis" type="cylinder" fromto="0 -0.0245 0  0 0.0245 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
+          <geom name="trail_axle_rod_vis" type="cylinder" fromto="0 -0.0325 0  0 0.0325 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
           <geom name="trail_vis_L" type="mesh" mesh="m_truck_wheel_L" material="mat_black_iron" pos="0 0.022880 0" contype="0" conaffinity="0" mass="0"/>
           <geom name="trail_vis_R" type="mesh" mesh="m_truck_wheel_R" material="mat_black_iron" pos="0 -0.022880 0" contype="0" conaffinity="0" mass="0"/>
         </body>
@@ -678,7 +678,7 @@
         <geom name="drain_cock_vis" type="mesh" mesh="m_drain_cock_linkage" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
       <body name="drain_pull_rod" pos="0 0 0">
-        <inertial pos="-0.015356 -0.017947 0.008508" mass="0.002835" fullinertia="1.599162707e-09 1.943685824e-05 1.943748617e-05 -4.919905341e-08 2.752177122e-09 -4.631711235e-12"/>
+        <inertial pos="-0.010209 -0.018261 0.010607" mass="0.002985" fullinertia="7.155677045e-08 1.910175254e-05 1.903736372e-05 -1.555274345e-07 7.102420384e-07 1.480690478e-08"/>
         <joint name="j_drain_pull" type="slide" axis="1 0 0" limited="true" range="-0.005 0.005" damping="0.02"/>
         <geom name="drain_pull_rod_vis" type="mesh" mesh="m_drain_pull_rod" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
       </body>
@@ -688,27 +688,27 @@
         <geom name="cab_reverser_wheel_vis" type="mesh" mesh="m_cab_reverser_wheel" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
       </body>
       <body name="cab_reverser_nut" pos="-0.127500 0.032500 0.044000">
-        <inertial pos="0.001311 -0.000000 -0.000000" mass="0.000494" fullinertia="1.000000000e-09 2.789661393e-09 2.800771732e-09 8.225475831e-25 1.100754461e-23 2.404075862e-26"/>
+        <inertial pos="0.000335 -0.000000 -0.000554" mass="0.000867" fullinertia="2.378939012e-09 6.539698301e-09 5.657552831e-09 -3.064696042e-23 -4.486673603e-10 -8.846148258e-24"/>
         <joint name="j_reverser_nut" type="slide" axis="1 0 0" limited="true" range="-0.005 0.005" damping="0.02"/>
         <geom name="cab_reverser_nut_vis" type="mesh" mesh="m_cab_reverser_nut" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_regulator_lever" pos="-0.119200 0.008200 0.066500">
+      <body name="cab_regulator_lever" pos="-0.126800 0.013200 0.066500">
         <inertial pos="-0.003820 -0.000159 0.000023" mass="0.000554" fullinertia="1.328493967e-09 1.409598810e-08 1.475863940e-08 1.963061546e-09 -4.771408248e-11 -4.488341845e-12"/>
         <joint name="j_cab_regulator" type="hinge" axis="0 -1 0" limited="true" range="0.0 1.25" damping="0.003"/>
         <geom name="cab_regulator_vis" type="mesh" mesh="m_cab_regulator_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_blower_wheel" pos="-0.121600 0.000000 0.066500">
+      <body name="cab_blower_wheel" pos="-0.133200 0.008200 0.066500">
         <inertial pos="0.000324 -0.000000 -0.000000" mass="0.000358" fullinertia="2.146522619e-09 1.368195099e-09 1.368195099e-09 -1.198407285e-23 -1.964450219e-23 -2.483714393e-24"/>
         <joint name="j_cab_blower" type="hinge" axis="1 0 0" limited="true" range="-6.28 6.28" damping="0.001"/>
         <geom name="cab_blower_vis" type="mesh" mesh="m_cab_blower_wheel" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_whistle_lever" pos="-0.115600 0.015500 0.062200">
+      <body name="cab_whistle_lever" pos="-0.117600 0.020200 0.062200">
         <inertial pos="-0.003521 -0.000000 -0.001528" mass="0.000249" fullinertia="1.000000000e-09 3.986221371e-09 3.470912428e-09 -8.499185847e-25 -1.037378631e-09 6.254278069e-26"/>
         <joint name="j_cab_whistle" type="hinge" axis="0 -1 0" limited="true" range="0.0 0.42" stiffness="0.04" damping="0.002"/>
         <geom name="cab_whistle_vis" type="mesh" mesh="m_cab_whistle_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
       <body name="cab_sight_drain" pos="-0.118500 -0.031300 0.028800">
-        <inertial pos="-0.000000 -0.000000 0.000286" mass="0.000458" fullinertia="1.208264312e-09 1.193377658e-09 1.000000000e-09 3.815071624e-23 -1.418129263e-23 7.114516755e-24"/>
+        <inertial pos="-0.000000 -0.000000 0.000021" mass="0.000410" fullinertia="1.000000000e-09 1.000000000e-09 1.000000000e-09 3.815599376e-23 -1.298211060e-23 9.530028469e-24"/>
         <joint name="j_cab_sight_drain" type="slide" axis="0 0 -1" limited="true" range="0.0 0.0018" stiffness="0.25" damping="0.008"/>
         <geom name="cab_sight_drain_vis" type="mesh" mesh="m_cab_sight_drain" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
@@ -728,13 +728,13 @@
         <geom name="cab_fire_door_vis" type="mesh" mesh="m_cab_firebox_door" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
       </body>
       <body name="cab_bypass_lever" pos="-0.135500 0.008500 0.022400">
-        <inertial pos="-0.000771 0.001790 -0.000387" mass="0.001451" fullinertia="2.559210467e-08 1.232468875e-08 2.489195101e-08 8.018003004e-09 1.058244817e-09 -2.425795897e-09"/>
+        <inertial pos="-0.001162 0.001513 -0.000386" mass="0.001412" fullinertia="2.143265865e-08 1.549675987e-08 2.470363694e-08 1.005704919e-08 1.370095476e-09 -1.785915610e-09"/>
         <joint name="j_cab_bypass" type="hinge" axis="0 0 1" limited="true" range="-1.57 1.57" damping="0.002"/>
-        <geom name="cab_bypass_vis" type="mesh" mesh="m_cab_bypass_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
+        <geom name="cab_bypass_vis" type="mesh" mesh="m_cab_bypass_lever" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_drain_lever" pos="-0.133500 -0.021000 0.015000">
-        <inertial pos="-0.005886 0.000015 0.008172" mass="0.002421" fullinertia="6.226346683e-08 7.909461288e-08 2.616106858e-08 -2.145699389e-10 2.897298525e-08 5.355637492e-10"/>
-        <joint name="j_cab_drain" type="hinge" axis="0 1 0" limited="true" range="-0.42 0.42" damping="0.0004"/>
+      <body name="cab_drain_lever" pos="-0.140000 -0.020800 0.022200">
+        <inertial pos="-0.003981 -0.000000 -0.000006" mass="0.002211" fullinertia="8.855541996e-09 3.862416895e-08 3.864496815e-08 9.425379272e-16 4.038299237e-11 2.744833706e-17"/>
+        <joint name="j_cab_drain" type="slide" axis="1 0 0" limited="true" range="-0.005 0.005" damping="0.02"/>
         <geom name="cab_drain_lever_vis" type="mesh" mesh="m_cab_drain_lever" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
       </body>
       <body name="dome_lid_29_12" pos="0.062400 0.000000 0.091850">
@@ -1007,7 +1007,7 @@
     <joint name="couple_drain_rod" joint1="j_drain_pull" joint2="j_drain_cock" polycoef="0 -0.0118 0 0.001967 0"/>
     <joint name="couple_reverser_wheel" joint1="j_reverser_wheel" joint2="j_reverser" polycoef="0 10.0 0 0 0"/>
     <joint name="couple_reverser_nut" joint1="j_reverser_nut" joint2="j_reverser" polycoef="0 0.007 0 -0.001167 0"/>
-    <joint name="couple_cab_drain" joint1="j_cab_drain" joint2="j_drain_cock" polycoef="0 1.25 0 0 0"/>
+    <joint name="couple_cab_drain" joint1="j_cab_drain" joint2="j_drain_cock" polycoef="0 -0.0118 0 0.001967 0"/>
     <connect name="loop_coup_2_L" site1="s_coup_hole_2_L" site2="s_crank_pin_2_L"/>
     <connect name="loop_coup_1_L" site1="s_coup_hole_1_L" site2="s_crank_pin_1_L"/>
     <connect name="loop_coup_4_L" site1="s_coup_hole_4_L" site2="s_crank_pin_4_L"/>

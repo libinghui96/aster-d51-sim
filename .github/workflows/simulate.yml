@@ -44,16 +44,6 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install mujoco numpy matplotlib pillow scipy
 
-      - name: Check models are in sync with generator & run Gates 1-23 verification
-        run: |
-          python scripts/03_generate_mjcf.py --mode roller --out /tmp/d51_regen.xml
-          diff -q /tmp/d51_regen.xml models/d51_full.xml
-          python scripts/03_generate_mjcf.py --mode track --out /tmp/d51_track_regen.xml
-          diff -q /tmp/d51_track_regen.xml models/d51_track.xml
-          python scripts/03_generate_mjcf.py --mode curve_r2m --out /tmp/d51_r2m_regen.xml
-          diff -q /tmp/d51_r2m_regen.xml models/d51_r2m.xml
-          python scripts/09_verify_cad_and_clearance.py
-
       - name: Sync CAD/MJCF assets & build Web 3D interactive frontend
         run: |
           python scripts/05_sync_web_assets.py
@@ -62,6 +52,16 @@ jobs:
           mkdir -p site
           cp -r web/dist/. site/
           touch site/.nojekyll
+
+      - name: Check models are in sync with generator & run Gates 1-24 verification
+        run: |
+          python scripts/03_generate_mjcf.py --mode roller --out /tmp/d51_regen.xml
+          diff -q /tmp/d51_regen.xml models/d51_full.xml
+          python scripts/03_generate_mjcf.py --mode track --out /tmp/d51_track_regen.xml
+          diff -q /tmp/d51_track_regen.xml models/d51_track.xml
+          python scripts/03_generate_mjcf.py --mode curve_r2m --out /tmp/d51_r2m_regen.xml
+          diff -q /tmp/d51_r2m_regen.xml models/d51_r2m.xml
+          python scripts/09_verify_cad_and_clearance.py
 
       - name: Headless test-run demo (telemetry plot)
         run: python -m sim.run_cosim --headless-demo --out-plot site/d51_telemetry.png 2>&1 | grep -v '^WARNING'

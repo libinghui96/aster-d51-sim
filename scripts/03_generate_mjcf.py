@@ -447,7 +447,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     cyl_pos_R = np.array([rc_cfg["cylinder_center_x"] * s, -rc_cfg["cylinder_center_y"] * s, rc_cfg["cylinder_center_z"] * s])
     mb_pos_L = np.array([tx_m, +y_vg_abs, tz_m])
     mb_pos_R = np.array([tx_m, -y_vg_abs, tz_m])
-    rev_stand_pos = np.array([-0.127500, +0.032500, 0.020000])
+    rev_stand_pos = np.array([-0.127500, +0.032500, 0.025500])
     sg_tube_pos = np.array([-0.118500, -0.031300, 0.046000])
     pg_dial_pos = np.array([-0.122500, -0.016500, 0.066800])
 
@@ -619,7 +619,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     ET.SubElement(
         frame, "geom", name="cab_reverser_stand_vis", type="mesh",
         mesh="m_cab_reverser_stand", material="mat_black_iron",
-        pos="-0.127500 0.032500 0.020000", mass="0", contype="0", conaffinity="0"
+        pos="-0.127500 0.032500 0.025500", mass="0", contype="0", conaffinity="0"
     )
     ET.SubElement(
         frame, "geom", name="boiler_Super_vis", type="mesh",
@@ -863,9 +863,10 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     add_rail_wheel_colliders(trail_ws, "trail", r_trk, y_gauge_half, use_explicit_inertial=True, is_driving=False)
 
     for ws_elem, pfx in [(lead_ws, "lead"), (trail_ws, "trail")]:
+        ax_y_half = 0.0245 if pfx == "lead" else 0.0325
         ET.SubElement(
             ws_elem, "geom", name=f"{pfx}_axle_rod_vis", type="cylinder",
-            fromto="0 -0.0245 0  0 0.0245 0", size="0.0020",
+            fromto=f"0 {-ax_y_half:.4f} 0  0 {ax_y_half:.4f} 0", size="0.0020",
             material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
         )
         for s_tag, sgn in [("L", 1.0), ("R", -1.0)]:
@@ -1015,8 +1016,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         joint1="j_reverser_nut", joint2="j_reverser", polycoef="0 0.007 0 -0.001167 0"
     )
 
-    # 11-11 + 11-12 11-15 后上左侧 (+Y=+8.2, X=-119.2, Z=+66.5mm) Y轴加减阀长柄: q=0 向后 (-X) 水平全闭，向上 (+Z) 旋转开启主蒸汽 (イラスト 11, 14 & Manual p.29)
-    reg_lev = ET.SubElement(frame, "body", name="cab_regulator_lever", pos="-0.119200 0.008200 0.066500")
+    # 11-11 + 11-12 纵向 11-15 左侧面后口 (-126.8, +14.4, +66.5mm) Y轴加减阀长柄: q=0 向后 (-X) 水平全闭，向上 (+Z) 旋转开启主蒸汽 (イラスト 11, 14 & Manual p.29)
+    reg_lev = ET.SubElement(frame, "body", name="cab_regulator_lever", pos="-0.126800 0.013200 0.066500")
     attach_part_inertial(reg_lev, parts_mp["cab_regulator_lever"])
     ET.SubElement(
         reg_lev, "joint", name="j_cab_regulator", type="hinge", axis="0 -1 0",
@@ -1027,10 +1028,10 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_regulator_lever", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
 
-    # 11-13 + 11-14 顶中后向 (-121.6, Y=0.0, Z=+66.5mm) 11-15 后端面中央四辐圆形黄铜通风阀手轮 (イラスト 11 & Manual p.29)
+    # 11-13 + 11-14 纵向 11-15 后端面 (-133.2, +8.2, +66.5mm) 同轴四辐圆形黄铜通风阀手轮 (イラスト 11, 13 & p45)
     blw_whl = ET.SubElement(
         frame, "body", name="cab_blower_wheel",
-        pos="-0.121600 0.000000 0.066500"
+        pos="-0.133200 0.008200 0.066500"
     )
     attach_part_inertial(blw_whl, parts_mp["cab_blower_wheel"])
     ET.SubElement(
@@ -1042,8 +1043,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_blower_wheel", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
 
-    # 11-3 左上 (+Y=+15.5, X=-115.6, Z=+62.2mm) 11-1 汽笛阀底部 XZ 纵向平面朝后 (-X) 上凹三孔扳机拨柄 (绕 Y 轴向下按压开启, イラスト 11 & p44)
-    whi_lev = ET.SubElement(frame, "body", name="cab_whistle_lever", pos="-0.115600 0.015500 0.062200")
+    # 11-3 纵向 11-15 左侧面前口 11-1 汽笛阀底部 (-117.6, +15.2, +62.2mm) XZ 纵向平面朝后 (-X) 上凹三孔扳机拨柄 (イラスト 11 & p45)
+    whi_lev = ET.SubElement(frame, "body", name="cab_whistle_lever", pos="-0.117600 0.020200 0.062200")
     attach_part_inertial(whi_lev, parts_mp["cab_whistle_lever"])
     ET.SubElement(
         whi_lev, "joint", name="j_cab_whistle", type="hinge", axis="0 -1 0",
@@ -1102,7 +1103,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_firebox_door", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
     )
 
-    # 6-9 / 8-7 驾驶室左地板 (+Y=+8.5mm, X=-135.5mm, Z=+22.4mm) 开口夹紧抱箍式旁通回水针阀手柄 (向下同轴直插床下阶梯圆筒 4-17, イラスト 4, 6, 8)
+    # 6-9 / 8-7 驾驶室左地板 (+Y=+8.5mm, X=-135.5mm, Z=+22.4mm) 低矮光滑圆筒发黑旁通针阀手柄 (向下同轴直插床下阶梯圆筒 4-17, イラスト 4, 6, 8 & p45)
     byp_lev = ET.SubElement(frame, "body", name="cab_bypass_lever", pos="-0.135500 0.008500 0.022400")
     attach_part_inertial(byp_lev, parts_mp["cab_bypass_lever"])
     ET.SubElement(
@@ -1111,15 +1112,15 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     )
     ET.SubElement(
         byp_lev, "geom", name="cab_bypass_vis", type="mesh",
-        mesh="m_cab_bypass_lever", material="mat_brass", contype="0", conaffinity="0", mass="0"
+        mesh="m_cab_bypass_lever", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
     )
 
-    # 8-6 ドレンツマミ: 驾驶室内部右地板上方 (-Y=-21.0mm, X=-133.5mm) 斜向推拉纵向滚花圆柄 (零高耸竖杆、零床下悬垂, イラスト 8 & p45)
-    drn_lev = ET.SubElement(frame, "body", name="cab_drain_lever", pos="-0.133500 -0.021000 0.015000")
+    # 8-6 ドレンバルブ: 驾驶室右地板缺口上方 (-140.0, -19.0, +22.2mm) 100% 纯水平同轴推拉滚花圆柱握柄 (pitch=0.0°, slide axis="1 0 0", イラスト 8 & 図 8.1)
+    drn_lev = ET.SubElement(frame, "body", name="cab_drain_lever", pos="-0.140000 -0.020800 0.022200")
     attach_part_inertial(drn_lev, parts_mp["cab_drain_lever"])
     ET.SubElement(
-        drn_lev, "joint", name="j_cab_drain", type="hinge", axis="0 1 0",
-        limited="true", range="-0.42 0.42", damping="0.0004"
+        drn_lev, "joint", name="j_cab_drain", type="slide", axis="1 0 0",
+        limited="true", range="-0.005 0.005", damping="0.02"
     )
     ET.SubElement(
         drn_lev, "geom", name="cab_drain_lever_vis", type="mesh",
@@ -1127,7 +1128,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     )
     ET.SubElement(
         equality, "joint", name="couple_cab_drain",
-        joint1="j_cab_drain", joint2="j_drain_cock", polycoef="0 1.25 0 0 0"
+        joint1="j_cab_drain", joint2="j_drain_cock", polycoef="0 -0.0118 0 0.001967 0"
     )
 
     # 29-12 + 29-13 カマボコ砂箱前部钢丝铰接可掀顶盖 (前铰于 (+62.4, 0.0, +91.85mm), Manual p.36 Step 29 & イラスト 29)

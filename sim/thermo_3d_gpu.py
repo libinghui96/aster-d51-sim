@@ -240,6 +240,9 @@ class Spatial3DSnapshot:
     pino_7op_active: bool = False
     hollow_lumen_verified: bool = True
     burner_lumen_connected: bool = True
+    sight_glass_lumen_connected: bool = True
+    sg_steam_lumen_cond: float = 1.0
+    sg_water_lumen_cond: float = 1.0
     wick_capillary_ml_s: float = 0.0
     wick_saturation: float = 0.90
     wick_tip_temp_c: float = 25.0
@@ -349,6 +352,9 @@ class AsterD51Thermo3DGPU:
         self._3d_crown_peak_c: Optional[float] = None
         self.d7_lumen_cond: float = 1.0
         self.d7_open_cups: int = 3
+        self.sg_steam_lumen_cond: float = 1.0
+        self.sg_water_lumen_cond: float = 1.0
+        self.sg_uloop_voxels: int = 0
         self.insulation_coverage: float = 0.86
         self._pino_last_tilt_deg = 12.0
         self._pino_last_o2_fb = 0.21
@@ -652,6 +658,7 @@ class AsterD51Thermo3DGPU:
             self.core1d.insulation_coverage = 0.0
 
         self.rebuild_d7_stl_geometry(s7_brn)
+        self.rebuild_sight_glass_lumen_geometry(mesh_dir)
 
         self.hollow_lumen_verified = bool(
             self.sh_hollow_core_verified
@@ -661,6 +668,9 @@ class AsterD51Thermo3DGPU:
             and self.d7_alc_lumen.sum().item() > 260
             and self.d7_open_cups == 3
             and self.d7_lumen_cond >= 0.85
+            and self.sg_steam_lumen_cond >= 0.85
+            and self.sg_water_lumen_cond >= 0.85
+            and self.sg_uloop_voxels >= 500
         )
         self.stl_passages_verified = bool(
             self.d1_connected
@@ -756,6 +766,92 @@ class AsterD51Thermo3DGPU:
             getattr(self, "sh_hollow_core_verified", True)
             and self.d7_open_cups == 3
             and self.d7_lumen_cond >= 0.85
+            and getattr(self, "sg_steam_lumen_cond", 1.0) >= 0.85
+            and getattr(self, "sg_water_lumen_cond", 1.0) >= 0.85
+        )
+
+    @torch.no_grad()
+    def rebuild_sight_glass_lumen_geometry(
+        self,
+        mesh_dir: Optional[Path] = None,
+        s_solid_override: Optional[torch.Tensor] = None,
+    ) -> None:
+        """
+        对跨锅炉与驾驶室后妻板的 13-6 (上蒸汽管) + 11-7 (Pyrex 玻璃管) + 13-10 (100%水平下水管) 执行全7件体素布尔并集
+        与三维形态学漫水传播 (gpu_flood_fill_3d):
+          - 逐件体素化 boiler_firebox_flues, boiler_aux_valves, cab_backhead_plate, boiler_insulation,
+            boiler_superstructure, cab_sight_glass_tube, cab_sight_drain 并取逐体素最大值 (严防拼接奇偶抵消假连通!);
+          - 分别从锅筒湿水腔 (X=-43.2, Z=+32.6) 与蒸汽穹顶腔 (X=-106.8, Z=+60.5) 发起漫水传播至 11-7 玻璃中段，
+            实测真实三维导通度 sg_water_lumen_cond, sg_steam_lumen_cond 并注入二阶连通器方程！
+        """
+        dev = self.device
+        xr, yr, zr = (-120.5, -40.5), (-33.5, -13.5), (30.5, 62.5)
+        shape = (168, 64, 96)
+        if s_solid_override is not None:
+            s_solid = s_solid_override.to(dev)
+        else:
+            mdir = Path(mesh_dir) if mesh_dir is not None else Path("models/meshes")
+            s_solid = torch.zeros(shape, dtype=torch.float32, device=dev)
+            for fn, shift in (
+                ("boiler_firebox_flues.stl", (0.0, 0.0, 0.0)),
+                ("boiler_aux_valves.stl", (0.0, 0.0, 0.0)),
+                ("cab_backhead_plate.stl", (0.0, 0.0, 0.0)),
+                ("boiler_insulation.stl", (0.0, 0.0, 0.0)),
+                ("boiler_superstructure.stl", (0.0, 0.0, 0.0)),
+                ("cab_sight_glass_tube.stl", (-118.5, -31.3, 46.0)),
+                ("cab_sight_drain.stl", (-118.5, -31.3, 28.8)),
+            ):
+                stl_p = mdir / fn
+                if stl_p.exists():
+                    t = load_stl_triangles_mm(stl_p).copy()
+                    if shift != (0.0, 0.0, 0.0):
+                        t[:, :, 0] += shift[0]
+                        t[:, :, 1] += shift[1]
+                        t[:, :, 2] += shift[2]
+                    s_solid = torch.maximum(s_solid, voxelize_stl_cuda(t, xr, yr, zr, shape, dev))
+            self.s_sg_solid_raw = s_solid
+
+        xs = torch.linspace(xr[0], xr[1], shape[0], device=dev)
+        ys = torch.linspace(yr[0], yr[1], shape[1], device=dev)
+        zs = torch.linspace(zr[0], zr[1], shape[2], device=dev)
+        X, Y, Z = torch.meshgrid(xs, ys, zs, indexing="ij")
+
+        in_boil_dome = (X >= -109.5) & (X <= -103.5) & (torch.hypot(Y, Z - 44.0) <= 26.2) & (Z >= 56.5)
+        in_boil_wet = (X >= -44.2) & (X <= -40.5) & (torch.hypot(Y, Z - 44.0) <= 26.2) & (Z <= 36.0)
+        in_13_6 = (
+            (((X - (-118.5)).abs() <= 1.05) & (Y >= -32.2) & (Y <= -16.8) & ((Z - 60.5).abs() <= 1.05))
+            | ((X >= -119.3) & (X <= -115.2) & (Y >= -20.8) & (Y <= -16.6) & ((Z - 60.5).abs() <= 1.05))
+            | ((X >= -119.3) & (X <= -105.5) & (Y >= -18.8) & (Y <= -14.2) & (Z >= 57.2) & (Z <= 61.5))
+        )
+        in_13_10 = (
+            (((X - (-118.5)).abs() <= 1.05) & (Y >= -32.2) & (Y <= -20.0) & ((Z - 32.6).abs() <= 1.05))
+            | ((X >= -119.3) & (X <= -115.2) & (Y >= -24.0) & (Y <= -19.8) & ((Z - 32.6).abs() <= 1.05))
+            | ((X >= -119.3) & (X <= -42.5) & ((Y - (-20.8)).abs() <= 1.05) & ((Z - 32.6).abs() <= 1.05))
+        )
+        in_pyrex = (torch.hypot(X - (-118.5), Y - (-31.3)) <= 1.15) & (Z >= 31.6) & (Z <= 61.0)
+        passable = ((in_boil_dome | in_boil_wet | in_13_6 | in_13_10 | in_pyrex) & (s_solid < 0.5)).float().unsqueeze(0).unsqueeze(0)
+
+        seed_wet = (in_boil_wet & (s_solid < 0.5)).float().unsqueeze(0).unsqueeze(0)
+        seed_dome = (in_boil_dome & (s_solid < 0.5)).float().unsqueeze(0).unsqueeze(0)
+        reach_wet = gpu_flood_fill_3d(passable, seed_wet, max_steps=420)
+        reach_dome = gpu_flood_fill_3d(passable, seed_dome, max_steps=260)
+        pyrex_mid = ((torch.hypot(X - (-118.5), Y - (-31.3)) <= 1.08) & (Z >= 40.0) & (Z <= 52.0)).float().unsqueeze(0).unsqueeze(0)
+
+        wet_to_glass = float((reach_wet * pyrex_mid).sum().item())
+        dome_to_glass = float((reach_dome * pyrex_mid).sum().item())
+        uloop_vox = int(round(float((reach_wet * seed_dome).sum().item())))
+
+        self.sg_water_lumen_cond = round(min(1.0, wet_to_glass / 240.0), 4)
+        self.sg_steam_lumen_cond = round(min(1.0, dome_to_glass / 240.0), 4)
+        self.sg_uloop_voxels = uloop_vox
+        self.core1d.sg_water_lumen_cond = self.sg_water_lumen_cond
+        self.core1d.sg_steam_lumen_cond = self.sg_steam_lumen_cond
+        self.hollow_lumen_verified = bool(
+            getattr(self, "sh_hollow_core_verified", True)
+            and self.d7_open_cups == 3
+            and self.d7_lumen_cond >= 0.85
+            and self.sg_steam_lumen_cond >= 0.85
+            and self.sg_water_lumen_cond >= 0.85
         )
 
     @torch.no_grad()
@@ -2042,6 +2138,9 @@ class AsterD51Thermo3DGPU:
             pino_7op_active=bool(self.pino_7op_loaded),
             hollow_lumen_verified=bool(self.hollow_lumen_verified),
             burner_lumen_connected=bool(self.d7_open_cups == 3 and self.d7_lumen_cond >= 0.5),
+            sight_glass_lumen_connected=bool(self.sg_steam_lumen_cond >= 0.5 and self.sg_water_lumen_cond >= 0.5),
+            sg_steam_lumen_cond=float(self.sg_steam_lumen_cond),
+            sg_water_lumen_cond=float(self.sg_water_lumen_cond),
             wick_capillary_ml_s=round(
                 float(self.core1d.ext_pino_wick_cht[0]) if self.core1d.ext_pino_wick_cht is not None else 0.0, 4
             ),

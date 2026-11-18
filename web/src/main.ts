@@ -44,8 +44,8 @@ const INTERACTIVE_PART_META: Record<string, { label: string; kind: InteractivePa
   cab_sight_drain_vis: { label: "13-5#3/1-1 右外縁(-Y) 11-7 水面計下部同軸ドレン栓 (クリックでフラッシュ洗浄)", kind: "toggle" },
   cab_blowdown_vis: { label: "11-16/11-17 左床下横向き(+Y)マイナス溝排水弁 (ドラッグで缶底排泥ブロー)", kind: "drag" },
   cab_fire_door_vis: { label: "12-1 低位中央・底ヒンジバタフライ火室扉 (ドラッグで開閉・二次空気流入)", kind: "drag" },
-  cab_bypass_vis: { label: "4-17/6-9/8-7 左運転台(+Y)床面・割クランプ給水バイパス弁レバー (ドラッグで 31-14 戻水量調整)", kind: "drag" },
-  cab_drain_lever_vis: { label: "8-6 右床面・室内斜めローレットドレンノブ → 8-5 → 1-19 (クリックでシリンダ二相排液開閉)", kind: "toggle" },
+  cab_bypass_vis: { label: "4-17/6-9/8-7 左運転台(+Y)床面・黒染平滑ハブ給水バイパス弁レバー (ドラッグで 31-14 戻水量調整)", kind: "drag" },
+  cab_drain_lever_vis: { label: "8-6 右床面・100%水平スライドローレットドレンノブ → 8-10 双耳ガイド → 8-5 (クリックでシリンダ排液開閉)", kind: "toggle" },
   dome_lid_vis: { label: "29-12/29-13 カマボコ砂箱前部ワイヤヒンジ蓋 (クリックで開閉)", kind: "toggle" },
   drain_pull_rod_vis: { label: "8-5 右床下ドレン弁水平引き棒 (クリックで8段排液リンク開閉)", kind: "toggle" },
   tender_handpump_vis: { label: "31-3/31-5 炭水車水槽内・4節リンク手動ポンプ立柱 (クリックで圧送)", kind: "pump" },
@@ -209,6 +209,7 @@ async function main() {
   const fluidVis = new FluidPartVisualizer();
   scene.add(fluidVis.root);
   scene.add(fluidVis.tenderRoot);
+  scene.add(fluidVis.worldRoot);
 
   let model: any = null;
   let data: any = null;
@@ -221,6 +222,7 @@ async function main() {
   let copperCoreMeshes: THREE.Mesh[] = [];
   let lubeShellMeshes: THREE.Mesh[] = [];
   let tenderOuterMeshes: THREE.Mesh[] = [];
+  let pipeWallXrayMeshes: THREE.Mesh[] = [];
   let boilerShellMats: THREE.MeshStandardMaterial[] = [];
   let ceramicWickMats: THREE.MeshStandardMaterial[] = [];
   let copperCoreMats: THREE.MeshStandardMaterial[] = [];
@@ -418,6 +420,7 @@ async function main() {
     copperCoreMeshes = [];
     lubeShellMeshes = [];
     tenderOuterMeshes = [];
+    pipeWallXrayMeshes = [];
     boilerShellMats = [];
     ceramicWickMats = [];
     copperCoreMats = [];
@@ -690,13 +693,16 @@ async function main() {
           copperCoreMats.push(cuMat);
           mat = cuMat;
         } else if (meshKey === "superheater_piping" || meshKey === "exhaust_blast_pipe") {
-          mat = matSuperheater;
+          mat = matSuperheater.clone();
+          attachSuperheaterShader(mat as THREE.MeshStandardMaterial, fluidVis.uniforms);
         } else if (meshKey === "feedwater_piping") {
-          mat = matFeedwater;
+          mat = matFeedwater.clone();
+          attachFeedwaterShader(mat as THREE.MeshStandardMaterial, fluidVis.uniforms, false);
         } else if (gName === "umb_hose_feed" || gName === "umb_hose_return") {
-          mat = matWaterHose;
+          mat = matWaterHose.clone();
+          attachFeedwaterShader(mat as THREE.MeshStandardMaterial, fluidVis.uniforms, true);
         } else if (gName === "umb_hose_fuel") {
-          mat = matSiliconeHose;
+          mat = matSiliconeHose.clone();
         } else if (INTERACTIVE_PART_META[gName]) {
           mat = baseMat.clone();
         } else if (meshKey === "displacement_lubricator") {
@@ -711,7 +717,16 @@ async function main() {
           const wMat = baseMat.clone();
           ceramicWickMats.push(wMat);
           mat = wMat;
-        } else if (meshKey === "cylinder_block_L" || meshKey === "cylinder_block_R" || meshKey === "tender_body") {
+        } else if (
+          meshKey === "cylinder_block_L" ||
+          meshKey === "cylinder_block_R" ||
+          meshKey === "tender_body" ||
+          meshKey === "tender_internals" ||
+          meshKey === "cab_backhead_plate" ||
+          meshKey === "boiler_aux_valves" ||
+          meshKey === "alcohol_burner" ||
+          meshKey === "blower_nozzle_17_3"
+        ) {
           mat = baseMat.clone();
         } else {
           mat = baseMat;
@@ -751,8 +766,22 @@ async function main() {
           copperCoreMeshes.push(mesh);
         } else if (meshKey === "displacement_lubricator") {
           lubeShellMeshes.push(mesh);
-        } else if (meshKey === "tender_body") {
+        } else if (meshKey === "tender_body" || meshKey === "tender_coal_cover") {
           tenderOuterMeshes.push(mesh);
+        } else if (
+          meshKey === "tender_internals" ||
+          meshKey === "cab_backhead_plate" ||
+          meshKey === "boiler_aux_valves" ||
+          meshKey === "alcohol_burner" ||
+          meshKey === "blower_nozzle_17_3" ||
+          meshKey === "superheater_piping" ||
+          meshKey === "exhaust_blast_pipe" ||
+          meshKey === "feedwater_piping" ||
+          gName === "umb_hose_fuel" ||
+          gName === "umb_hose_feed" ||
+          gName === "umb_hose_return"
+        ) {
+          pipeWallXrayMeshes.push(mesh);
         }
         const meta = INTERACTIVE_PART_META[gName];
         if (meta && mat instanceof THREE.MeshStandardMaterial) {
@@ -1165,6 +1194,11 @@ async function main() {
 
   const selScene = document.getElementById("select-scene") as HTMLSelectElement;
   const selCam = document.getElementById("select-cam") as HTMLSelectElement;
+  const btnFlowDir = document.getElementById("btn-flow-dir");
+  const btnPipeLabels = document.getElementById("btn-pipe-labels");
+  const pipeLabelsLayer = document.getElementById("pipe-labels-layer")!;
+  let flowDirEnabled = false;
+  let pipeLabelsEnabled = false;
 
   const setXrayMatGroup = (meshes: THREE.Mesh[], xray: boolean, alpha: number, order: number) => {
     for (const m of meshes) {
@@ -1177,14 +1211,29 @@ async function main() {
     }
   };
 
+  const syncOverlayButtons = () => {
+    btnFlowDir?.classList.toggle("active", flowDirEnabled);
+    btnPipeLabels?.classList.toggle("active", pipeLabelsEnabled);
+    if (!pipeLabelsEnabled) {
+      pipeLabelsLayer.innerHTML = "";
+    }
+  };
+
   const applyVisualMode = () => {
     const xray = selCam.value === "xray";
-    setXrayMatGroup(cylHousingMeshes, xray, 0.22, 2);
-    setXrayMatGroup(boilerOuterMeshes, xray, 0.14, 2);
-    setXrayMatGroup(insulationMeshes, xray, 0.24, 2);
-    setXrayMatGroup(copperCoreMeshes, xray, 0.34, 1);
-    setXrayMatGroup(lubeShellMeshes, xray, 0.30, 2);
-    setXrayMatGroup(tenderOuterMeshes, xray, 0.22, 2);
+    setXrayMatGroup(cylHousingMeshes, xray, 0.20, 2);
+    setXrayMatGroup(boilerOuterMeshes, xray, 0.12, 2);
+    setXrayMatGroup(insulationMeshes, xray, 0.20, 2);
+    setXrayMatGroup(copperCoreMeshes, xray, 0.30, 1);
+    setXrayMatGroup(lubeShellMeshes, xray, 0.28, 2);
+    setXrayMatGroup(tenderOuterMeshes, xray, 0.18, 2);
+    setXrayMatGroup(pipeWallXrayMeshes, xray, 0.30, 3);
+    if (xray && !pipeLabelsEnabled) {
+      pipeLabelsEnabled = true;
+    } else if (!xray && !flowDirEnabled) {
+      pipeLabelsEnabled = false;
+    }
+    syncOverlayButtons();
     if (selCam.value === "cab") {
       const lb = idxMap.locoBody;
       const lx = lb >= 0 ? data.xpos[3 * lb] : 0;
@@ -1214,6 +1263,24 @@ async function main() {
       sendWsMessage({ type: "action", name: "toggleGpuMonitor", enabled: gpuMonitorEnabled });
     });
   }
+  btnFlowDir?.addEventListener("click", () => {
+    flowDirEnabled = !flowDirEnabled;
+    if (flowDirEnabled && selCam.value === "normal") {
+      selCam.value = "xray";
+      applyVisualMode();
+    } else {
+      syncOverlayButtons();
+    }
+  });
+  btnPipeLabels?.addEventListener("click", () => {
+    pipeLabelsEnabled = !pipeLabelsEnabled;
+    if (pipeLabelsEnabled && selCam.value === "normal") {
+      selCam.value = "xray";
+      applyVisualMode();
+    } else {
+      syncOverlayButtons();
+    }
+  });
 
   selScene.addEventListener("change", () => {
     loadSimulationScene(selScene.value);
@@ -1282,7 +1349,7 @@ async function main() {
       j_cab_blowdown: 3.14 * ctrl.blowdownValve,
       j_cab_fire_door: +1.40 * ctrl.fireboxDoor,
       j_cab_bypass: -1.35 * ctrl.bypassValve,
-      j_cab_drain: ctrl.drainCock ? 0.35 : -0.35,
+      j_cab_drain: ctrl.drainCock ? -0.0038 : 0.0038,
       j_dome_lid: ctrl.domeLidOpen ? 1.15 : 0.0,
       j_safety_poppet_1: svLiftWasm,
       j_safety_poppet_2: svLiftWasm * 0.94,
@@ -1346,6 +1413,9 @@ async function main() {
       waterLevelPct: t.waterLevelPct,
       trueWaterLevelPct: t.trueWaterLevelPct,
       sightGlassLevelPct: t.sightGlassLevelPct ?? t.waterLevelPct,
+      sightGlassMeniscusZMm: t.sightGlassMeniscusZMm,
+      sightGlassVelMmS: t.sightGlassVelMmS ?? 0.0,
+      sightGlassLumenConnected: t.sightGlassLumenConnected ?? sp.sightGlassLumenConnected ?? true,
       cylWallTempC: t.cylWallTempC,
       condensateG: t.condensateG,
       smokeboxVacuumPa: t.smokeboxVacuumPa,
@@ -1577,7 +1647,9 @@ async function main() {
         currentCalib,
         xrayActive,
         ctrl.burnerLit,
-        hasTender ? tenderMat4 : null
+        hasTender ? tenderMat4 : null,
+        flowDirEnabled,
+        pipeLabelsEnabled
       );
 
       const hotRatio = Math.max(0.0, Math.min(1.0, (out.crownTempC - 240.0) / 300.0));
@@ -1749,6 +1821,37 @@ async function main() {
     }
 
     orbit.update();
+    if (pipeLabelsEnabled) {
+      const snaps = fluidVis.getPipeCallouts();
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const proj = new THREE.Vector3();
+      const occupied: [number, number][] = [];
+      let html = "";
+      for (const s of snaps) {
+        proj.copy(s.worldPos).project(camera);
+        if (proj.z < -0.98 || proj.z > 0.995) continue;
+        const sx = (proj.x * 0.5 + 0.5) * w;
+        const sy = (-proj.y * 0.5 + 0.5) * h;
+        // 避开左右 HUD 面板区域与密集标签互相遮盖
+        if (sx < 60 || sx > w - 60 || sy < 56 || sy > h - 28) continue;
+        if (sx < 405 && sy < 490) continue;
+        if (sx > w - 440 && sy > h - 410) continue;
+        let overlap = false;
+        for (const [ox, oy] of occupied) {
+          if (Math.abs(sx - ox) < 118 && Math.abs(sy - oy) < 24) {
+            overlap = true;
+            break;
+          }
+        }
+        if (overlap) continue;
+        occupied.push([sx, sy]);
+        html += `<div class="pipe-callout${s.active ? " flowing" : ""}" style="left:${sx.toFixed(1)}px;top:${sy.toFixed(1)}px;border-left-color:${s.colorCss}">` +
+          `<span class="pc-head" style="color:${s.colorCss}">${s.partNo}</span> ${s.title}` +
+          `<span class="pc-flow">${s.dirSymbol} ${s.flowText}</span></div>`;
+      }
+      pipeLabelsLayer.innerHTML = html;
+    }
     renderer.render(scene, camera);
   }
 

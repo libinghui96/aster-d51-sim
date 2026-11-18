@@ -89,6 +89,7 @@ export interface SpatialFluidState {
   pino6OpActive?: boolean;
   pino7OpActive?: boolean;
   burnerLumenConnected?: boolean;
+  sightGlassLumenConnected?: boolean;
   wickCapillaryMlS?: number;
   wickSaturation?: number;
   wickTipTempC?: number;
@@ -130,6 +131,9 @@ export interface StepOutput {
   waterLevelPct: number;
   trueWaterLevelPct: number;
   sightGlassLevelPct: number;
+  sightGlassMeniscusZMm?: number;
+  sightGlassVelMmS?: number;
+  sightGlassLumenConnected?: boolean;
   cylWallTempC: number;
   condensateG: number;
   smokeboxVacuumPa: number;
@@ -316,6 +320,9 @@ export class AsterD51Thermo1D {
   private handPumpPendingKg = 0.0;
   private pgBourdonKgf = 0.0;
   private sgMeniscusPct = 50.0;
+  private sgMeniscusZMm = 55.5;
+  private sgVelMS = 0.0;
+  private pSgTop = P_ATM;
   private lut: SmokeboxLutJson | null = null;
 
   constructor(public calib: CylinderCalibration, lut?: SmokeboxLutJson | null) {
@@ -359,6 +366,9 @@ export class AsterD51Thermo1D {
     this.handPumpPendingKg = 0.0;
     this.pgBourdonKgf = 0.0;
     this.sgMeniscusPct = 50.0;
+    this.sgMeniscusZMm = 55.5;
+    this.sgVelMS = 0.0;
+    this.pSgTop = P_ATM;
   }
 
   resetHotReady(): void {
@@ -367,6 +377,7 @@ export class AsterD51Thermo1D {
     this.T_crownC = 168.5;
     this.crownZonesC = [169.5, 169.0, 168.6, 168.2, 167.8, 167.2];
     this.P_boiler = satPressurePa(this.T_boilerC);
+    this.pSgTop = this.P_boiler;
     this.pgBourdonKgf = Math.max(0.0, (this.P_boiler - P_ATM) / PA_PER_KGF_CM2);
     this.T_superheatC = 165.0;
     this.T_shWallC = 172.0;
@@ -1003,8 +1014,50 @@ export class AsterD51Thermo1D {
     const turretPressureKgf = Math.max(0.0, pGaugeBoil - 0.06 * Math.min(2.5, mdotSteamOut * 1000.0));
     this.pgBourdonKgf += Math.min(1.0, dt / 0.12) * (turretPressureKgf - this.pgBourdonKgf);
     const appClamped = Math.max(0.0, Math.min(100.0, apparentLevelPct));
-    const sgTarget = ctrl.sightDrainValve ? Math.max(4.0, appClamped * (0.18 + 0.12 * Math.exp(-pGaugeBoil))) : appClamped;
-    this.sgMeniscusPct += Math.min(1.0, dt * 11.0) * (sgTarget - this.sgMeniscusPct);
+    // 13-6/11-7/13-10 二阶连通器液柱动量与静水压差平衡方程 (与 Python thermo_1d.py 完全同构!)
+    const zPortBot = 32.6;
+    const zBoilAtSg = Math.max(18.2, zFreeStaticMm + 68.0 * tanTh);
+    const voidAlpha = Math.min(0.042, 0.016 * (evapRateKgS * 1000.0));
+    const rhoBoil =
+      Math.max(840.0, 1000.0 - 0.085 * (this.T_boilerC - 20.0) - 0.0028 * Math.pow(this.T_boilerC - 20.0, 2)) *
+      (1.0 - voidAlpha);
+    const tSgC = 25.0 + 0.68 * Math.max(0.0, this.T_boilerC - 25.0);
+    const rhoSg = Math.max(860.0, 1000.0 - 0.085 * (tSgC - 20.0) - 0.0028 * Math.pow(tSgC - 20.0, 2));
+    const sigmaSg = Math.max(0.042, 0.0728 - 0.000165 * Math.max(0.0, tSgC - 20.0));
+    const dpCap = (2.0 * sigmaSg * 0.208) / 1.15e-3;
+    const muSg = 2.414e-5 * Math.pow(10.0, 247.8 / (tSgC + 133.15));
+    const rLin = (32.0 * muSg * 0.086) / Math.pow(1.56e-3, 2) * 2.174 + 2150.0;
+    const sgDrain = ctrl.sightDrainValve ? 1.0 : 0.0;
+    const dtSg = dt / 4.0;
+    for (let k = 0; k < 4; k++) {
+      const pSgEq = P_ATM + (this.P_boiler - P_ATM) * (1.0 / (1.0 + 0.08 * sgDrain));
+      this.pSgTop += Math.min(1.0, 3200.0 * dtSg) * (pSgEq - this.pSgTop);
+      const pBoilPort = this.P_boiler + rhoBoil * 9.81 * Math.max(0.0, zBoilAtSg - zPortBot) * 1e-3;
+      const dpDrainVent =
+        sgDrain * (0.82 * Math.max(0.0, this.P_boiler - P_ATM) + rhoBoil * 9.81 * Math.max(0.0, zBoilAtSg - 34.5) * 1e-3);
+      const pSgColBase = this.pSgTop + rhoSg * 9.81 * Math.max(0.0, this.sgMeniscusZMm - zPortBot) * 1e-3 - dpCap;
+      const dpDrive = pBoilPort - dpDrainVent - pSgColBase;
+      const accelSg = (dpDrive - rLin * this.sgVelMS - 2600.0 * Math.abs(this.sgVelMS) * this.sgVelMS) / (0.21 * rhoSg);
+      this.sgVelMS = Math.max(-1.5, Math.min(1.5, this.sgVelMS + accelSg * dtSg));
+      let nz = this.sgMeniscusZMm + this.sgVelMS * 1000.0 * dtSg;
+      if (nz <= zPortBot) {
+        nz = zPortBot;
+        if (this.sgVelMS < 0.0) this.sgVelMS = 0.0;
+      } else if (nz >= 63.2) {
+        nz = 63.2;
+        if (this.sgVelMS > 0.0) this.sgVelMS = 0.0;
+      }
+      this.sgMeniscusZMm = nz;
+    }
+    if (this.sgMeniscusZMm <= 47.0) {
+      this.sgMeniscusPct = 0.0;
+    } else if (this.sgMeniscusZMm <= 55.5) {
+      this.sgMeniscusPct = (50.0 * (this.sgMeniscusZMm - 47.0)) / 8.5;
+    } else if (this.sgMeniscusZMm <= 62.5) {
+      this.sgMeniscusPct = 50.0 + (50.0 * (this.sgMeniscusZMm - 55.5)) / 7.0;
+    } else {
+      this.sgMeniscusPct = 100.0;
+    }
     const mariotteHeadspaceKpa = ctrl.fuelCapOpen
       ? 0.0
       : Math.max(0.0, 0.789 * 9.81 * (0.032 * (this.alcoholMl / 130.0)) * 1e-3 * 1000.0);
@@ -1041,6 +1094,9 @@ export class AsterD51Thermo1D {
       waterLevelPct: appClamped,
       trueWaterLevelPct: Math.max(0.0, Math.min(100.0, trueLevelPct)),
       sightGlassLevelPct: Math.max(0.0, Math.min(100.0, this.sgMeniscusPct)),
+      sightGlassMeniscusZMm: this.sgMeniscusZMm,
+      sightGlassVelMmS: this.sgVelMS * 1000.0,
+      sightGlassLumenConnected: true,
       cylWallTempC: this.T_cylWallC,
       condensateG: this.condensateKg * 1000.0,
       smokeboxVacuumPa: smokeboxVacPa,
