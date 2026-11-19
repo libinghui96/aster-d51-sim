@@ -45,7 +45,14 @@ def main() -> None:
             manifest["meshes"].append(stl.name)
             hashes[f"meshes/{stl.name}"] = _sha256_short(dst)
 
-    for cfg_name in ("d51_mass_props.json", "d51_boiler_piping.json", "smokebox_lut.json", "auto_fireman_policy.json"):
+    for cfg_name in (
+        "d51_mass_props.json",
+        "d51_boiler_piping.json",
+        "d51_fluid_topology.json",
+        "d51_fluid_lvs_report.json",
+        "smokebox_lut.json",
+        "auto_fireman_policy.json",
+    ):
         cfg_p = Path("configs") / cfg_name
         if cfg_p.exists():
             dst = dst_models / cfg_name

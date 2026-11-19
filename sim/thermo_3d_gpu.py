@@ -243,6 +243,10 @@ class Spatial3DSnapshot:
     sight_glass_lumen_connected: bool = True
     sg_steam_lumen_cond: float = 1.0
     sg_water_lumen_cond: float = 1.0
+    fluid_lvs_verified: bool = True
+    fluid_lvs_open_edges: int = 35
+    fluid_lvs_total_edges: int = 35
+    edge_conductances: Dict[str, float] = field(default_factory=dict)
     wick_capillary_ml_s: float = 0.0
     wick_saturation: float = 0.90
     wick_tip_temp_c: float = 25.0
@@ -2176,6 +2180,10 @@ class AsterD51Thermo3DGPU:
             crown_bulge_mm=float(self.thermo_elastic.last_state.crown_bulge_mm),
             max_boiler_stress_mpa=float(self.thermo_elastic.last_state.max_boiler_stress_mpa),
             copper_yield_mpa=float(self.thermo_elastic.last_state.copper_yield_mpa),
+            fluid_lvs_verified=bool(self.core1d.fluid_lvs_verified),
+            fluid_lvs_open_edges=int(self.core1d.fluid_lvs_open_edges),
+            fluid_lvs_total_edges=int(self.core1d.fluid_lvs_total_edges),
+            edge_conductances=dict(self.core1d.edge_conds),
             gpu_monitor=self.gpu_monitor.snapshot().to_dict() if self.gpu_monitor.enabled else {},
             midplane_temp_u8=u8_slice,
         )

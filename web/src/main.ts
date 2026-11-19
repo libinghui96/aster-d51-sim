@@ -134,12 +134,21 @@ async function main() {
   const stlGeomMap = new Map<string, THREE.BufferGeometry>();
 
   let smokeboxLut: SmokeboxLutJson | null = null;
+  let lvsEdgeConds: Record<string, number> = {};
   const cfgList = manifest.configs || [];
   if (cfgList.includes("smokebox_lut.json")) {
     try {
       smokeboxLut = await (await fetch(assetUrl("smokebox_lut.json"))).json();
     } catch {
       smokeboxLut = null;
+    }
+  }
+  if (cfgList.includes("d51_fluid_lvs_report.json")) {
+    try {
+      const lvsJson = await (await fetch(assetUrl("d51_fluid_lvs_report.json"))).json();
+      lvsEdgeConds = lvsJson?.edge_conductances || {};
+    } catch {
+      lvsEdgeConds = {};
     }
   }
   const humanAgent = new HumanEngineerTS();
@@ -1622,6 +1631,9 @@ async function main() {
 
     if (out) {
       const sp = out.spatial;
+      if (!sp.edgeConductances || Object.keys(sp.edgeConductances).length === 0) {
+        sp.edgeConductances = lvsEdgeConds;
+      }
       const xrayActive = selCam.value === "xray";
       const sd = data.sensordata;
 

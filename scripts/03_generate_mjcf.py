@@ -296,7 +296,7 @@ def add_r2m_circular_track(world: ET.Element, R_center: float, y_gauge_half: flo
     rail_half_w = 0.0008
     r_outer_rail = R_center + (y_gauge_half + rail_half_w)
     r_inner_rail = R_center - (y_gauge_half + rail_half_w)
-    n_rail_seg = max(n_seg, 216)
+    n_rail_seg = max(n_seg, 432)
     dphi = (2.0 * math.pi) / n_rail_seg
     z_rail_axis = 0.004 - rail_half_w
 
@@ -315,7 +315,7 @@ def add_r2m_circular_track(world: ET.Element, R_center: float, y_gauge_half: flo
                 size=f"{rail_half_w:.6f}",
                 contype="1", conaffinity="2", friction="0.46 0.002 0.0001", rgba="0.70 0.72 0.75 1"
             )
-        if i % 2 == 0:
+        if i % 4 == 0:
             sx, sy = R_center * math.cos(phi_mid), -R_center + R_center * math.sin(phi_mid)
             ET.SubElement(
                 track_root, "geom", name=f"sleeper_r2m_{i:03d}", type="box",
@@ -345,12 +345,15 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
 
     mj = ET.Element("mujoco", model="aster_d51_consist")
     ET.SubElement(mj, "compiler", angle="radian", autolimits="true", meshdir="meshes")
-    ET.SubElement(mj, "option", timestep="0.0005", integrator="implicitfast", gravity="0 0 -9.81")
+    ET.SubElement(
+        mj, "option", timestep="0.0005", integrator="implicitfast",
+        iterations="100", tolerance="1e-11", gravity="0 0 -9.81"
+    )
 
     default = ET.SubElement(mj, "default")
     ET.SubElement(default, "geom", condim="3", solref="0.0015 1.0", solimp="0.95 0.99 0.0001")
     ET.SubElement(default, "joint", solreflimit="0.002 1.0", solimplimit="0.98 0.995 0.0001")
-    ET.SubElement(default, "equality", solref="0.00045 1.0", solimp="0.997 0.9997 0.000002")
+    ET.SubElement(default, "equality", solref="0.0010 1.0", solimp="0.9992 0.9999 0.00002")
 
     mesh_dir = Path("models/meshes")
     asset = ET.SubElement(mj, "asset")
@@ -505,12 +508,12 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     for s_tag, sgn_f in [("L", +1.0), ("R", -1.0)]:
         ET.SubElement(
             frame, "geom", name=f"main_chassis_{s_tag}", type="box",
-            pos=f"0.056 {sgn_f * 0.0135:.6f} 0.004", size="0.122 0.00175 0.008",
+            pos=f"0.056 {sgn_f * 0.0135:.6f} 0.0022", size="0.122 0.00175 0.008",
             material="mat_black_iron", rgba="0.12 0.12 0.14 1", mass="0", contype="0", conaffinity="0"
         )
         ET.SubElement(
             frame, "geom", name=f"rear_chassis_{s_tag}", type="box",
-            pos=f"-0.103 {sgn_f * 0.0135:.6f} 0.0092", size="0.043 0.00175 0.0040",
+            pos=f"-0.088 {sgn_f * 0.0135:.6f} 0.0092", size="0.028 0.00175 0.0040",
             material="mat_black_iron", rgba="0.12 0.12 0.14 1", mass="0", contype="0", conaffinity="0"
         )
         ET.SubElement(
@@ -664,7 +667,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         ET.SubElement(
             abox, "joint", name=f"j_susp_z{idx}", type="slide", axis="0 0 1",
             springref="-0.0017" if on_rails else "0",
-            limited="true", range="-0.0035 0.0035", stiffness="950", damping="14"
+            limited="true", range="-0.0035 0.0035", stiffness="950", damping="12"
         )
         ET.SubElement(
             abox, "joint", name=f"j_lat_y{idx}", type="slide", axis="0 1 0",
@@ -1044,7 +1047,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     )
 
     # 11-3 纵向 11-15 左侧面前口 11-1 汽笛阀底部 (-117.6, +15.2, +62.2mm) XZ 纵向平面朝后 (-X) 上凹三孔扳机拨柄 (イラスト 11 & p45)
-    whi_lev = ET.SubElement(frame, "body", name="cab_whistle_lever", pos="-0.117600 0.020200 0.062200")
+    whi_lev = ET.SubElement(frame, "body", name="cab_whistle_lever", pos="-0.119900 0.020200 0.062200")
     attach_part_inertial(whi_lev, parts_mp["cab_whistle_lever"])
     ET.SubElement(
         whi_lev, "joint", name="j_cab_whistle", type="hinge", axis="0 -1 0",
@@ -1601,7 +1604,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         ET.SubElement(
             equality, "connect", name="loop_tender_handpump",
             site1="s_hp_lever_bot", site2="s_hp_ram_pin",
-            solref="0.0015 1.0", solimp="0.995 0.9995 0.00005"
+            solref="0.00045 1.0", solimp="0.997 0.9997 0.000002"
         )
 
         drn_plg = ET.SubElement(tender, "body", name="tender_drain_plug", pos="-0.041000 -0.010300 0.015200")

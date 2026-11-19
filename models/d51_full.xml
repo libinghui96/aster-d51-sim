@@ -1,11 +1,11 @@
 <?xml version="1.0" ?>
 <mujoco model="aster_d51_consist">
   <compiler angle="radian" autolimits="true" meshdir="meshes"/>
-  <option timestep="0.0005" integrator="implicitfast" gravity="0 0 -9.81"/>
+  <option timestep="0.0005" integrator="implicitfast" iterations="100" tolerance="1e-11" gravity="0 0 -9.81"/>
   <default>
     <geom condim="3" solref="0.0015 1.0" solimp="0.95 0.99 0.0001"/>
     <joint solreflimit="0.002 1.0" solimplimit="0.98 0.995 0.0001"/>
-    <equality solref="0.00045 1.0" solimp="0.997 0.9997 0.000002"/>
+    <equality solref="0.0010 1.0" solimp="0.9992 0.9999 0.00002"/>
   </default>
   <asset>
     <mesh name="m_driving_wheel_L" file="driving_wheel_L.stl" scale="0.001 0.001 0.001"/>
@@ -127,12 +127,12 @@
     <light pos="0 -1.5 2.2" dir="0 0.4 -0.9" diffuse="0.92 0.92 0.92"/>
     <geom name="ground" type="plane" size="6.5 6.5 0.05" rgba="0.16 0.18 0.20 1" contype="0" conaffinity="0" friction="0.88 0.010 0.002"/>
     <body name="loco_frame" pos="0.000000 0.000000 0.041900">
-      <inertial pos="0.032408 0.000065 0.037204" mass="3.441878" fullinertia="3.632377843e-03 3.362328972e-02 3.265514453e-02 1.857489220e-05 1.952037257e-03 7.952924519e-06"/>
-      <geom name="main_chassis_L" type="box" pos="0.056 0.013500 0.004" size="0.122 0.00175 0.008" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
-      <geom name="rear_chassis_L" type="box" pos="-0.103 0.013500 0.0092" size="0.043 0.00175 0.0040" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
+      <inertial pos="0.031632 0.000064 0.037259" mass="3.448463" fullinertia="3.621566383e-03 3.380367751e-02 3.284394704e-02 1.828766608e-05 1.929279910e-03 7.424710277e-06"/>
+      <geom name="main_chassis_L" type="box" pos="0.056 0.013500 0.0022" size="0.122 0.00175 0.008" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
+      <geom name="rear_chassis_L" type="box" pos="-0.088 0.013500 0.0092" size="0.028 0.00175 0.0040" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="motion_bracket_vis_L" type="mesh" mesh="m_motion_bracket_L" material="mat_black_iron" pos="0.046500 0.036000 0.015500" mass="0" contype="0" conaffinity="0"/>
-      <geom name="main_chassis_R" type="box" pos="0.056 -0.013500 0.004" size="0.122 0.00175 0.008" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
-      <geom name="rear_chassis_R" type="box" pos="-0.103 -0.013500 0.0092" size="0.043 0.00175 0.0040" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
+      <geom name="main_chassis_R" type="box" pos="0.056 -0.013500 0.0022" size="0.122 0.00175 0.008" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
+      <geom name="rear_chassis_R" type="box" pos="-0.088 -0.013500 0.0092" size="0.028 0.00175 0.0040" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="motion_bracket_vis_R" type="mesh" mesh="m_motion_bracket_R" material="mat_black_iron" pos="0.046500 -0.036000 0.015500" mass="0" contype="0" conaffinity="0"/>
       <geom name="loco_rear_dragbox" type="box" pos="-0.144000 0.000000 -0.002900" size="0.006200 0.015000 0.001600" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="loco_drawbar_pin_vis" type="cylinder" fromto="-0.146000 0.000000 -0.009200  -0.146000 0.000000 -0.001200" size="0.001800" material="mat_brass" rgba="0.82 0.62 0.24 1" mass="0" contype="0" conaffinity="0"/>
@@ -159,7 +159,7 @@
       <geom name="boiler_Super_vis" type="mesh" mesh="m_boiler_superstructure" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <body name="axlebox_1" pos="0.093000 0 0">
         <inertial pos="0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 4.120193964e-21 -1.750421357e-25 -9.044771781e-22"/>
-        <joint name="j_susp_z1" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="950" damping="14"/>
+        <joint name="j_susp_z1" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="950" damping="12"/>
         <joint name="j_lat_y1" type="slide" axis="0 1 0" limited="true" range="-0.001200 0.001200" stiffness="85" damping="3.5"/>
         <geom name="abox_vis_1_L" type="mesh" mesh="m_driving_axlebox_L" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
         <geom name="abox_vis_1_R" type="mesh" mesh="m_driving_axlebox_R" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
@@ -183,7 +183,7 @@
       </body>
       <body name="axlebox_2" pos="0.046500 0 0">
         <inertial pos="0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 4.120193964e-21 -1.750421357e-25 -9.044771781e-22"/>
-        <joint name="j_susp_z2" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="950" damping="14"/>
+        <joint name="j_susp_z2" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="950" damping="12"/>
         <joint name="j_lat_y2" type="slide" axis="0 1 0" limited="true" range="-0.000300 0.000300" stiffness="85" damping="3.5"/>
         <geom name="abox_vis_2_L" type="mesh" mesh="m_driving_axlebox_L" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
         <geom name="abox_vis_2_R" type="mesh" mesh="m_driving_axlebox_R" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
@@ -207,7 +207,7 @@
       </body>
       <body name="axlebox_3" pos="0.000000 0 0">
         <inertial pos="0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 4.120193964e-21 -1.750421357e-25 -9.044771781e-22"/>
-        <joint name="j_susp_z3" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="950" damping="14"/>
+        <joint name="j_susp_z3" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="950" damping="12"/>
         <joint name="j_lat_y3" type="slide" axis="0 1 0" limited="true" range="-0.000200 0.000200" stiffness="85" damping="3.5"/>
         <geom name="abox_vis_3_L" type="mesh" mesh="m_driving_axlebox_L" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
         <geom name="abox_vis_3_R" type="mesh" mesh="m_driving_axlebox_R" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
@@ -328,7 +328,7 @@
       </body>
       <body name="axlebox_4" pos="-0.046500 0 0">
         <inertial pos="0.000000 -0.000000 0.000639" mass="0.009567" fullinertia="2.613988201e-06 2.754963310e-07 2.597094078e-06 4.120193964e-21 -1.750421357e-25 -9.044771781e-22"/>
-        <joint name="j_susp_z4" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="950" damping="14"/>
+        <joint name="j_susp_z4" type="slide" axis="0 0 1" springref="0" limited="true" range="-0.0035 0.0035" stiffness="950" damping="12"/>
         <joint name="j_lat_y4" type="slide" axis="0 1 0" limited="true" range="-0.000400 0.000400" stiffness="85" damping="3.5"/>
         <geom name="abox_vis_4_L" type="mesh" mesh="m_driving_axlebox_L" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
         <geom name="abox_vis_4_R" type="mesh" mesh="m_driving_axlebox_R" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
@@ -490,7 +490,7 @@
         <joint name="j_cab_blower" type="hinge" axis="1 0 0" limited="true" range="-6.28 6.28" damping="0.001"/>
         <geom name="cab_blower_vis" type="mesh" mesh="m_cab_blower_wheel" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       </body>
-      <body name="cab_whistle_lever" pos="-0.117600 0.020200 0.062200">
+      <body name="cab_whistle_lever" pos="-0.119900 0.020200 0.062200">
         <inertial pos="-0.003521 -0.000000 -0.001528" mass="0.000249" fullinertia="1.000000000e-09 3.986221371e-09 3.470912428e-09 -8.499185847e-25 -1.037378631e-09 6.254278069e-26"/>
         <joint name="j_cab_whistle" type="hinge" axis="0 -1 0" limited="true" range="0.0 0.42" stiffness="0.04" damping="0.002"/>
         <geom name="cab_whistle_vis" type="mesh" mesh="m_cab_whistle_lever" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
@@ -545,7 +545,7 @@
       <geom name="piston_tail_sheath_vis_L" type="mesh" mesh="m_piston_tail_sheath_L" material="mat_black_iron" pos="0.126000 0.032500 0.000000" mass="0" contype="0" conaffinity="0"/>
       <geom name="valve_spindle_sheath_vis_L" type="mesh" mesh="m_valve_spindle_sheath_L" material="mat_black_iron" pos="0.126000 0.032500 0.000000" mass="0" contype="0" conaffinity="0"/>
       <body name="piston_crosshead_L" pos="0.102000 0.032500 0.000000">
-        <inertial pos="0.025216 0.000141 0.000432" mass="0.009754" fullinertia="2.057960835e-07 2.940049213e-06 2.887593300e-06 3.539626828e-08 1.207136233e-07 5.693752383e-09"/>
+        <inertial pos="0.026008 0.000133 0.000405" mass="0.010387" fullinertia="2.381128741e-07 3.057328217e-06 3.004773379e-06 3.648961743e-08 1.240485099e-07 5.657414037e-09"/>
         <joint name="j_piston_L" type="slide" axis="1 0 0" limited="true" range="-0.022000 0.002000" damping="0.35" frictionloss="0.12"/>
         <geom name="piston_ch_vis_L" type="mesh" mesh="m_piston_crosshead_L" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
         <site name="s_crosshead_pin_L" pos="0 0 0"/>
@@ -563,7 +563,7 @@
         </body>
       </body>
       <body name="slide_valve_L" pos="0.109574 0.036000 0.018500">
-        <inertial pos="0.017577 -0.000000 -0.000702" mass="0.003484" fullinertia="1.955573511e-08 1.407718066e-07 1.446432696e-07 -1.060680430e-11 5.190398318e-09 4.233973391e-13"/>
+        <inertial pos="0.017564 -0.000000 -0.000731" mass="0.003464" fullinertia="2.021044298e-08 1.425599566e-07 1.461120271e-07 -1.059904705e-11 5.409519082e-09 4.412717185e-13"/>
         <joint name="j_valve_L" type="slide" axis="1 0 0" limited="true" range="-0.008 0.008" damping="0.12" frictionloss="0.04"/>
         <geom name="valve_vis_L" type="mesh" mesh="m_slide_valve_L" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
         <site name="s_valve_clevis_L" pos="0 0 0"/>
@@ -591,7 +591,7 @@
       <geom name="piston_tail_sheath_vis_R" type="mesh" mesh="m_piston_tail_sheath_R" material="mat_black_iron" pos="0.126000 -0.032500 0.000000" mass="0" contype="0" conaffinity="0"/>
       <geom name="valve_spindle_sheath_vis_R" type="mesh" mesh="m_valve_spindle_sheath_R" material="mat_black_iron" pos="0.126000 -0.032500 0.000000" mass="0" contype="0" conaffinity="0"/>
       <body name="piston_crosshead_R" pos="0.091455 -0.032500 0.000000">
-        <inertial pos="0.025216 -0.000141 0.000432" mass="0.009754" fullinertia="2.057960835e-07 2.940049213e-06 2.887593300e-06 -3.539626828e-08 1.207136233e-07 -5.693752383e-09"/>
+        <inertial pos="0.026008 -0.000133 0.000405" mass="0.010387" fullinertia="2.381128741e-07 3.057328217e-06 3.004773379e-06 -3.648961743e-08 1.240485099e-07 -5.657414037e-09"/>
         <joint name="j_piston_R" type="slide" axis="1 0 0" limited="true" range="-0.011455 0.012545" damping="0.35" frictionloss="0.12"/>
         <geom name="piston_ch_vis_R" type="mesh" mesh="m_piston_crosshead_R" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
         <site name="s_crosshead_pin_R" pos="0 0 0"/>
@@ -609,7 +609,7 @@
         </body>
       </body>
       <body name="slide_valve_R" pos="0.111039 -0.036000 0.018500">
-        <inertial pos="0.017577 0.000000 -0.000702" mass="0.003484" fullinertia="1.955573511e-08 1.407718066e-07 1.446432696e-07 1.060680430e-11 5.190398318e-09 -4.233973391e-13"/>
+        <inertial pos="0.017564 0.000000 -0.000731" mass="0.003464" fullinertia="2.021044298e-08 1.425599566e-07 1.461120271e-07 1.059904705e-11 5.409519082e-09 -4.412717185e-13"/>
         <joint name="j_valve_R" type="slide" axis="1 0 0" limited="true" range="-0.008 0.008" damping="0.12" frictionloss="0.04"/>
         <geom name="valve_vis_R" type="mesh" mesh="m_slide_valve_R" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
         <site name="s_valve_clevis_R" pos="0 0 0"/>
@@ -644,7 +644,7 @@
       </body>
     </body>
     <body name="tender_body" pos="-0.282000 0.000000 0.037800" euler="0 0 0.000000">
-      <inertial pos="-0.003546 0.000130 0.031398" mass="1.680529" fullinertia="1.860079103e-03 7.269387390e-03 7.819358331e-03 1.917477441e-05 -1.140412086e-04 -1.777813479e-06"/>
+      <inertial pos="-0.004069 0.000131 0.031575" mass="1.664879" fullinertia="1.851460457e-03 7.195123206e-03 7.748121912e-03 1.906068816e-05 -1.319609920e-04 -1.739151135e-06"/>
       <site name="s_tender_front_pin" pos="0.102000 0 -0.001900"/>
       <geom name="tender_internals_vis" type="mesh" mesh="m_tender_internals" material="mat_brass" contype="0" conaffinity="0" mass="0"/>
       <geom name="tender_body_vis" type="mesh" mesh="m_tender_body" material="mat_black_iron" contype="0" conaffinity="0" mass="0"/>
@@ -763,7 +763,7 @@
     <connect name="loop_eccentric_R" site1="s_ecc_front_R" site2="s_exp_tail_R"/>
     <connect name="loop_radius_R" site1="s_rad_front_R" site2="s_comb_radius_R"/>
     <connect name="loop_reverser_R" site1="s_lift_bot_R" site2="s_rad_lift_R"/>
-    <connect name="loop_tender_handpump" site1="s_hp_lever_bot" site2="s_hp_ram_pin" solref="0.0015 1.0" solimp="0.995 0.9995 0.00005"/>
+    <connect name="loop_tender_handpump" site1="s_hp_lever_bot" site2="s_hp_ram_pin" solref="0.00045 1.0" solimp="0.997 0.9997 0.000002"/>
   </equality>
   <tendon>
     <fixed name="tendon_eq_front" stiffness="1650" damping="22" springlength="0">

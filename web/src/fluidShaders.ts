@@ -1266,10 +1266,10 @@ export class FluidPartVisualizer {
       {
         id: "loco_6_5_6_6_deliv",
         partNo: "6-5→6-6→4-17",
-        title: "軸動ポンプ双球室→吐出管→バイパス弁",
+        title: "軸動ポンプ双球室→車架内側吐出管(Y=-8.2)→バイパス弁",
         zone: "underframe",
         frame: "loco",
-        ptsMm: [[-38.8, 0.0, -6.2], [-38.8, 0.0, 9.6], [-38.8, -3.5, 13.5], [-85.0, -3.5, 14.3], [-128.0, -3.5, 15.0], [-135.5, -3.5, 15.0]],
+        ptsMm: [[-38.8, 0.0, -6.2], [-38.8, 0.0, 9.6], [-38.8, -8.2, 13.8], [-85.0, -8.2, 14.3], [-128.0, -8.2, 14.8], [-135.5, -5.5, 15.0]],
         radiusMm: 0.78,
         arrows: 5,
         labelT: 0.42,
@@ -1714,7 +1714,7 @@ export class FluidPartVisualizer {
         title: "シリンダ底ばねポペット二相フラッシュドレン弁",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[130.8, -30.3, -6.2], [130.8, -30.3, -15.5]],
+        ptsMm: [[130.8, -30.8, -6.2], [130.8, -30.8, -15.5]],
         radiusMm: 0.65,
         arrows: 2,
         labelT: 0.60,
@@ -2203,14 +2203,17 @@ export class FluidPartVisualizer {
       }
 
       const st = pr.evalFlow(out, sp);
-      const absRate = Math.abs(st.signedRate);
-      const signDir = st.signedRate >= 0 ? 1.0 : -1.0;
+      const lvsG = sp.edgeConductances?.[pr.id] ?? 1.0;
+      const lvsOpen = lvsG > 0.02;
+      const effSigned = lvsOpen ? st.signedRate : 0.0;
+      const absRate = Math.abs(effSigned);
+      const signDir = effSigned >= 0 ? 1.0 : -1.0;
       const isFlowing = absRate > 0.0025;
       const speed = isFlowing ? signDir * (2.6 + Math.min(18.0, absRate * 14.0)) : 0.0;
       pr.phase = (pr.phase + dt * speed) % 628.318;
 
       pr.mat.uniforms.uPhase.value = pr.phase;
-      pr.mat.uniforms.uFill.value = st.fill;
+      pr.mat.uniforms.uFill.value = lvsOpen ? st.fill : 0.08;
       pr.mat.uniforms.uActive.value = isFlowing ? Math.min(1.0, 0.38 + absRate * 2.5) : 0.0;
       if (st.colOverride) {
         pr.mat.uniforms.uColB.value.setRGB(st.colOverride[0], st.colOverride[1], st.colOverride[2]);
@@ -2252,9 +2255,10 @@ export class FluidPartVisualizer {
         } else if (pr.frame === "tender" && tenderMatrix) {
           wp.applyMatrix4(tenderMatrix);
         }
-        const dirSymbol = !isFlowing ? "⏸" : signDir > 0 ? "→" : "←";
-        const valStr =
-          st.unit === "給気" || st.unit === "排気"
+        const dirSymbol = !lvsOpen ? "⛔" : !isFlowing ? "⏸" : signDir > 0 ? "→" : "←";
+        const valStr = !lvsOpen
+          ? "LVS断流"
+          : st.unit === "給気" || st.unit === "排気"
             ? `${st.unit} ${(absRate * 100).toFixed(0)}%`
             : `${absRate.toFixed(2)} ${st.unit}`;
         this.calloutSnapshots.push({

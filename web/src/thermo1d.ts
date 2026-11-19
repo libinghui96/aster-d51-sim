@@ -90,6 +90,10 @@ export interface SpatialFluidState {
   pino7OpActive?: boolean;
   burnerLumenConnected?: boolean;
   sightGlassLumenConnected?: boolean;
+  fluidLvsVerified?: boolean;
+  fluidLvsOpenEdges?: number;
+  fluidLvsTotalEdges?: number;
+  edgeConductances?: Record<string, number>;
   wickCapillaryMlS?: number;
   wickSaturation?: number;
   wickTipTempC?: number;

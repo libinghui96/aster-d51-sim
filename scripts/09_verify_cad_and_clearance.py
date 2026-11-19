@@ -3383,8 +3383,8 @@ def verify_gate_23(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     pump_rear_solid = _pt_inside_stl(fw_tris, (-42.3, 0.0, 0.0))
     pump_top_blind = _pt_inside_stl(fw_tris, (-38.8, 0.0, +11.2))
     pump_bot_blind = _pt_inside_stl(fw_tris, (-38.8, 0.0, -8.4))
-    pipe_6_6_lumen_open = not _pt_inside_stl(fw_tris, (-83.4, -3.5, 14.25))
-    pipe_6_6_wall_solid = _pt_inside_stl(fw_tris, (-83.4, -3.5, 14.25 + 0.95))
+    pipe_6_6_lumen_open = not _pt_inside_stl(fw_tris, (-83.4, -8.2, 14.30))
+    pipe_6_6_wall_solid = _pt_inside_stl(fw_tris, (-83.4, -8.2, 14.30 + 0.95))
 
     if not (
         len(mp) >= 104
@@ -3836,6 +3836,164 @@ def verify_gate_24(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     return ok, msgs
 
 
+def verify_gate_25() -> Tuple[bool, List[str]]:
+    """
+    Gate 25: 全车流体拓扑网表 (7 子网 / 28 节点 / 35 管道) 与三维体素 Fluid-LVS 门禁:
+      25.1 configs/d51_fluid_topology.json 与 Web fluidShaders.ts 35 路管道 ID 1:1 严格同构 (零漏检死角)；
+      25.2 直线轨道 (d51_track.xml) 与最小曲线 (d51_r2m.xml) 双姿态三维体素 Fluid-LVS 核验:
+           - Zero-Open: 35/35 管道在管壁内侧套筒 (r_sleeve < r_od) 6-邻域漫水 100% 端到端贯通；
+           - Zero-Necking: 35/35 管道沿程最小过流水力直径 >= 规格下限；
+           - Zero-Missing-Wall: 35/35 管道外周真实金属/橡胶管壁包裹率达标；
+           - Zero-Short: 8/8 互斥腔室对 (煤水车醇/水箱、锅炉燃气/汽水腔、左右活塞前后腔、中立滑阀进/排汽腔、6-5盲底、4-17盲端) 零体素串腔；
+           - Dynamic Valve Topology: 8/8 可动阀态 (1-6 滑阀中立遮断与前后排气拱桥、31-11 水槽栓闭/开、28-6 安全阀着座/突跳) 100% 符合物理真值；
+      25.3 零 if 物理耦合防呆核验: 注入管道堵塞 (G_edge -> 0) 时对应主蒸汽/供醇/旁通回水流量由流导方程自然归零。
+    """
+    import re
+    import torch
+    from sim.fluid_topology_lvs import (
+        evaluate_dynamic_valve_lvs,
+        evaluate_pipe_edge_lvs,
+        run_full_vehicle_fluid_lvs,
+    )
+    from sim.thermo_1d import AsterD51Thermo1D, CabControls
+
+    ok = True
+    msgs: List[str] = []
+
+    topo_p = PROJECT_ROOT / "configs" / "d51_fluid_topology.json"
+    rep_p = PROJECT_ROOT / "configs" / "d51_fluid_lvs_report.json"
+    shader_p = PROJECT_ROOT / "web" / "src" / "fluidShaders.ts"
+    if not topo_p.exists() or not shader_p.exists():
+        return False, ["FAIL: configs/d51_fluid_topology.json or web/src/fluidShaders.ts missing"]
+
+    topo = json.loads(topo_p.read_text(encoding="utf-8"))
+    topo_ids = [str(e["id"]) for e in topo.get("edges", [])]
+    shader_src = shader_p.read_text(encoding="utf-8")
+    # 提取 fluidShaders.ts specs 数组内的全部 35 个管道 id
+    spec_sec = shader_src[shader_src.find("const specs: Spec[] = [") : shader_src.find("let nLocoArrows = 0;")]
+    web_ids = re.findall(r'id:\s*"([^"]+)"', spec_sec)
+
+    if len(topo_ids) != 35 or set(topo_ids) != set(web_ids) or len(topo.get("subnets", [])) < 7:
+        ok = False
+        msgs.append(
+            f"FAIL: Netlist/Web 35-pipe ID mismatch: topo={len(topo_ids)}, web={len(web_ids)}, "
+            f"diff={set(topo_ids) ^ set(web_ids)}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Declarative Fluid Netlist verified (7 subnets, {len(topo.get('nodes', []))} nodes, "
+            f"exact 35/35 pipe ID parity with Web X-Ray)"
+        )
+
+    has_cuda = torch.cuda.is_available()
+    if has_cuda:
+        rep_trk = run_full_vehicle_fluid_lvs(
+            PROJECT_ROOT / "models" / "d51_track.xml",
+            topo_p,
+            device=torch.device("cuda"),
+            out_report_path=rep_p,
+        )
+        rep_r2m = run_full_vehicle_fluid_lvs(
+            PROJECT_ROOT / "models" / "d51_r2m.xml",
+            topo_p,
+            device=torch.device("cuda"),
+            out_report_path=None,
+        )
+        if not rep_trk.all_passed or not rep_r2m.all_passed:
+            ok = False
+            msgs.append(
+                f"FAIL: Live GPU Fluid-LVS failed: track=({rep_trk.passed_edges}/{rep_trk.total_edges}, "
+                f"iso={rep_trk.passed_isolation_pairs}/{rep_trk.total_isolation_pairs}, "
+                f"dyn={rep_trk.passed_dynamic_tests}/{rep_trk.total_dynamic_tests}), "
+                f"r2m=({rep_r2m.passed_edges}/{rep_r2m.total_edges}, "
+                f"iso={rep_r2m.passed_isolation_pairs}/{rep_r2m.total_isolation_pairs})"
+            )
+        else:
+            msgs.append(
+                f"PASS: Live GPU 3D Fluid-LVS verified on Straight & R2m Curve: "
+                f"Edges={rep_trk.passed_edges}/35 (Open=35, NeckFree=35, Wall=35), "
+                f"Isolation={rep_trk.passed_isolation_pairs}/8, DynamicValves={rep_trk.passed_dynamic_tests}/8 "
+                f"({rep_trk.elapsed_ms:.0f}ms + {rep_r2m.elapsed_ms:.0f}ms)"
+            )
+    else:
+        # CPU-only GitHub Actions CI: 核验报告完整性 + 现场抽检跨车软管、气缸斜道与滑阀/排水栓动态通断!
+        if not rep_p.exists():
+            ok = False
+            msgs.append("FAIL: Pre-computed configs/d51_fluid_lvs_report.json missing for CPU CI")
+        else:
+            rep_raw = json.loads(rep_p.read_text(encoding="utf-8"))
+            if (
+                not rep_raw.get("all_passed", False)
+                or int(rep_raw.get("passed_edges", 0)) != 35
+                or int(rep_raw.get("passed_isolation_pairs", 0)) != 8
+            ):
+                ok = False
+                msgs.append(f"FAIL: Fluid-LVS report indicates failure: {rep_raw.get('passed_edges')}/35")
+        m_cpu = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / "models" / "d51_track.xml"))
+        d_cpu = mujoco.MjData(m_cpu)
+        dev_cpu = torch.device("cpu")
+        excl_cpu = topo.get("global_permeable_or_non_wall_geoms", [])
+        edge_map = {e["id"]: e for e in topo["edges"]}
+        dyn_map = {t["id"]: t for t in topo["dynamic_valve_tests"]}
+        r_umb = evaluate_pipe_edge_lvs(m_cpu, d_cpu, edge_map["umb_bt5_feed"], dev_cpu, excl_cpu)
+        r_cyl = evaluate_pipe_edge_lvs(m_cpu, d_cpu, edge_map["cyl_port_L_head"], dev_cpu, excl_cpu)
+        d_closed = evaluate_dynamic_valve_lvs(m_cpu, d_cpu, dyn_map["dyn_tender_drain_plug_closed"], dev_cpu, excl_cpu)
+        d_open = evaluate_dynamic_valve_lvs(m_cpu, d_cpu, dyn_map["dyn_tender_drain_plug_open"], dev_cpu, excl_cpu)
+        if not (r_umb.passed and r_cyl.passed and d_closed.passed and d_open.passed):
+            ok = False
+            msgs.append(
+                f"FAIL: CPU live Fluid-LVS spot-check failed: umb={r_umb.passed}, cyl={r_cyl.passed}, "
+                f"drain_closed={d_closed.passed}, drain_open={d_open.passed}"
+            )
+        else:
+            msgs.append(
+                "PASS: CPU CI Fluid-LVS report (35/35 edges, 8/8 isolations) + live 3D voxel umbilical/cylinder/valve checks verified"
+            )
+
+    # 25.3 物理流导耦合防呆验证: 堵塞主干汽管 13-9 / 供醇软管 ST-ø7 / 旁通回水管 4-16 必须物理断流!
+    calib = CoSimRunner(PROJECT_ROOT / "models" / "d51_full.xml", preset="hot", use_gpu_3d=False).calib
+    th_open = AsterD51Thermo1D(calib=calib)
+    th_open.reset_hot_ready()
+    th_plug = AsterD51Thermo1D(calib=calib)
+    th_plug.reset_hot_ready()
+    th_plug.sump_fuel_ml = 0.0
+    th_plug.set_edge_conductances(
+        {
+            "boil_13_9_drypipe": 0.0,
+            "tdr_36_6_mariotte": 0.0,
+            "umb_st7_fuel": 0.0,
+            "loco_4_16_byp_ret": 0.0,
+        }
+    )
+    ctrl = CabControls(regulator=0.75, reverser=0.65, burner_lit=True, fuel_valve=0.8, bypass_valve=0.95)
+    tel_o = tel_p = None
+    for k in range(120):
+        v_ram = -0.06 if (k % 16 < 8) else +0.06
+        _, _, _, tel_o = th_open.step(0.002, 0.0, 0.02, -0.002, 0.0, 0.02, 0.002, 12.0, v_ram, ctrl, k * 0.002)
+        _, _, _, tel_p = th_plug.step(0.002, 0.0, 0.02, -0.002, 0.0, 0.02, 0.002, 12.0, v_ram, ctrl, k * 0.002)
+
+    assert tel_o is not None and tel_p is not None
+    if not (
+        tel_o.steam_chest_kgf > 1.2
+        and tel_p.steam_chest_kgf < 0.02
+        and tel_o.return_water_ml_s > 0.05
+        and tel_p.return_water_ml_s < 1e-4
+        and not tel_p.fluid_lvs_verified
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Fluid-LVS physics coupling failed: open_chest={tel_o.steam_chest_kgf:.2f} vs plug={tel_p.steam_chest_kgf:.3f}, "
+            f"open_ret={tel_o.return_water_ml_s:.3f} vs plug={tel_p.return_water_ml_s:.4f}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Zero-if Fluid-LVS conductance coupling verified (plugged 13-9 chest={tel_p.steam_chest_kgf:.3f} vs {tel_o.steam_chest_kgf:.2f} kgf/cm²; "
+            f"plugged 4-16 bypass_ret={tel_p.return_water_ml_s:.4f} vs {tel_o.return_water_ml_s:.2f} ml/s)"
+        )
+
+    return ok, msgs
+
+
 # ==============================================================================
 # 主入口
 # ==============================================================================
@@ -3986,11 +4144,18 @@ def main() -> int:
         print(f"  - {m}")
     all_ok &= g24_ok
 
+    hw_guard.cooldown_if_needed()
+    g25_ok, g25_msgs = verify_gate_25()
+    print(f"\n[Gate 25] Stage 20 Full-Vehicle 35-Edge Fluid-LVS (Zero-Open, Zero-Necking, Zero-Short, Dynamic Valves & Conductance Coupling) -> {'PASS' if g25_ok else 'FAIL'}")
+    for m in g25_msgs:
+        print(f"  - {m}")
+    all_ok &= g25_ok
+
     snap = hw_guard.read_metrics()
     print(f"\n[Thermal/Power Guard] Post-run telemetry: CPU={snap['cpu_c']:.1f}°C | GPU={snap['gpu_c']:.1f}°C | GPU_Power={snap['gpu_w']:.1f}W")
     print("=" * 88)
     if all_ok:
-        print(" [ALL GATES 1-24 PASSED] STAGE 19 (FULL BLUEPRINT CAB/TRUCKS + COAXIAL PIPES + U-TUBE SIGHT GLASS + 35-PIPE X-RAY FLOW VECTORS) VERIFIED 100%")
+        print(" [ALL GATES 1-25 PASSED] STAGE 20 (FULL-VEHICLE 35-EDGE FLUID-LVS TOPOLOGY + 8-CHAMBER ISOLATION + DYNAMIC VALVE STATES) VERIFIED 100%")
         print("=" * 88)
         return 0
     else:

@@ -53,7 +53,7 @@ jobs:
           cp -r web/dist/. site/
           touch site/.nojekyll
 
-      - name: Check models are in sync with generator & run Gates 1-24 verification
+      - name: Check models are in sync with generator & run Gates 1-25 verification
         run: |
           python scripts/03_generate_mjcf.py --mode roller --out /tmp/d51_regen.xml
           diff -q /tmp/d51_regen.xml models/d51_full.xml
