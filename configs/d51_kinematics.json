@@ -24,9 +24,27 @@
       "drive_3": 0.2,
       "drive_4": 0.2
     },
-    "leading_pivot_r2m_offset": 10.0,
+    "leading_pivot_arm_mm": 56.0,
+    "front_tail_rod_20_6_r2m_outboard_mm": 3.85,
     "quartering_deg_R_minus_L": -90.0,
     "coupling_knuckle_offset": 8.5,
+    "mechanical_clearances_mm": {
+      "axle_1_hornblock_lat_half_mm": 1.20,
+      "axle_2_hornblock_lat_half_mm": 0.30,
+      "axle_3_hornblock_lat_half_mm": 0.20,
+      "axle_4_hornblock_lat_half_mm": 0.20,
+      "hornblock_fore_aft_play_mm": 0.05,
+      "main_rod_big_end_radial_play_mm": 0.04,
+      "crosshead_pin_radial_play_mm": 0.04,
+      "coupling_rod_pin_radial_play_mm": 0.06,
+      "crank_pin_axial_play_half_mm": 0.35,
+      "leading_bolster_lat_play_half_mm": 2.00,
+      "trailing_pivot_radial_play_mm": 0.08,
+      "tender_bolster_pin_play_mm": 0.15,
+      "copper_alpha_1_per_k": 1.68e-5,
+      "steel_alpha_1_per_k": 1.18e-5,
+      "brass_alpha_1_per_k": 1.92e-5
+    },
     "wheel_rail_gauge1": {
       "back_to_back_mm": 40.0,
       "flange_height_mm": 1.55,

@@ -68,7 +68,7 @@ def default_d51_kinematics() -> Dict[str, Any]:
                 "drive_3": 0.2,
                 "drive_4": 0.2,
             },
-            "leading_pivot_r2m_offset": 10.0,     # イラスト 20 (20-6): R2m 与 R3m 支点孔距 10mm
+            "leading_pivot_arm_mm": 56.0,         # イラスト 19/20 (19-6/4-10): 先导台车单固定支点距先导轮轴 X 臂长 56.0mm (X=+112.0mm)
             "quartering_deg_R_minus_L": -90.0,    # 图 9.5 (JNR D51 右先行): 极角 atan2(z,x) 下 theta_L=0°, theta_R=-90° (绕 +Y 前进正转时右曲柄超前左曲柄 90°)
             "coupling_knuckle_offset": 8.5,       # イラスト 7 (7-12/7-15): 耦合连杆分节铰接销距第2/3动轮曲柄销偏置 (mm)
         },
@@ -79,6 +79,7 @@ def default_d51_kinematics() -> Dict[str, Any]:
             "crank_radius": 10.0,                 # 主曲柄销偏心半径 10.0mm (活塞行程 Stroke = 20.0mm)
             "cylinder_center_x": 126.0,           # 气缸腔体中心 X 坐标
             "cylinder_center_y": 32.5,            # 左右气缸中心距车架中心线横向偏移 ±32.5mm
+            "front_tail_rod_20_6_r2m_outboard_mm": 3.85,  # イラスト 20 図 20.1 (20-6 尻棒2): R2m 最小回转半径时在 1-36/1-13 前缸盖外侧孔位外移 +3.85mm (|Y|=36.35mm vs R3m 同轴 |Y|=32.50mm)
             "cylinder_center_z": 0.0,             # 主活塞轴线与动轮轴等高
             "valve_axis_z": 18.5,                 # 上部平面滑阀 (1-6) 滑动轴线高度 Z
             "main_rod_length": 92.0,              # 主連棒 (7-11/7-16) 大小头孔距

@@ -244,8 +244,8 @@ class Spatial3DSnapshot:
     sg_steam_lumen_cond: float = 1.0
     sg_water_lumen_cond: float = 1.0
     fluid_lvs_verified: bool = True
-    fluid_lvs_open_edges: int = 35
-    fluid_lvs_total_edges: int = 35
+    fluid_lvs_open_edges: int = 36
+    fluid_lvs_total_edges: int = 36
     edge_conductances: Dict[str, float] = field(default_factory=dict)
     wick_capillary_ml_s: float = 0.0
     wick_saturation: float = 0.90
@@ -438,6 +438,9 @@ class AsterD51Thermo3DGPU:
         tris_val_L = load_stl_triangles_mm(mesh_dir / "slide_valve_L.stl")
         tris_pis_L = load_stl_triangles_mm(mesh_dir / "piston_crosshead_L.stl")
         tris_fw = load_stl_triangles_mm(mesh_dir / "feedwater_piping.stl")
+        tris_byp_417 = load_stl_triangles_mm(mesh_dir / "bypass_valve_4_17.stl") if (mesh_dir / "bypass_valve_4_17.stl").exists() else None
+        tris_riser_68 = load_stl_triangles_mm(mesh_dir / "boiler_riser_6_8.stl") if (mesh_dir / "boiler_riser_6_8.stl").exists() else None
+        tris_ret_416 = load_stl_triangles_mm(mesh_dir / "bypass_return_4_16.stl") if (mesh_dir / "bypass_return_4_16.stl").exists() else None
         tris_lub = load_stl_triangles_mm(mesh_dir / "displacement_lubricator.stl")
 
         # === Domain 1: 燃烧 + 火室 + 5烟管 + 烟室射流 [-116, +164] × [-36, +36] × [8, 96] mm (256×80×104) ===
@@ -577,6 +580,15 @@ class AsterD51Thermo3DGPU:
         _, nx5, ny5, nz5 = self.D5_SHAPE
         s5_lub = voxelize_stl_cuda(tris_lub, (140.0, 168.0), (-8.5, 8.5), (-1.5, 16.5), (nx5, ny5, nz5), dev)
         s5_fw = voxelize_stl_cuda(tris_fw, (-44.0, -16.0), (-11.0, 11.0), (-9.0, 14.0), (nx5, ny5, nz5), dev)
+        # 逐件体素化后取 torch.maximum 布尔真并集还原 4-17 床下横置旁通阀 + 6-8 给水立管 + 4-16 回水环眼三维壁面 (严禁重叠三角面拼接做射线奇偶计数!)
+        s5_byp_union = voxelize_stl_cuda(tris_fw, (-142.0, -130.0), (-15.0, 16.0), (7.5, 21.0), (nx5, ny5, nz5), dev)
+        for t_extra in (tris_byp_417, tris_riser_68, tris_ret_416):
+            if t_extra is not None:
+                s5_byp_union = torch.maximum(
+                    s5_byp_union,
+                    voxelize_stl_cuda(t_extra, (-142.0, -130.0), (-15.0, 16.0), (7.5, 21.0), (nx5, ny5, nz5), dev),
+                )
+        self.d5_bypass_4_17_solid = s5_byp_union
         xs5_lub = torch.linspace(140.0, 168.0, nx5, device=dev)
         ys5_lub = torch.linspace(-8.5, 8.5, ny5, device=dev)
         zs5_lub = torch.linspace(-1.5, 16.5, nz5, device=dev)

@@ -795,7 +795,7 @@
         ]
       },
       "drain_cock_knob_8_6": {
-        "side": "-Y=-19.0mm Inside Right Cab Floor (100% Horizontal Coaxial X-Slide pitch=0.0 deg! Longitudinally-Fluted Black Cylindrical Knob 8-6 @ (-140.0,-19.0,+22.2mm) -> 8-10 Twin-Ear Horizontal Guide Saddle -> Horizontal 8-5 Shaft Through 11-9 -> Outer-Firebox Step to Y=-17.8, Z=+8.5 -> 7-1~6 -> 1-19x4 -> 1-18x4 -> 1-16x4 Spring Poppet Drain Cocks)",
+        "side": "-Y=-25.0mm Above Right Cab Floor Wing wing_R (Z_top=+25.5mm! 100% Horizontal Coaxial X-Slide pitch=0.0 deg at Z=+29.4mm [Z_min=+26.2mm > +25.5mm, zero under-floor protrusion]! Longitudinally-Fluted Black Cylindrical Knob 8-6 -> 8-10 Upright Twin-Ear Guide Saddle on wing_R -> Horizontal 8-5 Shaft Through 11-9 -> Outer-Firebox Step to Y=-17.8, Z=+8.5 -> 7-1~6 -> 1-19x4 -> 1-18x4 -> 1-16x4 Spring Poppet Drain Cocks)",
         "parts": [
           "8-6",
           "8-10",
@@ -810,8 +810,8 @@
         ],
         "knob_xyz_mm": [
           -140.0,
-          -19.0,
-          22.2
+          -25.0,
+          29.4
         ]
       }
     }
@@ -1337,7 +1337,7 @@
         {
           "id": "feedwater_6_8_riser_to_backhead_clack_13_2",
           "fluid_loop": "shared_boiler_feedwater",
-          "geom_a": "feedwater_piping_vis",
+          "geom_a": "boiler_riser_6_8_vis",
           "geom_b": "boiler_aux_valves_vis",
           "roi_a_local_mm": [
             [
@@ -1349,6 +1349,60 @@
               -112.5,
               -8.0,
               46.5
+            ]
+          ]
+        },
+        {
+          "id": "feedwater_6_6_to_bypass_valve_4_17",
+          "fluid_loop": "shared_boiler_feedwater",
+          "geom_a": "feedwater_piping_vis",
+          "geom_b": "bypass_valve_4_17_vis",
+          "roi_a_local_mm": [
+            [
+              -139.0,
+              -9.5,
+              11.5
+            ],
+            [
+              -131.5,
+              -2.5,
+              18.5
+            ]
+          ]
+        },
+        {
+          "id": "boiler_riser_6_8_to_bypass_valve_4_17",
+          "fluid_loop": "shared_boiler_feedwater",
+          "geom_a": "boiler_riser_6_8_vis",
+          "geom_b": "bypass_valve_4_17_vis",
+          "roi_a_local_mm": [
+            [
+              -139.5,
+              -15.0,
+              11.5
+            ],
+            [
+              -131.0,
+              -8.5,
+              18.5
+            ]
+          ]
+        },
+        {
+          "id": "bypass_return_4_16_to_bypass_valve_4_17",
+          "fluid_loop": "axle_pump_bypass_return",
+          "geom_a": "bypass_return_4_16_vis",
+          "geom_b": "bypass_valve_4_17_vis",
+          "roi_a_local_mm": [
+            [
+              -139.5,
+              4.5,
+              8.0
+            ],
+            [
+              -131.5,
+              12.5,
+              14.5
             ]
           ]
         },
@@ -1454,7 +1508,7 @@
         {
           "id": "umbilical_return_loco_nipple_4_16_plusY",
           "fluid_loop": "axle_pump_bypass_return",
-          "geom_a": "feedwater_piping_vis",
+          "geom_a": "bypass_return_4_16_vis",
           "geom_b": "umb_hose_return",
           "roi_a_local_mm": [
             [
@@ -1611,13 +1665,13 @@
           "roi_b_local_mm": [
             [
               -145.0,
-              -24.0,
-              18.5
+              -28.5,
+              25.5
             ],
             [
-              -130.0,
-              -17.5,
-              26.0
+              -128.0,
+              -21.5,
+              33.5
             ]
           ]
         },

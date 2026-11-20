@@ -31,9 +31,45 @@ export interface PipeCalloutSnapshot {
   zone: "tender" | "umbilical" | "cab" | "boiler" | "underframe" | "cylinder";
   worldPos: THREE.Vector3;
   colorCss: string;
+  tempC: number;
   flowText: string;
   dirSymbol: string;
   active: boolean;
+}
+
+const THERMAL_STOPS: { t: number; r: number; g: number; b: number }[] = [
+  { t: 20.0, r: 0.114, g: 0.306, b: 0.847 },  // #1d4ed8 常温冷水/冷醇 (深钴蓝)
+  { t: 45.0, r: 0.024, g: 0.714, b: 0.831 },  // #06b6d4 预热回水/温醇 (青蓝)
+  { t: 80.0, r: 0.063, g: 0.725, b: 0.506 },  // #10b981 暖机汽缸油/热给水 (翠绿)
+  { t: 105.0, r: 0.918, g: 0.702, b: 0.031 }, // #eab308 常压沸水/膨胀乏汽 (明黄)
+  { t: 148.0, r: 0.961, g: 0.620, b: 0.043 }, // #f59e0b 3.8kgf饱和锅水与湿蒸汽 (金琥珀)
+  { t: 210.0, r: 0.976, g: 0.451, b: 0.086 }, // #f97316 四程过热活汽 (炽橙)
+  { t: 420.0, r: 0.937, g: 0.267, b: 0.267 }, // #ef4444 火管高温燃气/赤热顶板 (绯红)
+  { t: 750.0, r: 0.996, g: 0.941, b: 0.541 }, // #fef08a 酒精外焰核心 (白炽黄)
+];
+
+/** 全车液体、气体、蒸汽、油、酒精与管道统一温度正相关色标 (严格单调随温度 °C 升高由深蓝→青→绿→黄→琥珀→橙→红→白炽过渡) */
+export function temperatureToThermalColor(tempC: number, out?: THREE.Color): THREE.Color {
+  const c = out ?? new THREE.Color();
+  const t = Math.max(THERMAL_STOPS[0].t, Math.min(THERMAL_STOPS[THERMAL_STOPS.length - 1].t, tempC));
+  for (let i = 0; i < THERMAL_STOPS.length - 1; i++) {
+    const a = THERMAL_STOPS[i];
+    const b = THERMAL_STOPS[i + 1];
+    if (t <= b.t) {
+      const u = (t - a.t) / Math.max(1e-6, b.t - a.t);
+      return c.setRGB(a.r + (b.r - a.r) * u, a.g + (b.g - a.g) * u, a.b + (b.b - a.b) * u);
+    }
+  }
+  const last = THERMAL_STOPS[THERMAL_STOPS.length - 1];
+  return c.setRGB(last.r, last.g, last.b);
+}
+
+export function temperatureToThermalCss(tempC: number): string {
+  const c = temperatureToThermalColor(tempC);
+  const r = Math.round(Math.max(0, Math.min(1, c.r)) * 255);
+  const g = Math.round(Math.max(0, Math.min(1, c.g)) * 255);
+  const b = Math.round(Math.max(0, Math.min(1, c.b)) * 255);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
 interface InternalPipeRuntime {
@@ -53,6 +89,7 @@ interface InternalPipeRuntime {
   colorA: THREE.Color;
   colorB: THREE.Color;
   colorCss: string;
+  evalTempC: (out: StepOutput, sp: SpatialFluidState) => number;
   evalFlow: (out: StepOutput, sp: SpatialFluidState) => {
     signedRate: number; // >0 along curvepts[0]->[-1], <0 reversed!
     fill: number;       // 0..1 lumen presence
@@ -146,6 +183,7 @@ export class FluidPartVisualizer {
 
   private lubeCoreMat: THREE.ShaderMaterial;
   private lubeCoreMesh: THREE.Mesh;
+  private lubeStandpipeMesh: THREE.Mesh;
 
   private tenderWaterMesh: THREE.Mesh;
   private tenderOpenBayWaterMesh: THREE.Mesh;
@@ -797,13 +835,15 @@ export class FluidPartVisualizer {
       makePortGlow(0.1185, -0.0360), // R Crank port
     ];
 
-    // 4-2 前车架卧式置换注油器油水分层内芯 (X ∈ [0.1438, 0.1642], Y = 0, Z = 0.0062, r = 0.0050)
+    // 4-2 前车架卧式置换注油器油水分层内芯 + 内部银焊竖直溢流立管 (Roscoe Standpipe: X=+0.1462, Y=0, Z∈[-0.0006,+0.0109])
     this.lubeCoreMat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
       uniforms: {
         uWaterFrac: { value: 0.20 },
         uTime: { value: 0.0 },
+        uWaterCol: { value: new THREE.Color(0.06, 0.58, 0.76) },
+        uOilCol: { value: new THREE.Color(0.18, 0.76, 0.42) },
       },
       vertexShader: /* glsl */ `
         varying vec3 vLocal;
@@ -815,19 +855,24 @@ export class FluidPartVisualizer {
       fragmentShader: /* glsl */ `
         uniform float uWaterFrac;
         uniform float uTime;
+        uniform vec3 uWaterCol;
+        uniform vec3 uOilCol;
         varying vec3 vLocal;
         void main() {
           float r = 0.0050;
           float zRel = (vLocal.z - 0.0062) / (2.0 * r) + 0.5;
-          float split = clamp(uWaterFrac + 0.015 * sin(vLocal.x * 260.0 + uTime * 4.0), 0.0, 1.0);
-          // 下层深青色凝结沉水，上层金琥珀色高粘度汽缸油
-          vec3 waterCol = vec3(0.12, 0.72, 0.98);
-          vec3 oilCol   = vec3(0.96, 0.66, 0.10);
-          float interfaceBand = smoothstep(split - 0.04, split + 0.04, zRel);
-          vec3 col = mix(waterCol, oilCol, interfaceBand);
+          float split = clamp(uWaterFrac + 0.012 * sin(vLocal.x * 260.0 + uTime * 4.0), 0.0, 0.90);
+          float topHead = smoothstep(0.90, 0.96, zRel);
+          float interfaceBand = smoothstep(split - 0.035, split + 0.035, zRel);
+          vec3 liqCol = mix(uWaterCol, uOilCol, interfaceBand);
+          // Z > +10.9mm 顶空高温蒸汽凝结区 + 油层中按 Stokes 定律沉降的微细凝结水珠闪烁
+          float dropWave = step(0.965, fract(sin(dot(floor(vec2(vLocal.x * 1600.0, (vLocal.z + uTime * 0.0025) * 1800.0)), vec2(12.9898, 78.233))) * 43758.5453));
+          liqCol = mix(liqCol, uWaterCol + vec3(0.25), dropWave * interfaceBand * (1.0 - topHead) * 0.65);
+          vec3 steamCapCol = vec3(0.98, 0.68, 0.16);
+          vec3 col = mix(liqCol, steamCapCol, topHead);
           float men = 1.0 - abs(interfaceBand * 2.0 - 1.0);
-          col += vec3(0.35, 0.40, 0.42) * men * 0.6;
-          gl_FragColor = vec4(col, 0.84);
+          col += vec3(0.32, 0.36, 0.38) * men * 0.55;
+          gl_FragColor = vec4(col, mix(0.84, 0.52, topHead));
         }
       `,
     });
@@ -838,6 +883,24 @@ export class FluidPartVisualizer {
     this.lubeCoreMesh.renderOrder = 3;
     this.lubeCoreMesh.visible = false;
     this.root.add(this.lubeCoreMesh);
+
+    // 4-2 内部银焊竖直溢流立管 (自 -Z 底孔 Z=-0.6mm 直通油箱顶部 Z=+10.9mm: 物理隔离罐底沉水、收集顶层浮油!)
+    const spGeom = new THREE.CylinderGeometry(0.00105, 0.00105, 0.0115, 16, 1, true);
+    spGeom.rotateX(Math.PI * 0.5);
+    spGeom.translate(0.1462, 0.0, 0.00515);
+    this.lubeStandpipeMesh = new THREE.Mesh(
+      spGeom,
+      new THREE.MeshBasicMaterial({
+        color: 0xfbbf24,
+        transparent: true,
+        opacity: 0.92,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      })
+    );
+    this.lubeStandpipeMesh.renderOrder = 5;
+    this.lubeStandpipeMesh.visible = false;
+    this.root.add(this.lubeStandpipeMesh);
 
     // -----------------------------------------------------------------------
     // 5. P3 煤水车 (Tender) 31-10 后置独立水箱 + 35-1 敞口湾 Domain 6 浅水波纹面 + 36-4 前置上法兰吊挂酒精箱
@@ -1069,21 +1132,22 @@ export class FluidPartVisualizer {
       },
       {
         id: "tdr_31_5_31_13_hp",
-        partNo: "31-5→31-13",
-        title: "手動給水ポンプ＋SB-ø4×2止回塔→吐出管",
+        partNo: "31-6→31-5→31-13",
+        title: "炭水車給水吸込・手動ポンプ共用塔 (SB-ø4×2)→吐出管",
         zone: "tender",
         frame: "tender",
-        ptsMm: [[-56.0, 4.0, 21.7], [-69.5, 4.0, 21.7], [-69.5, 4.0, 35.7], [-69.5, -21.3, 35.7], [-16.4, -21.3, 35.7], [-16.4, -21.3, 18.2]],
+        ptsMm: [[-56.0, 4.0, 17.5], [-69.5, 4.0, 17.5], [-69.5, 4.0, 35.7], [-69.5, -21.3, 35.7], [-16.4, -21.3, 35.7], [-16.4, -21.3, 18.2]],
         radiusMm: 0.95,
         arrows: 5,
         labelT: 0.46,
-        colHexA: 0x0b6bcb,
-        colHexB: 0x5eead4,
-        css: "#38bdf8",
-        evalFlow: (out) => {
-          const hp = out.tenderWaterMl > 0.5 ? Math.max(0.0, out.feedwaterGS - Math.abs(out.wheelRpm) * 0.008) * 0.6 : 0.0;
-          return { signedRate: hp, fill: out.tenderWaterMl > 0.5 ? 0.85 : 0.0, unit: "ml/s" };
-        },
+        colHexA: 0x1d4ed8,
+        colHexB: 0x06b6d4,
+        css: "#06b6d4",
+        evalFlow: (out) => ({
+          signedRate: out.tenderWaterMl > 0.3 ? out.feedwaterGS + out.returnWaterMlS : 0.0,
+          fill: out.tenderWaterMl > 0.3 ? 0.90 : 0.0,
+          unit: "ml/s",
+        }),
       },
       {
         id: "tdr_34_6_feed_R",
@@ -1091,13 +1155,13 @@ export class FluidPartVisualizer {
         title: "炭水車床下給水本管 (吸込/圧送共用)",
         zone: "tender",
         frame: "tender",
-        ptsMm: [[-36.0, -21.3, 21.0], [-16.4, -21.3, 18.2], [-16.4, -21.3, 16.2], [45.0, -21.3, 16.2], [102.2, -21.3, 16.2], [103.8, -21.3, -5.1], [109.5, -21.3, -5.1]],
+        ptsMm: [[-16.4, -21.3, 18.2], [-16.4, -21.3, 16.2], [45.0, -21.3, 16.2], [102.2, -21.3, 16.2], [103.8, -21.3, -5.1], [109.5, -21.3, -5.1]],
         radiusMm: 0.95,
         arrows: 5,
         labelT: 0.52,
-        colHexA: 0x0969da,
-        colHexB: 0x4cc9f0,
-        css: "#38bdf8",
+        colHexA: 0x1d4ed8,
+        colHexB: 0x06b6d4,
+        css: "#06b6d4",
         evalFlow: (out) => ({
           signedRate: out.tenderWaterMl > 0.3 ? out.feedwaterGS + out.returnWaterMlS : 0.0,
           fill: out.tenderWaterMl > 0.3 ? 0.90 : 0.0,
@@ -1284,11 +1348,11 @@ export class FluidPartVisualizer {
       },
       {
         id: "loco_6_8_13_2_riser",
-        partNo: "6-8→13-2",
-        title: "ボイラ給水立管→中位逆止弁(SB-ø3)",
+        partNo: "4-17→6-8→13-2",
+        title: "バイパス弁4-17→給水立管6-8→中位逆止弁(SB-ø3)",
         zone: "cab",
         frame: "loco",
-        ptsMm: [[-135.5, -11.4, 15.0], [-115.8, -11.8, 16.2], [-115.8, -11.8, 47.5], [-109.2, -11.8, 47.5]],
+        ptsMm: [[-135.5, -11.4, 15.0], [-131.5, -11.4, 15.0], [-115.8, -11.8, 16.2], [-115.8, -11.8, 47.5], [-109.2, -11.8, 47.5]],
         radiusMm: 0.78,
         arrows: 3,
         labelT: 0.62,
@@ -1304,10 +1368,10 @@ export class FluidPartVisualizer {
       {
         id: "loco_4_16_byp_ret",
         partNo: "4-17→4-16",
-        title: "バイパス分流戻し管 (左後梁+Y)",
+        title: "バイパス弁4-17下口バンジョー→4-16戻し管(左+Y)",
         zone: "cab",
         frame: "loco",
-        ptsMm: [[-135.5, 10.0, 13.8], [-141.0, 19.2, 5.5], [-144.5, 19.2, -8.5], [-150.8, 19.2, -8.5]],
+        ptsMm: [[-135.5, 8.5, 15.0], [-135.5, 8.5, 11.2], [-138.2, 13.7, 11.2], [-141.5, 19.2, 6.2], [-144.5, 19.2, -8.5], [-150.8, 19.2, -8.5]],
         radiusMm: 0.78,
         arrows: 3,
         labelT: 0.50,
@@ -1323,16 +1387,16 @@ export class FluidPartVisualizer {
       {
         id: "loco_4_2_lub_oil",
         partNo: "4-2→7-9",
-        title: "ロスコ置換注油器立管→毛細給油管",
+        title: "ロスコ置換注油器 内立管(Z=+10.9)→-Z底Uループ→7-9給気管",
         zone: "underframe",
         frame: "loco",
-        ptsMm: [[144.6, 2.6, 10.9], [144.6, 2.6, 6.2], [139.5, 7.5, 6.2], [123.5, 7.5, 6.2], [123.5, 7.5, 18.5]],
+        ptsMm: [[146.2, 0.0, 10.9], [146.2, 0.0, -0.6], [146.2, 0.0, -3.4], [142.0, 4.2, -3.4], [136.5, 7.5, 3.2], [123.5, 7.5, 5.2], [123.5, 7.5, 18.5]],
         radiusMm: 0.62,
-        arrows: 3,
-        labelT: 0.52,
-        colHexA: 0xd97706,
-        colHexB: 0xfde047,
-        css: "#f59e0b",
+        arrows: 4,
+        labelT: 0.54,
+        colHexA: 0x10b981,
+        colHexB: 0xf59e0b,
+        css: "#10b981",
         evalFlow: (out) => {
           const oilRate = out.lubricatorOilPct > 1.0 && (out.steamOutGS ?? out.steamGenGS) > 0.01 ? 0.08 + 0.35 * (out.steamOutGS ?? out.steamGenGS) : 0.0;
           return { signedRate: oilRate, fill: out.lubricatorOilPct > 1.0 ? 0.92 : 0.1, unit: "mg/m" };
@@ -1596,115 +1660,150 @@ export class FluidPartVisualizer {
       {
         id: "cyl_port_L_head",
         partNo: "1-9(左前気道)",
-        title: "左前ポート (過熱給気→ / ←乏汽排出 可逆)",
+        title: "左前ポート (滑弁→ピストン給気 / ピストン→滑弁排気 可逆)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[134.2, 34.7, 15.5], [140.2, 32.5, 11.2], [140.2, 32.0, 5.0]],
-        radiusMm: 0.72,
-        arrows: 2,
+        ptsMm: [[133.8, 34.7, 15.6], [137.2, 33.2, 8.8], [138.6, 32.5, 1.5]],
+        radiusMm: 0.76,
+        arrows: 3,
         labelT: 0.50,
-        colHexA: 0xfb923c,
+        colHexA: 0xf97316,
         colHexB: 0xfef08a,
-        css: "#fdba74",
+        css: "#f97316",
         evalFlow: (out, sp) => {
           const pv = sp.valvePortOpenL[0] ?? 0;
-          const activeP = pv >= 0 ? out.steamChestKgf : sp.cylLPKgf[0] ?? 0.2;
+          const sweepDrive = Math.min(0.85, Math.abs(out.wheelRpm) * 0.012) + (sp.cylLPKgf[0] ?? 0.0) * 0.65;
+          const rate = pv >= 0.02
+            ? (out.steamChestKgf > 0.015 ? pv * (0.35 + 0.45 * Math.min(1.0, out.steamChestKgf)) : 0.0)
+            : pv <= -0.02
+              ? pv * Math.max(0.18, sweepDrive)
+              : 0.0;
           return {
-            signedRate: activeP > 0.02 ? pv * 0.65 : 0.0,
-            fill: Math.abs(pv) > 0.02 && activeP > 0.02 ? 0.94 : 0.20,
+            signedRate: rate,
+            fill: Math.abs(rate) > 0.01 ? 0.95 : 0.22,
             unit: pv >= 0 ? "給気" : "排気",
-            colOverride: pv < 0 ? [0.38, 0.88, 1.0] : undefined,
           };
         },
       },
       {
         id: "cyl_port_L_crank",
         partNo: "1-9(左後気道)",
-        title: "左後ポート (過熱給気→ / ←乏汽排出 可逆)",
+        title: "左後ポート (滑弁→ピストン給気 / ピストン→滑弁排気 可逆)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[126.2, 34.7, 15.5], [122.0, 32.5, 11.2], [122.0, 32.0, 5.0]],
-        radiusMm: 0.72,
-        arrows: 2,
+        ptsMm: [[126.2, 34.7, 15.6], [119.2, 33.2, 8.8], [113.8, 32.5, 1.5]],
+        radiusMm: 0.76,
+        arrows: 3,
         labelT: 0.50,
-        colHexA: 0xfb923c,
+        colHexA: 0xf97316,
         colHexB: 0xfef08a,
-        css: "#fdba74",
+        css: "#f97316",
         evalFlow: (out, sp) => {
           const pv = sp.valvePortOpenL[1] ?? 0;
-          const activeP = pv >= 0 ? out.steamChestKgf : sp.cylLPKgf[1] ?? 0.2;
+          const sweepDrive = Math.min(0.85, Math.abs(out.wheelRpm) * 0.012) + (sp.cylLPKgf[1] ?? 0.0) * 0.65;
+          const rate = pv >= 0.02
+            ? (out.steamChestKgf > 0.015 ? pv * (0.35 + 0.45 * Math.min(1.0, out.steamChestKgf)) : 0.0)
+            : pv <= -0.02
+              ? pv * Math.max(0.18, sweepDrive)
+              : 0.0;
           return {
-            signedRate: activeP > 0.02 ? pv * 0.65 : 0.0,
-            fill: Math.abs(pv) > 0.02 && activeP > 0.02 ? 0.94 : 0.20,
+            signedRate: rate,
+            fill: Math.abs(rate) > 0.01 ? 0.95 : 0.22,
             unit: pv >= 0 ? "給気" : "排気",
-            colOverride: pv < 0 ? [0.38, 0.88, 1.0] : undefined,
           };
         },
       },
       {
         id: "cyl_port_R_head",
         partNo: "1-9(右前気道)",
-        title: "右前ポート (過熱給気→ / ←乏汽排出 可逆)",
+        title: "右前ポート (滑弁→ピストン給気 / ピストン→滑弁排気 可逆)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[134.2, -34.7, 15.5], [140.2, -32.5, 11.2], [140.2, -32.0, 5.0]],
-        radiusMm: 0.72,
-        arrows: 2,
+        ptsMm: [[133.8, -34.7, 15.6], [137.2, -33.2, 8.8], [138.6, -32.5, 1.5]],
+        radiusMm: 0.76,
+        arrows: 3,
         labelT: 0.50,
-        colHexA: 0xfb923c,
+        colHexA: 0xf97316,
         colHexB: 0xfef08a,
-        css: "#fdba74",
+        css: "#f97316",
         evalFlow: (out, sp) => {
           const pv = sp.valvePortOpenR[0] ?? 0;
-          const activeP = pv >= 0 ? out.steamChestKgf : sp.cylRPKgf[0] ?? 0.2;
+          const sweepDrive = Math.min(0.85, Math.abs(out.wheelRpm) * 0.012) + (sp.cylRPKgf[0] ?? 0.0) * 0.65;
+          const rate = pv >= 0.02
+            ? (out.steamChestKgf > 0.015 ? pv * (0.35 + 0.45 * Math.min(1.0, out.steamChestKgf)) : 0.0)
+            : pv <= -0.02
+              ? pv * Math.max(0.18, sweepDrive)
+              : 0.0;
           return {
-            signedRate: activeP > 0.02 ? pv * 0.65 : 0.0,
-            fill: Math.abs(pv) > 0.02 && activeP > 0.02 ? 0.94 : 0.20,
+            signedRate: rate,
+            fill: Math.abs(rate) > 0.01 ? 0.95 : 0.22,
             unit: pv >= 0 ? "給気" : "排気",
-            colOverride: pv < 0 ? [0.38, 0.88, 1.0] : undefined,
           };
         },
       },
       {
         id: "cyl_port_R_crank",
         partNo: "1-9(右後気道)",
-        title: "右後ポート (過熱給気→ / ←乏汽排出 可逆)",
+        title: "右後ポート (滑弁→ピストン給気 / ピストン→滑弁排気 可逆)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[126.2, -34.7, 15.5], [122.0, -32.5, 11.2], [122.0, -32.0, 5.0]],
-        radiusMm: 0.72,
-        arrows: 2,
+        ptsMm: [[126.2, -34.7, 15.6], [119.2, -33.2, 8.8], [113.8, -32.5, 1.5]],
+        radiusMm: 0.76,
+        arrows: 3,
         labelT: 0.50,
-        colHexA: 0xfb923c,
+        colHexA: 0xf97316,
         colHexB: 0xfef08a,
-        css: "#fdba74",
+        css: "#f97316",
         evalFlow: (out, sp) => {
           const pv = sp.valvePortOpenR[1] ?? 0;
-          const activeP = pv >= 0 ? out.steamChestKgf : sp.cylRPKgf[1] ?? 0.2;
+          const sweepDrive = Math.min(0.85, Math.abs(out.wheelRpm) * 0.012) + (sp.cylRPKgf[1] ?? 0.0) * 0.65;
+          const rate = pv >= 0.02
+            ? (out.steamChestKgf > 0.015 ? pv * (0.35 + 0.45 * Math.min(1.0, out.steamChestKgf)) : 0.0)
+            : pv <= -0.02
+              ? pv * Math.max(0.18, sweepDrive)
+              : 0.0;
           return {
-            signedRate: activeP > 0.02 ? pv * 0.65 : 0.0,
-            fill: Math.abs(pv) > 0.02 && activeP > 0.02 ? 0.94 : 0.20,
+            signedRate: rate,
+            fill: Math.abs(rate) > 0.01 ? 0.95 : 0.22,
             unit: pv >= 0 ? "給気" : "排気",
-            colOverride: pv < 0 ? [0.38, 0.88, 1.0] : undefined,
           };
         },
       },
       {
         id: "cyl_7_8_20_7_blast",
-        partNo: "7-8→20-7",
-        title: "排気合流横管→煙室ブラストノズル(ø4.2)",
+        partNo: "1-9(L)→7-8→20-7",
+        title: "左シリンダ排気内孔→7-8合流管→20-7ブラストノズル(ø4.2)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[130.0, 34.2, 13.5], [130.0, 18.0, 12.5], [130.0, 0.0, 12.5], [130.0, 0.0, 35.0]],
-        radiusMm: 1.30,
+        ptsMm: [[130.0, 34.5, 15.6], [130.0, 27.5, 13.0], [130.0, 21.1, 12.5], [130.0, 0.0, 12.5], [130.0, 0.0, 35.0]],
+        radiusMm: 1.25,
         arrows: 4,
-        labelT: 0.75,
-        colHexA: 0x38bdf8,
-        colHexB: 0xf0f9ff,
-        css: "#7dd3fc",
+        labelT: 0.76,
+        colHexA: 0xeab308,
+        colHexB: 0xfde047,
+        css: "#eab308",
         evalFlow: (out) => ({
           signedRate: out.exhaustGS ?? out.exhaustPlume * 0.35,
-          fill: (out.exhaustGS ?? 0) > 0.005 || out.exhaustPlume > 0.04 ? 0.92 : 0.16,
+          fill: (out.exhaustGS ?? 0) > 0.005 || out.exhaustPlume > 0.04 ? 0.92 : 0.18,
+          unit: "g/s",
+        }),
+      },
+      {
+        id: "cyl_7_8_exhaust_R",
+        partNo: "1-9(R)→7-8",
+        title: "右シリンダ中央排気腔→内壁ソケット→7-8排気合流管",
+        zone: "cylinder",
+        frame: "loco",
+        ptsMm: [[130.0, -34.5, 15.6], [130.0, -27.5, 13.0], [130.0, -21.1, 12.5], [130.0, 0.0, 12.5]],
+        radiusMm: 1.22,
+        arrows: 3,
+        labelT: 0.45,
+        colHexA: 0xeab308,
+        colHexB: 0xfde047,
+        css: "#eab308",
+        evalFlow: (out) => ({
+          signedRate: (out.exhaustGS ?? out.exhaustPlume * 0.35) * 0.5,
+          fill: (out.exhaustGS ?? 0) > 0.005 || out.exhaustPlume > 0.04 ? 0.92 : 0.18,
           unit: "g/s",
         }),
       },
@@ -1732,6 +1831,66 @@ export class FluidPartVisualizer {
     let nLocoArrows = 0;
     let nTdrArrows = 0;
     let nWorldArrows = 0;
+
+    const makePipeTempEvaluator = (id: string): InternalPipeRuntime["evalTempC"] => {
+      return (out, sp) => {
+        if (id === "tdr_36_6_mariotte" || id === "tdr_34_2_fuel" || id === "umb_st7_fuel") {
+          return out.alcoholTempC ?? 28.0;
+        }
+        if (id === "loco_23_1_burner") {
+          return Math.min(72.0, (out.alcoholTempC ?? 30.0) + 12.0);
+        }
+        if (id === "tdr_31_5_31_13_hp" || id === "tdr_34_6_feed_R" || id === "umb_bt5_feed" || id === "loco_6_10_suction" || id === "tdr_31_9_drain") {
+          return out.tenderWaterTempC;
+        }
+        if (id === "loco_6_5_6_6_deliv") {
+          return out.tenderWaterTempC + 0.06 * Math.max(0.0, out.boilerTempC - out.tenderWaterTempC);
+        }
+        if (id === "loco_4_16_byp_ret" || id === "umb_bt5_return" || id === "tdr_34_6_ret_L" || id === "tdr_31_14_gooseneck") {
+          return out.tenderWaterTempC + 0.10 * Math.max(0.0, out.boilerTempC - out.tenderWaterTempC);
+        }
+        if (id === "loco_6_8_13_2_riser") {
+          return 0.55 * out.tenderWaterTempC + 0.45 * out.boilerTempC;
+        }
+        if (id === "loco_4_2_lub_oil") {
+          return out.lubeOilTempC ?? Math.max(32.0, 0.62 * out.cylWallTempC);
+        }
+        if (id === "boil_flues_upper") {
+          return Math.max(out.boilerTempC, 0.55 * (sp.flueGasProfileC[1] ?? out.boilerTempC) + 0.45 * (sp.flueGasProfileC[5] ?? out.boilerTempC));
+        }
+        if (id === "boil_flues_lower") {
+          return Math.max(out.boilerTempC, 0.48 * (sp.flueGasProfileC[2] ?? out.boilerTempC) + 0.52 * (sp.flueGasProfileC[6] ?? out.boilerTempC));
+        }
+        if (id === "boil_17_5_sh_4pass" || id === "cyl_7_9_inlet_L" || id === "cyl_7_9_inlet_R") {
+          return out.superheatTempC;
+        }
+        if (id === "boil_13_1_siphon") {
+          return 25.0 + 0.35 * Math.max(0.0, out.boilerTempC - 25.0);
+        }
+        if (id === "boil_13_10_sg_water") {
+          return 25.0 + 0.72 * Math.max(0.0, out.boilerTempC - 25.0);
+        }
+        if (id === "cyl_port_L_head") {
+          return (sp.valvePortOpenL[0] ?? 0) >= 0 ? out.superheatTempC : Math.max(28.0, Math.min(112.0, 0.78 * out.cylWallTempC + 8.0));
+        }
+        if (id === "cyl_port_L_crank") {
+          return (sp.valvePortOpenL[1] ?? 0) >= 0 ? out.superheatTempC : Math.max(28.0, Math.min(112.0, 0.78 * out.cylWallTempC + 8.0));
+        }
+        if (id === "cyl_port_R_head") {
+          return (sp.valvePortOpenR[0] ?? 0) >= 0 ? out.superheatTempC : Math.max(28.0, Math.min(112.0, 0.78 * out.cylWallTempC + 8.0));
+        }
+        if (id === "cyl_port_R_crank") {
+          return (sp.valvePortOpenR[1] ?? 0) >= 0 ? out.superheatTempC : Math.max(28.0, Math.min(112.0, 0.78 * out.cylWallTempC + 8.0));
+        }
+        if (id === "cyl_7_8_20_7_blast" || id === "cyl_7_8_exhaust_R") {
+          return out.boilerPressureKgf > 0.05 ? Math.max(98.0, Math.min(118.0, 0.76 * out.cylWallTempC + 10.0)) : out.cylWallTempC;
+        }
+        if (id === "cyl_1_16_drains") {
+          return Math.max(28.0, Math.min(104.0, 0.75 * out.cylWallTempC));
+        }
+        return out.boilerTempC;
+      };
+    };
 
     for (const s of specs) {
       const colA = new THREE.Color(s.colHexA);
@@ -1772,6 +1931,7 @@ export class FluidPartVisualizer {
         colorA: colA,
         colorB: colB,
         colorCss: s.css,
+        evalTempC: makePipeTempEvaluator(s.id),
         evalFlow: s.evalFlow,
       });
     }
@@ -2036,6 +2196,7 @@ export class FluidPartVisualizer {
     this.bubblePoints.visible = xray && hasBoilerWater && sp.boilingIntensity > 0.02;
     this.sliceMesh.visible = xray;
     this.lubeCoreMesh.visible = xray;
+    this.lubeStandpipeMesh.visible = xray;
     this.tenderWaterMesh.visible = xray && hasTdr && out.tenderWaterMl > 1.0;
     this.tenderAlcoholMesh.visible = xray && hasTdr && out.alcoholMl > 0.5;
     this.mariotteBubblePoints.visible = xray && hasTdr && (out.mariotteBubbling || out.mariotteFloodAlarm);
@@ -2062,13 +2223,16 @@ export class FluidPartVisualizer {
     if (hasTdr) {
       this.tenderWaterMesh.scale.set(1.0, 1.0, 0.0445 * wFrac);
       const twMat = this.tenderWaterMesh.material as THREE.MeshBasicMaterial;
-      const warm = Math.max(0.0, Math.min(1.0, (out.tenderWaterTempC - 25.0) / 40.0));
-      twMat.color.setRGB(0.10 + 0.12 * warm, 0.52 + 0.30 * warm, 0.90);
+      temperatureToThermalColor(out.tenderWaterTempC, twMat.color);
 
       const aFrac = Math.max(0.02, Math.min(1.0, out.alcoholMl / 130.0));
       this.tenderAlcoholMesh.scale.set(1.0, 1.0, 0.0350 * aFrac);
       const taMat = this.tenderAlcoholMesh.material as THREE.MeshBasicMaterial;
-      taMat.color.setHex(out.mariotteFloodAlarm ? 0xff4d29 : 0xf7b731);
+      if (out.mariotteFloodAlarm) {
+        taMat.color.setHex(0xff4d29);
+      } else {
+        temperatureToThermalColor(out.alcoholTempC ?? 28.0, taMat.color);
+      }
 
       if (this.mariotteBubblePoints.visible) {
         const zTop = 0.0258 + 0.0350 * aFrac;
@@ -2149,19 +2313,22 @@ export class FluidPartVisualizer {
     portVals.forEach((pv, k) => {
       const pm = this.portGlowMeshes[k].material as THREE.MeshBasicMaterial;
       if (pv >= 0) {
-        // 正向开度: 高温过热进汽射流 (琥珀橙白)
-        pm.color.setRGB(1.0, 0.62, 0.18);
+        temperatureToThermalColor(out.superheatTempC, pm.color);
         pm.opacity = Math.min(0.82, pv * (0.25 + 0.55 * Math.min(1.0, out.steamChestKgf / 3.0)));
       } else {
-        // 负向开度: 乏汽经滑阀背腔排向 20-7 排汽喷嘴 (冰青白)
-        pm.color.setRGB(0.45, 0.85, 1.0);
-        pm.opacity = Math.min(0.65, -pv * 0.55);
+        temperatureToThermalColor(Math.max(28.0, Math.min(112.0, 0.78 * out.cylWallTempC + 8.0)), pm.color);
+        pm.opacity = Math.min(0.68, -pv * 0.58);
       }
     });
 
-    // 5. 4-2 卧式置换注油器油水分层更新
+    // 5. 4-2 卧式置换注油器油水分层与统一温标色更新 (底水稍凉于顶层受蒸汽直接加热的浮油)
+    const tOilNow = out.lubeOilTempC ?? Math.max(28.0, 0.62 * out.cylWallTempC);
     this.lubeCoreMat.uniforms.uWaterFrac.value = sp.lubeWaterFrac;
     this.lubeCoreMat.uniforms.uTime.value = this.elapsed;
+    temperatureToThermalColor(Math.max(22.0, tOilNow - 18.0), this.lubeCoreMat.uniforms.uWaterCol.value);
+    temperatureToThermalColor(tOilNow, this.lubeCoreMat.uniforms.uOilCol.value);
+    const sgMat = this.sightGlassWaterMesh.material as THREE.MeshBasicMaterial;
+    temperatureToThermalColor(25.0 + 0.72 * Math.max(0.0, out.boilerTempC - 25.0), sgMat.color);
   }
 
   private updateAllPipeLumensAndArrows(
@@ -2203,6 +2370,10 @@ export class FluidPartVisualizer {
       }
 
       const st = pr.evalFlow(out, sp);
+      const pipeTempC = pr.evalTempC(out, sp);
+      temperatureToThermalColor(pipeTempC - 12.0, pr.colorA);
+      temperatureToThermalColor(pipeTempC + 10.0, pr.colorB);
+      const dynCss = temperatureToThermalCss(pipeTempC);
       const lvsG = sp.edgeConductances?.[pr.id] ?? 1.0;
       const lvsOpen = lvsG > 0.02;
       const effSigned = lvsOpen ? st.signedRate : 0.0;
@@ -2215,6 +2386,7 @@ export class FluidPartVisualizer {
       pr.mat.uniforms.uPhase.value = pr.phase;
       pr.mat.uniforms.uFill.value = lvsOpen ? st.fill : 0.08;
       pr.mat.uniforms.uActive.value = isFlowing ? Math.min(1.0, 0.38 + absRate * 2.5) : 0.0;
+      pr.mat.uniforms.uColA.value.copy(pr.colorA);
       if (st.colOverride) {
         pr.mat.uniforms.uColB.value.setRGB(st.colOverride[0], st.colOverride[1], st.colOverride[2]);
       } else {
@@ -2259,15 +2431,16 @@ export class FluidPartVisualizer {
         const valStr = !lvsOpen
           ? "LVS断流"
           : st.unit === "給気" || st.unit === "排気"
-            ? `${st.unit} ${(absRate * 100).toFixed(0)}%`
-            : `${absRate.toFixed(2)} ${st.unit}`;
+            ? `${pipeTempC.toFixed(0)}°C · ${st.unit} ${(absRate * 100).toFixed(0)}%`
+            : `${pipeTempC.toFixed(0)}°C · ${absRate.toFixed(2)} ${st.unit}`;
         this.calloutSnapshots.push({
           id: pr.id,
           partNo: pr.partNo,
           title: pr.title,
           zone: pr.zone,
           worldPos: wp,
-          colorCss: st.colOverride ? "#67e8f9" : pr.colorCss,
+          colorCss: dynCss,
+          tempC: pipeTempC,
           flowText: valStr,
           dirSymbol,
           active: isFlowing,

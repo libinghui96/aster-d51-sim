@@ -88,6 +88,22 @@
     .pipe-callout .pc-head { font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     .pipe-callout .pc-flow { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #8b949e; margin-left: 4px; }
     .pipe-callout.flowing .pc-flow { color: #f0f6fc; font-weight: 600; }
+    #thermal-scale-bar {
+      position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+      display: none; align-items: center; gap: 8px; z-index: 45; pointer-events: none;
+      background: rgba(11, 15, 22, 0.88); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px;
+      padding: 5px 12px; font-size: 11px; color: #e6edf3; box-shadow: 0 4px 16px rgba(0,0,0,0.55);
+    }
+    .thermal-grad {
+      width: 220px; height: 9px; border-radius: 4px;
+      background: linear-gradient(90deg, #1d4ed8 0%, #06b6d4 16%, #10b981 32%, #eab308 48%, #f59e0b 64%, #f97316 78%, #ef4444 90%, #fef08a 100%);
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+    .thermal-ticks {
+      display: flex; justify-content: space-between; width: 220px;
+      font-size: 9.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #9ca3af; margin-top: 2px;
+    }
   </style>
 </head>
 <body>
@@ -98,6 +114,13 @@
   <div id="canvas-container"></div>
   <div id="pipe-labels-layer"></div>
   <div id="part-tooltip"></div>
+  <div id="thermal-scale-bar">
+    <span style="font-weight:600;color:#cbd5e1">統一温度色標</span>
+    <div>
+      <div class="thermal-grad"></div>
+      <div class="thermal-ticks"><span>20°C</span><span>45°</span><span>80°</span><span>105°</span><span>148°</span><span>210°</span><span>750°C</span></div>
+    </div>
+  </div>
 
   <div id="scene-toolbar" class="hud-panel">
     <select id="select-scene">
@@ -111,7 +134,7 @@
       <option value="cab">運転室・炭水車 3D直感操作視点</option>
       <option value="chase">R2m 整列侧前动态追车视角</option>
     </select>
-    <button id="btn-flow-dir" title="透視モードで全35系統配管の液体・気体・蒸気・油・アルコールの実物理流向矢印を表示">🌊 流体/気体流向</button>
+    <button id="btn-flow-dir" title="透視モードで全36系統配管の液体・気体・蒸気・油・アルコールの統一温度色標＆実物理流向矢印を表示">🌊 流体/気体流向</button>
     <button id="btn-pipe-labels" title="炭水車内・機関車・ボイラ・運転室・シリンダ全配管の名称と実流量ラベルを表示">🏷️ 全配管標注</button>
     <button id="btn-hot-preset" class="active">3.8kg/cm² 热炉即发</button>
     <button id="btn-cold-reset">冷炉整备重置</button>
@@ -152,7 +175,8 @@
     <div class="gauge-row"><span>左右ピストン推力 / 締切率</span><span id="txt-forces" class="val-mono">L: 0.0N | R: 0.0N | 61%</span></div>
     <div class="gauge-row"><span>6-5 軸動ポンプ負圧 / 煙管撓み</span><span id="txt-pump-elastic" class="val-mono">-0.0kPa (0.0W) | 撓0.00mm</span></div>
     <div class="gauge-row"><span>乾き度 x / 当量比 φ / 油膜</span><span id="txt-fluid3d" class="val-mono">x=0.95 | φ=1.00 | 3.8μm</span></div>
-    <div class="gauge-row"><span>熱効率 η / 断熱放熱 / 灯芯毛細</span><span id="txt-cht" class="val-mono">η=46.5% | 29.1W (71°C) | 0.11ml/s</span></div>
+    <div class="gauge-row"><span>熱効率 η / 第一法則熱収支</span><span id="txt-cht" class="val-mono">η=33.4% (蒸180W/排煙290W/殻28W)</span></div>
+    <div class="gauge-row"><span>懸架撓み / 銅缶熱膨張 / 4-2油水</span><span id="txt-sys-clearance" class="val-mono">懸架撓0.72mm | 膨張+0.40mm | 油水沈降0.18mm/s</span></div>
     <div id="gpu-monitor-box" class="gpu-mon-box"></div>
     <div id="copilot-box" class="copilot-box">
       <div class="copilot-head"><span id="txt-copilot-model">L3 Bonsai-2:27B</span><span id="txt-copilot-lvl">NOMINAL</span></div>

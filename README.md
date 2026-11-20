@@ -1,6 +1,6 @@
 # Aster Hobby JNR D51 Live-Steam 3D Digital Twin
 
-Aster Hobby 1 番ゲージ (`1/32`, `45.0 mm` 轨距, `1-D-1 Mikado`) JNR D51 真蒸汽机车的 **STEP-First 104 件全水密三维空心管阀与弹性走行部 CAD + 578 万体素八域真 3D 多相流道/多材料共轭传热/紫铜烟管热弹塑性形变 + 七算子 GPU PINO (`125 Hz`) + 2000 Hz MuJoCo 华氏闭环多体与真实轮轨/枕木接触动力学** 双向紧耦合数字孪生仿真。
+Aster Hobby 1 番ゲージ (`1/32`, `45.0 mm` 轨距, `1-D-1 Mikado`) JNR D51 真蒸汽机车的 **五层系统工程架构 (`docs/SYSTEM_ARCHITECTURE.md`) + STEP-First 107 件全水密三维空心管阀与弹性走行部 CAD + 578 万体素八域真 3D 多相流道/多材料共轭传热/紫铜烟管热弹塑性形变 + 七算子 GPU PINO (`125 Hz`) + 2000 Hz MuJoCo 华氏闭环多体与真实旷量/轮轨接触动力学** 双向紧耦合数字孪生仿真。
 
 - **在线 Web 3D 实时交互数字孪生 (WASM + Three.js，由 GitHub Actions 自动构建发布):** https://libinghui96.github.io/aster-d51-sim/
 - **CI 试运转遥测与离屏动画报告:** https://libinghui96.github.io/aster-d51-sim/report.html
@@ -11,10 +11,10 @@ Aster Hobby 1 番ゲージ (`1/32`, `45.0 mm` 轨距, `1-D-1 Mikado`) JNR D51 �
 
 ## 核心物理与工程特性
 
-1. **STEP-First 104 件精确 B-Rep 解析建模与全流道管壁包络校验 (`models/step/*.step` -> `models/meshes/*.stl`)**：
-   - 全车 **104 件** 刚体、走行部叠板簧/均衡梁与空心管阀均以 `ISO-10303-21 (.step)` 精确解析曲面为唯一几何真值源（`scripts/step_pipeline.py`），直接由 OpenCascade B-Rep 拓扑积分材料质量、偏心质心与惯量张量，并编译水密单连通网格（`boundary_edges == 0, connected_components == 1`）及 40 组跨刚体零断口端口。
-   - 全功能管道、实心盲头 `6-5` 中央轴动给水泵（含全长 `6-1` 黄铜柱塞 + 双 `SB-ø3` 止回钢球）、阶梯车削 `4-17` 旁通阀、`23.0 mm` 分汽包 `11-15`、四孔铸造蝴蝶式火室门 `12-1`、封闭蒲鉾形砂箱 `29-11` 及极坐标贴壁撒砂管均按原厂图纸 1:1 还原，并通过 `verify_step_wall_bounded_lumen`（内腔 `TopAbs_OUT` + 管壁 `TopAbs_IN`）与 GPU 三维漫水校验。
-   - 全车建立 **7 子网 / 28 腔室节点 / 35 路管道** 声明式流体网表（`configs/d51_fluid_topology.json`，与 Web 透视 35 路管道 1:1 同构），通过 GPU 负空间三维体素 **`Fluid-LVS` 验证引擎（`sim/fluid_topology_lvs.py`）** 在直线轨道与 `R2m` 最小曲线双姿态下执行 `Zero-Open`（35/35 全贯通）、`Zero-Necking`（35/35 最小过流水力直径达标）、`Zero-Missing-Wall`（35/35 管壁闭合）与 `Zero-Short`（8/8 互斥腔室零串腔 + 8/8 动态阀态通断）核验，并将实测三维流导直接耦合至热流网络与 Web 流向箭头。
+1. **五层系统工程架构与 STEP-First 107 件精确 B-Rep 解析建模 (`docs/SYSTEM_ARCHITECTURE.md`, `models/step/*.step` -> `models/meshes/*.stl`)**：
+   - 全车 **107 件** 独立 BOM 功能刚体（含独立 `4-17` 旁通阀体/`LN5-7A`/`4-15`、`6-8` 立管、`4-16` 径向班卓回水管、`20-6` `R3m/R2m` 双孔位前盖护套、`3-16/3-5/3-4/19-8/19-15` 全套受载弹簧与均衡梁）均以 `ISO-10303-21 (.step)` 为唯一几何真值源，编译水密单连通网格（`boundary_edges == 0, connected_components == 1`）及 48 组跨刚体零断口端口。
+   - 完整还原 `4-2` 底部 `-Z` 引出 U 形毛细管 + 罐内垂直溢流内立管（Roscoe Standpipe）沉水顶油结构、100% 封闭 `21-28` 驾驶室拱顶前妻板、零穿模左驾 `8-7` 逆时针手柄与右地板上方室内 `8-6/8-5` 水平推拉排液杆。
+   - 全车建立 **7 子网 / 28 腔室节点 / 36 路管道** 声明式流体网表（`configs/d51_fluid_topology.json`，与 Web 透视 36 路管道及 `20°C..750°C` 统一温度正相关热色谱 1:1 同构），通过 GPU 负空间三维体素 **`Fluid-LVS` 验证引擎（`sim/fluid_topology_lvs.py`）** 在直线与 `R2m` 最小曲线双姿态下执行 `Zero-Open`（36/36 全贯通）、`Zero-Necking`、`Zero-Missing-Wall` 与 `Zero-Short`（8/8 互斥腔室零串腔 + 8/8 动态阀态通断）核验。
 2. **八域 578 万体素真 3D 多相热流、黏温油醇流动、开口系多变膨胀与烟管热弹塑性形变 (`sim/thermo_3d_gpu.py` & `sim/thermo_elastic_gpu.py`)**：
    - 完整物理仿真水循环（`272/340 ml` 煤水车水箱、`6-5` 泵腔抽吸负压真空与压水轴功、`4-17` 旁通分流、`0 ml` 彻底干锅零虚假蒸发）、开口系第一定律气缸多变膨胀做功（实时验证华氏螺旋逆转机截止率节汽效率）、`1-16×4` 气液两相均相闪蒸排液、以及考虑温度黏度 $\mu(T)$/密度/蒸气压/坡度重力的 `4-2` 蒸汽油与 `36-4 -> 23-1` 乙醇毛细燃烧过程。
    - GPU 实时求解 `C1100` 紫铜 5 根烟管与火室顶板在干烧退火软化及蒸汽外压下的受限热膨胀弯曲、Timoshenko 薄壳椭圆扁化与永久蠕变挠度，双向反馈烟管流固耦合阻力并在 WebGL 顶点着色器中实时呈现。

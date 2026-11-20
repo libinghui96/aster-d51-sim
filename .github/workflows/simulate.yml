@@ -53,7 +53,7 @@ jobs:
           cp -r web/dist/. site/
           touch site/.nojekyll
 
-      - name: Check models are in sync with generator & run Gates 1-25 verification
+      - name: Check models are in sync with generator & run Gates 1-26 verification
         run: |
           python scripts/03_generate_mjcf.py --mode roller --out /tmp/d51_regen.xml
           diff -q /tmp/d51_regen.xml models/d51_full.xml
@@ -78,7 +78,7 @@ jobs:
           <style>body{font-family:sans-serif;background:#111;color:#ddd;max-width:1100px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #333}a.btn{display:inline-block;background:#b85c00;color:#fff;text-decoration:none;padding:8px 14px;border-radius:6px;font-weight:600}</style>
           </head>
           <body>
-          <h1>Aster D51 STEP-First 104件 3D 多相热流/热弹塑性 + 7-PINO + MuJoCo 轮轨联合仿真 CI 报告</h1>
+          <h1>Aster D51 五层系统架构 + STEP-First 107件 3D 多相热流/热弹塑性 + 7-PINO + MuJoCo 轮轨联合仿真 CI 报告</h1>
           <p><a class="btn" href="./">打开 Web 3D 实时交互数字孪生</a></p>
           <p>commit <code>${GITHUB_SHA::7}</code>, built $(date -u '+%Y-%m-%d %H:%M UTC')</p>
           <h2>滚轮台热炉运转 (4x 慢放)</h2>

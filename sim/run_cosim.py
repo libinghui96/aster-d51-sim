@@ -293,6 +293,12 @@ class CoSimRunner:
             sj_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, s_jname)
             self._susp_qpos_addrs.append(int(self.model.jnt_qposadr[sj_id]) if sj_id >= 0 else -1)
 
+        self._lat_qpos_addrs: List[int] = []
+        for l_jname in ("j_leading_lat", "j_lat_y1", "j_lat_y2", "j_lat_y3", "j_lat_y4"):
+            lj_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, l_jname)
+            if lj_id >= 0:
+                self._lat_qpos_addrs.append(int(self.model.jnt_qposadr[lj_id]))
+
         self._wheelset_specs: List[tuple[int, str, float]] = []
         for wb_name, r_nom in (
             ("leading_wheelset", 0.0130),
@@ -425,7 +431,7 @@ class CoSimRunner:
             "j_cab_pg_needle": -2.10 + p_norm * 4.20,
             "j_cab_blowdown": 3.14 * float(getattr(self.ctrl, "blowdown_valve", 0.0)),
             "j_cab_fire_door": +1.40 * self.ctrl.firebox_door,
-            "j_cab_bypass": -1.35 * self.ctrl.bypass_valve,
+            "j_cab_bypass": +1.30 * self.ctrl.bypass_valve,
             "j_dome_lid": 1.15 if (bool(getattr(self.ctrl, "dome_lid_open", False)) or bool(getattr(self.ctrl, "cab_roof_open", False))) else 0.0,
             "j_safety_poppet_1": sv_lift_m,
             "j_safety_poppet_2": sv_lift_m * 0.94,
@@ -574,6 +580,25 @@ class CoSimRunner:
             step_kwargs["q_ram"] = float(self.data.qpos[self.qpos_pump])
         F_L, F_R, F_pump, tel = self.thermo.step(**step_kwargs)
         self.last_f_pump = float(F_pump)
+        if not any(abs(v) > 1e-6 for v in tel.spring_deflect_mm):
+            tel.spring_deflect_mm = [round(abs(z) * 1000.0, 3) for z in susp_z_m]
+        if self._lat_qpos_addrs:
+            tel.hunting_lat_mm = round(max(abs(float(self.data.qpos[qa])) for qa in self._lat_qpos_addrs) * 1000.0, 3)
+        if not self.is_roller_mode and self.data.ncon > 0:
+            rot_m = self.data.xmat[self.loco_bid].reshape(3, 3)
+            e_lat = rot_m[:, 1]
+            cw = np.zeros(6, dtype=np.float64)
+            y_sum, q_sum = 0.0, 0.0
+            for ci in range(self.data.ncon):
+                con = self.data.contact[ci]
+                if (con.geom1 in self._wheel_geom_ids) or (con.geom2 in self._wheel_geom_ids):
+                    mujoco.mj_contactForce(self.model, self.data, ci, cw)
+                    fw = con.frame.reshape(3, 3).T @ cw[:3]
+                    if con.geom1 in self._wheel_geom_ids:
+                        fw = -fw
+                    y_sum += abs(float(np.dot(fw, e_lat)))
+                    q_sum += max(0.0, float(fw[2]))
+            tel.nadal_lv_ratio = round(min(2.5, y_sum / max(2.0, q_sum)), 3)
 
         self.data.ctrl[self.act_fL] = F_L
         self.data.ctrl[self.act_fR] = F_R

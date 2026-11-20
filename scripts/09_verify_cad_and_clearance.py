@@ -613,6 +613,9 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
 
     static_geoms_to_check = [
         "feedwater_piping_vis",
+        "bypass_valve_4_17_vis",
+        "boiler_riser_6_8_vis",
+        "bypass_return_4_16_vis",
         "displacement_lubricator_vis",
         "boiler_aux_valves_vis",
         "superheater_piping_vis",
@@ -2456,7 +2459,7 @@ def verify_gate_18(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         return float(np.min(dists)) * 1000.0
 
     seat_byp_floor = pair_min_mm("cab_bypass_vis", "cab_deck_and_mounts_vis")
-    seat_byp_valve = pair_min_mm("cab_bypass_vis", "feedwater_piping_vis")
+    seat_byp_valve = pair_min_mm("cab_bypass_vis", "bypass_valve_4_17_vis")
     seat_drn_floor = pair_min_mm("cab_drain_lever_vis", "cab_deck_and_mounts_vis")
     seat_rev_floor = pair_min_mm("cab_reverser_stand_vis", "cab_deck_and_mounts_vis")
     seat_sg_drain = pair_min_mm("cab_sight_drain_vis", "boiler_aux_valves_vis")
@@ -2481,8 +2484,8 @@ def verify_gate_18(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     }
     sweep_poses = [
         {"j_cab_regulator": 0.0, "j_cab_whistle": 0.0, "j_cab_fire_door": 0.0, "j_cab_bypass": 0.0, "j_cab_drain": -0.0038, "j_reverser": 0.0},
-        {"j_cab_regulator": 1.12, "j_cab_whistle": +0.36, "j_cab_fire_door": 1.40, "j_cab_bypass": -1.35, "j_cab_drain": +0.0038, "j_reverser": 0.45},
-        {"j_cab_regulator": 0.56, "j_cab_whistle": +0.36, "j_cab_fire_door": 0.75, "j_cab_bypass": -0.70, "j_cab_drain": -0.0038, "j_reverser": -0.45},
+        {"j_cab_regulator": 1.12, "j_cab_whistle": +0.36, "j_cab_fire_door": 1.40, "j_cab_bypass": +1.30, "j_cab_drain": +0.0038, "j_reverser": 0.45},
+        {"j_cab_regulator": 0.56, "j_cab_whistle": +0.36, "j_cab_fire_door": 0.75, "j_cab_bypass": +0.65, "j_cab_drain": -0.0038, "j_reverser": -0.45},
         {"j_cab_regulator": 1.12, "j_cab_whistle": 0.0, "j_cab_fire_door": 1.40, "j_cab_bypass": 0.0, "j_cab_drain": +0.0038, "j_reverser": -0.45},
     ]
     min_cab_clear_mm = 999.0
@@ -2749,7 +2752,7 @@ def verify_gate_20(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     bd_axis = m.jnt_axis[jid_bd]
     aux_pts = stl_tris_mm["boiler_aux_valves"].reshape(-1, 3)
     clack_pts = aux_pts[(aux_pts[:, 0] <= -111.0) & (aux_pts[:, 1] >= -15.0) & (aux_pts[:, 1] <= -8.5) & (aux_pts[:, 2] >= 43.0) & (aux_pts[:, 2] <= 53.5)]
-    fw_pts = stl_tris_mm["feedwater_piping"].reshape(-1, 3)
+    fw_pts = stl_tris_mm["boiler_riser_6_8"].reshape(-1, 3)
     riser_zmax = float(fw_pts[(fw_pts[:, 0] >= -120.0) & (fw_pts[:, 0] <= -110.0)][:, 2].max()) if len(fw_pts) else 99.0
     lf_pos = d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "loco_frame")]
     bid_rr = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "cab_reach_rod")
@@ -3017,11 +3020,17 @@ def verify_gate_22(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         ],
         "feedwater_piping": [
             ((-80.0, -8.2, 8.5), (1.0, 0.0, 0.0), 0.38),
-            ((-83.4, -3.5, 14.25), (1.0, 0.0, 0.0), 0.38),
+            ((-83.4, -8.2, 14.30), (1.0, 0.0, 0.0), 0.38),
+        ],
+        "boiler_riser_6_8": [
             ((-115.8, -11.8, 30.0), (0.0, 0.0, 1.0), 0.35),
         ],
+        "bypass_return_4_16": [
+            ((-148.0, 19.2, -8.5), (1.0, 0.0, 0.0), 0.35),
+        ],
         "displacement_lubricator": [
-            ((128.0, 7.5, 18.5), (1.0, 0.0, 0.0), 0.35),
+            ((146.2, 0.0, 5.5), (0.0, 0.0, 1.0), 0.32),
+            ((123.5, 7.5, 12.0), (0.0, 0.0, 1.0), 0.32),
         ],
         "tender_internals": [
             ((-95.0, -18.5, 9.2), (1.0, 0.0, 0.0), 0.55),
@@ -3284,9 +3293,9 @@ def verify_gate_22(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         and wh_xmin <= -10.5
         and abs(float(wh_ax[1]) + 1.0) < 1e-4
         and -143.5 <= dr_loc_mm[0] <= -135.0
-        and -22.5 <= dr_loc_mm[1] <= -17.0
-        and 23.5 <= dr_top_z_mm <= 26.8
-        and 18.5 <= dr_bot_z_mm <= 21.6
+        and -27.5 <= dr_loc_mm[1] <= -22.5
+        and 31.0 <= dr_top_z_mm <= 34.5
+        and 25.8 <= dr_bot_z_mm <= 27.5
         and dpr_xmin <= -134.0
         and no_roof_hatch_jnt
         and has_dome_lid_jnt
@@ -3723,6 +3732,7 @@ def verify_gate_24(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         "blower_nozzle_17_3",
         "boiler_aux_valves",
         "feedwater_piping",
+        "boiler_riser_6_8",
     ):
         wall_vox[fn] = voxelize_stl_cuda(stl_tris_mm[fn], xr, yr, zr, sh_chk, dev)
 
@@ -3873,16 +3883,16 @@ def verify_gate_25() -> Tuple[bool, List[str]]:
     spec_sec = shader_src[shader_src.find("const specs: Spec[] = [") : shader_src.find("let nLocoArrows = 0;")]
     web_ids = re.findall(r'id:\s*"([^"]+)"', spec_sec)
 
-    if len(topo_ids) != 35 or set(topo_ids) != set(web_ids) or len(topo.get("subnets", [])) < 7:
+    if len(topo_ids) != 36 or set(topo_ids) != set(web_ids) or len(topo.get("subnets", [])) < 7:
         ok = False
         msgs.append(
-            f"FAIL: Netlist/Web 35-pipe ID mismatch: topo={len(topo_ids)}, web={len(web_ids)}, "
+            f"FAIL: Netlist/Web 36-pipe ID mismatch: topo={len(topo_ids)}, web={len(web_ids)}, "
             f"diff={set(topo_ids) ^ set(web_ids)}"
         )
     else:
         msgs.append(
             f"PASS: Declarative Fluid Netlist verified (7 subnets, {len(topo.get('nodes', []))} nodes, "
-            f"exact 35/35 pipe ID parity with Web X-Ray)"
+            f"exact 36/36 pipe ID parity with Web X-Ray)"
         )
 
     has_cuda = torch.cuda.is_available()
@@ -3911,7 +3921,7 @@ def verify_gate_25() -> Tuple[bool, List[str]]:
         else:
             msgs.append(
                 f"PASS: Live GPU 3D Fluid-LVS verified on Straight & R2m Curve: "
-                f"Edges={rep_trk.passed_edges}/35 (Open=35, NeckFree=35, Wall=35), "
+                f"Edges={rep_trk.passed_edges}/36 (Open=36, NeckFree=36, Wall=36), "
                 f"Isolation={rep_trk.passed_isolation_pairs}/8, DynamicValves={rep_trk.passed_dynamic_tests}/8 "
                 f"({rep_trk.elapsed_ms:.0f}ms + {rep_r2m.elapsed_ms:.0f}ms)"
             )
@@ -3924,11 +3934,11 @@ def verify_gate_25() -> Tuple[bool, List[str]]:
             rep_raw = json.loads(rep_p.read_text(encoding="utf-8"))
             if (
                 not rep_raw.get("all_passed", False)
-                or int(rep_raw.get("passed_edges", 0)) != 35
+                or int(rep_raw.get("passed_edges", 0)) != 36
                 or int(rep_raw.get("passed_isolation_pairs", 0)) != 8
             ):
                 ok = False
-                msgs.append(f"FAIL: Fluid-LVS report indicates failure: {rep_raw.get('passed_edges')}/35")
+                msgs.append(f"FAIL: Fluid-LVS report indicates failure: {rep_raw.get('passed_edges')}/36")
         m_cpu = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / "models" / "d51_track.xml"))
         d_cpu = mujoco.MjData(m_cpu)
         dev_cpu = torch.device("cpu")
@@ -3989,6 +3999,239 @@ def verify_gate_25() -> Tuple[bool, List[str]]:
         msgs.append(
             f"PASS: Zero-if Fluid-LVS conductance coupling verified (plugged 13-9 chest={tel_p.steam_chest_kgf:.3f} vs {tel_o.steam_chest_kgf:.2f} kgf/cm²; "
             f"plugged 4-16 bypass_ret={tel_p.return_water_ml_s:.4f} vs {tel_o.return_water_ml_s:.2f} ml/s)"
+        )
+
+    return ok, msgs
+
+
+# ==============================================================================
+# Gate 26: Stage 21 顶层五层系统工程抽象、驾驶室拱门全封闭、8-7逆时针零穿模、8-6床板上置、
+#          4-17独立还原、4-2底出内立管多相油水沉降、20-6 R2m/R3m外移、机械旷量/悬挂、
+#          第一定律闭合热平衡桑基图与全车统一温度正相关色标门禁
+# ==============================================================================
+
+def verify_gate_26(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
+    import re
+    from sim.thermo_1d import AsterD51Thermo1D, CabControls
+
+    ok = True
+    msgs: List[str] = []
+
+    # 26.1 核验 5 层系统工程架构元数据契约与独立 4-17 / 6-8 / 4-16 STEP 母本
+    arch_p = PROJECT_ROOT / "configs" / "d51_system_architecture.json"
+    req_layers = {
+        "layer_1_bom_accounting_ledger",
+        "layer_2_enclosure_and_sweep_contracts",
+        "layer_3_suspension_and_clearance_system",
+        "layer_4_multiphase_fluid_and_thermal_color_standard",
+        "layer_5_boiler_first_law_sankey_balance",
+    }
+    arch_raw = json.loads(arch_p.read_text(encoding="utf-8")) if arch_p.exists() else {}
+    step_417 = (PROJECT_ROOT / "models" / "step" / "bypass_valve_4_17.step").exists()
+    step_68 = (PROJECT_ROOT / "models" / "step" / "boiler_riser_6_8.step").exists()
+    step_416 = (PROJECT_ROOT / "models" / "step" / "bypass_return_4_16.step").exists()
+    b417_pts = stl_tris_mm["bypass_valve_4_17"].reshape(-1, 3)
+    b417_yspan = float(b417_pts[:, 1].max() - b417_pts[:, 1].min())
+    b417_zmin = float(b417_pts[:, 2].min())
+    b417_zmax = float(b417_pts[:, 2].max())
+    if not (
+        req_layers.issubset(set(arch_raw.keys()))
+        and step_417
+        and step_68
+        and step_416
+        and b417_yspan >= 24.5
+        and b417_zmin <= 9.8
+        and b417_zmax >= 19.8
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: 5-layer architecture or standalone 4-17 STEP failed: layers={list(arch_raw.keys())}, "
+            f"step=({step_417},{step_68},{step_416}), 4-17=(Yspan={b417_yspan:.1f}, Z=[{b417_zmin:.1f},{b417_zmax:.1f}]mm)"
+        )
+    else:
+        msgs.append(
+            f"PASS: 5-Layer Systems Architecture contract + standalone 4-17/6-8/4-16 STEP verified "
+            f"(bypass_valve_4_17 Y_span={b417_yspan:.1f}mm, Z=[{b417_zmin:.1f}, +{b417_zmax:.1f}]mm)"
+        )
+
+    # 26.2 核验 21-28 驾驶室前妻板拱顶零露空、8-7 逆时针 0..+1.30 rad 零穿模、8-6 100% 位于右地板 wing_R (Z=+25.5mm) 之上
+    bs_tris = stl_tris_mm["boiler_superstructure"]
+    bh_tris = stl_tris_mm["cab_backhead_plate"]
+    all_front_tris = np.concatenate([bs_tris, bh_tris], axis=0)
+    v0f, e1f, e2f = all_front_tris[:, 0], all_front_tris[:, 1] - all_front_tris[:, 0], all_front_tris[:, 2] - all_front_tris[:, 0]
+    d_x = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+    hf = np.cross(d_x, e2f)
+    af = np.einsum("ij,ij->i", e1f, hf)
+    vf_mask = np.abs(af) > 1e-11
+    v0f, e1f, e2f, hf, inv_af = v0f[vf_mask], e1f[vf_mask], e2f[vf_mask], hf[vf_mask], 1.0 / af[vf_mask]
+
+    open_arch_rays = 0
+    tested_arch_rays = 0
+    for y_mm in np.linspace(-28.0, 28.0, 15):
+        for z_mm in np.linspace(75.5, 86.5, 7):
+            if (y_mm / 39.2) ** 2 + ((z_mm - 56.0) / 33.0) ** 2 > 0.92:
+                continue
+            tested_arch_rays += 1
+            s_vec = np.array([-118.0, y_mm, z_mm], dtype=np.float64) - v0f
+            u_val = inv_af * np.einsum("ij,ij->i", s_vec, hf)
+            m1 = (u_val >= 0.0) & (u_val <= 1.0)
+            hit_wall = False
+            if np.any(m1):
+                q_vec = np.cross(s_vec[m1], e1f[m1])
+                v_val = inv_af[m1] * np.einsum("ij,j->i", q_vec, d_x)
+                m2 = (v_val >= 0.0) & (u_val[m1] + v_val <= 1.0)
+                if np.any(m2):
+                    t_x = inv_af[m1][m2] * np.einsum("ij,ij->i", e2f[m1][m2], q_vec[m2])
+                    if np.any((t_x >= 0.0) & (t_x <= 12.0)):
+                        hit_wall = True
+            if not hit_wall:
+                open_arch_rays += 1
+
+    m_cab = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / "models" / "d51_full.xml"))
+    d_cab = mujoco.MjData(m_cab)
+    jid_byp = mujoco.mj_name2id(m_cab, mujoco.mjtObj.mjOBJ_JOINT, "j_cab_bypass")
+    byp_range = m_cab.jnt_range[jid_byp].copy()
+    gid_byp = mujoco.mj_name2id(m_cab, mujoco.mjtObj.mjOBJ_GEOM, "cab_bypass_vis")
+    lf_bid = mujoco.mj_name2id(m_cab, mujoco.mjtObj.mjOBJ_BODY, "loco_frame")
+    byp_local_m = sample_triangle_surface(stl_tris_mm["cab_bypass_lever"] * 1e-3, max_spacing_m=0.0005)
+    max_byp_y_mm = -999.0
+    for q_b in np.linspace(0.0, 1.30, 7):
+        mujoco.mj_resetData(m_cab, d_cab)
+        d_cab.qpos[m_cab.jnt_qposadr[jid_byp]] = float(q_b)
+        mujoco.mj_forward(m_cab, d_cab)
+        w_pts = byp_local_m @ d_cab.geom_xmat[gid_byp].reshape(3, 3).T + d_cab.geom_xpos[gid_byp]
+        loc_y_mm = (w_pts[:, 1] - d_cab.xpos[lf_bid, 1]) * 1000.0
+        max_byp_y_mm = max(max_byp_y_mm, float(np.max(loc_y_mm)))
+
+    bid_drn = mujoco.mj_name2id(m_cab, mujoco.mjtObj.mjOBJ_BODY, "cab_drain_lever")
+    drn_zmin_mm = (d_cab.xpos[bid_drn, 2] - d_cab.xpos[lf_bid, 2]) * 1000.0 + float(stl_tris_mm["cab_drain_lever"][:, :, 2].min())
+    if not (
+        tested_arch_rays >= 60
+        and open_arch_rays == 0
+        and float(byp_range[0]) >= -1e-4
+        and float(byp_range[1]) >= 1.28
+        and max_byp_y_mm <= 14.8
+        and drn_zmin_mm >= 25.8
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Cab arch/8-7/8-6 check failed: open_arch={open_arch_rays}/{tested_arch_rays}, "
+            f"j_cab_bypass_range={byp_range.round(2)}, byp_ymax={max_byp_y_mm:.2f}mm (must <=14.8mm clear of riser_L +16.8mm), "
+            f"8-6_zmin={drn_zmin_mm:.2f}mm (must >25.5mm floor)"
+        )
+    else:
+        msgs.append(
+            f"PASS: Cab front arch 100% enclosed (0/{tested_arch_rays} open rays), 8-7 CCW [0..+1.30rad] zero-clipping "
+            f"(Y_max=+{max_byp_y_mm:.2f}mm < +16.8mm riser_L), & 8-6 100% above right floorplate (Z_min=+{drn_zmin_mm:.2f}mm > +25.50mm)"
+        )
+
+    # 26.3 核验 図 20.1 气缸前假杆护套 20-6 R2m 外移孔位 (+3.85mm) vs R3m 同轴孔位净空增益、先导摇枕旷量与四轴旷量真值
+    m_trk = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / "models" / "d51_track.xml"))
+    m_r2m = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / "models" / "d51_r2m.xml"))
+    d_r2m = mujoco.MjData(m_r2m)
+    gid_pts_trk = mujoco.mj_name2id(m_trk, mujoco.mjtObj.mjOBJ_GEOM, "piston_tail_sheath_vis_L")
+    gid_pts_r2m = mujoco.mj_name2id(m_r2m, mujoco.mjtObj.mjOBJ_GEOM, "piston_tail_sheath_vis_L")
+    y_pts_r3m_mm = float(m_trk.geom_pos[gid_pts_trk, 1]) * 1000.0
+    y_pts_r2m_mm = float(m_r2m.geom_pos[gid_pts_r2m, 1]) * 1000.0
+    jid_lyaw = mujoco.mj_name2id(m_r2m, mujoco.mjtObj.mjOBJ_JOINT, "j_leading_yaw")
+    d_r2m.qpos[m_r2m.jnt_qposadr[jid_lyaw]] = +0.11  # 外侧先导轮向 +Y 气缸假杆摆出!
+    mujoco.mj_forward(m_r2m, d_r2m)
+    gid_lw = mujoco.mj_name2id(m_r2m, mujoco.mjtObj.mjOBJ_GEOM, "lead_vis_L")
+    lw_pts = (sample_triangle_surface(stl_tris_mm["truck_wheel_L"] * 1e-3, max_spacing_m=0.0008) @ d_r2m.geom_xmat[gid_lw].reshape(3, 3).T) + d_r2m.geom_xpos[gid_lw]
+    pts_surf_m = sample_triangle_surface(stl_tris_mm["piston_tail_sheath_L"] * 1e-3, max_spacing_m=0.0007)
+    pts_w_r2m = (pts_surf_m @ d_r2m.geom_xmat[gid_pts_r2m].reshape(3, 3).T) + d_r2m.geom_xpos[gid_pts_r2m]
+    lf_r2m = mujoco.mj_name2id(m_r2m, mujoco.mjtObj.mjOBJ_BODY, "loco_frame")
+    inboard_vec = d_r2m.xmat[lf_r2m].reshape(3, 3)[:, 1] * (-0.00385)
+    pts_w_r3m = pts_w_r2m + inboard_vec
+    clr_r2m_mm = float(np.min(cKDTree(lw_pts).query(pts_w_r2m, workers=1)[0])) * 1000.0
+    clr_r3m_mm = float(np.min(cKDTree(lw_pts).query(pts_w_r3m, workers=1)[0])) * 1000.0
+
+    jid_llat = mujoco.mj_name2id(m_trk, mujoco.mjtObj.mjOBJ_JOINT, "j_leading_lat")
+    llat_half_mm = float(m_trk.jnt_range[jid_llat, 1]) * 1000.0
+    drv_plays_mm = [
+        round(float(m_trk.jnt_range[mujoco.mj_name2id(m_trk, mujoco.mjtObj.mjOBJ_JOINT, f"j_lat_y{k}"), 1]) * 1000.0, 2)
+        for k in range(1, 5)
+    ]
+    eq_pts = stl_tris_mm["chassis_equalizer_brakes"].reshape(-1, 3)
+    drv_spr_pts = int(np.sum((eq_pts[:, 0] >= -61.0) & (eq_pts[:, 0] <= -56.0) & (eq_pts[:, 2] >= 7.2) & (eq_pts[:, 2] <= 13.0)))
+    if not (
+        abs((y_pts_r2m_mm - y_pts_r3m_mm) - 3.85) <= 0.05
+        and clr_r2m_mm >= clr_r3m_mm + 2.8
+        and abs(llat_half_mm - 2.00) <= 0.05
+        and drv_plays_mm == [1.2, 0.3, 0.2, 0.2]
+        and drv_spr_pts >= 120
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Sheet 20 (20-6) R2m/R3m or suspension clearances failed: Y_r3m={y_pts_r3m_mm:.2f}, Y_r2m={y_pts_r2m_mm:.2f}, "
+            f"clr_r2m={clr_r2m_mm:.2f} vs clr_r3m={clr_r3m_mm:.2f}mm, lead_lat=±{llat_half_mm:.2f}mm, drv_plays={drv_plays_mm}, 3-16_pts={drv_spr_pts}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Sheet 20 (20-6) R2m (+3.85mm outboard |Y|={y_pts_r2m_mm:.2f}mm vs R3m {y_pts_r3m_mm:.2f}mm, curve wheel clearance "
+            f"{clr_r3m_mm:.2f}->{clr_r2m_mm:.2f}mm) + 3-16 driving springs + blueprint plays (lead ±{llat_half_mm:.1f}mm, axles {drv_plays_mm}mm)"
+        )
+
+    # 26.4 核验 4-2 -Z 底出毛细管 + 内部竖直溢流立管多相沉降物理、第一定律闭合热平衡桑基图 & Web 统一温度正相关色标
+    lub_tris = stl_tris_mm["displacement_lubricator"]
+    lub_pts_all = lub_tris.reshape(-1, 3)
+    lub_bot_zmin = float(lub_pts_all[(lub_pts_all[:, 0] >= 141.0) & (lub_pts_all[:, 0] <= 148.0), 2].min())
+    standpipe_bore_open = not _pt_inside_stl(lub_tris, (146.2, 0.0, 6.0))
+    standpipe_wall_solid = _pt_inside_stl(lub_tris, (146.2, 0.84, 6.0))
+    oil_pool_open = not _pt_inside_stl(lub_tris, (152.0, 0.0, 6.0))
+
+    runner_chk = CoSimRunner(PROJECT_ROOT / "models" / "d51_track.xml", preset="cold", use_gpu_3d=False)
+    runner_chk.ctrl.burner_lit = True
+    runner_chk.ctrl.fuel_valve = 1.0
+    tel_cold = runner_chk.step_once()
+    runner_hot = CoSimRunner(PROJECT_ROOT / "models" / "d51_track.xml", preset="hot", use_gpu_3d=False)
+    runner_hot.ctrl.burner_lit = True
+    runner_hot.ctrl.fuel_valve = 1.0
+    runner_hot.ctrl.regulator = 0.50
+    runner_hot.ctrl.reverser = 0.78
+    runner_hot.thermo.T_lube_oil_c = 105.0
+    tel_hot = None
+    for _ in range(160):
+        tel_hot = runner_hot.step_once()
+    assert tel_hot is not None
+
+    fs_txt = (PROJECT_ROOT / "web" / "src" / "fluidShaders.ts").read_text(encoding="utf-8")
+    idx_txt = (PROJECT_ROOT / "web" / "dist" / "index.html").read_text(encoding="utf-8")
+    has_thermal_fn = ("export function temperatureToThermalColor" in fs_txt) and ("id=\"thermal-scale-bar\"" in idx_txt)
+    has_tdr_flow_fix = "out.tenderWaterMl > 0.3 ? out.feedwaterGS + out.returnWaterMlS : 0.0" in fs_txt
+    has_exh_r = "id: \"cyl_7_8_exhaust_R\"" in fs_txt
+
+    if not (
+        lub_bot_zmin <= -2.8
+        and standpipe_bore_open
+        and standpipe_wall_solid
+        and oil_pool_open
+        and tel_hot.lube_settling_mm_s > 3.0 * max(1e-4, tel_cold.lube_settling_mm_s)
+        and tel_hot.q_fuel_w > 50.0
+        and tel_hot.q_evap_w > 5.0
+        and tel_hot.q_flue_loss_w > 5.0
+        and tel_hot.q_casing_loss_w > 2.0
+        and tel_hot.energy_balance_err_pct < 0.20
+        and tel_hot.boiler_expansion_mm >= 0.32
+        and len(tel_hot.spring_deflect_mm) >= 10
+        and has_thermal_fn
+        and has_tdr_flow_fix
+        and has_exh_r
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: 4-2 standpipe / Sankey / Web thermal scale check failed: lub_zmin={lub_bot_zmin:.2f}mm, "
+            f"standpipe=(bore={standpipe_bore_open}, wall={standpipe_wall_solid}, pool={oil_pool_open}), "
+            f"stokes=({tel_cold.lube_settling_mm_s:.3f}->{tel_hot.lube_settling_mm_s:.3f}mm/s), "
+            f"Sankey=(fuel={tel_hot.q_fuel_w:.1f}W, evap={tel_hot.q_evap_w:.1f}W, flue={tel_hot.q_flue_loss_w:.1f}W, "
+            f"casing={tel_hot.q_casing_loss_w:.1f}W, err={tel_hot.energy_balance_err_pct:.4f}%), exp={tel_hot.boiler_expansion_mm:.3f}mm, "
+            f"web=(thermal={has_thermal_fn}, tdr_fix={has_tdr_flow_fix}, exh_r={has_exh_r})"
+        )
+    else:
+        msgs.append(
+            f"PASS: 4-2 -Z bottom U-loop (Z_min={lub_bot_zmin:.2f}mm) + internal standpipe & Stokes settling "
+            f"({tel_cold.lube_settling_mm_s:.2f}->{tel_hot.lube_settling_mm_s:.2f}mm/s), closed First-Law Sankey "
+            f"(err={tel_hot.energy_balance_err_pct:.4f}% < 0.2%, ΔL_Cu=+{tel_hot.boiler_expansion_mm:.2f}mm), & Web 36-pipe unified thermal scale"
         )
 
     return ok, msgs
@@ -4146,16 +4389,23 @@ def main() -> int:
 
     hw_guard.cooldown_if_needed()
     g25_ok, g25_msgs = verify_gate_25()
-    print(f"\n[Gate 25] Stage 20 Full-Vehicle 35-Edge Fluid-LVS (Zero-Open, Zero-Necking, Zero-Short, Dynamic Valves & Conductance Coupling) -> {'PASS' if g25_ok else 'FAIL'}")
+    print(f"\n[Gate 25] Stage 20 Full-Vehicle 36-Edge Fluid-LVS (Zero-Open, Zero-Necking, Zero-Short, Dynamic Valves & Conductance Coupling) -> {'PASS' if g25_ok else 'FAIL'}")
     for m in g25_msgs:
         print(f"  - {m}")
     all_ok &= g25_ok
+
+    hw_guard.cooldown_if_needed()
+    g26_ok, g26_msgs = verify_gate_26(stl_tris_mm)
+    print(f"\n[Gate 26] Stage 21 5-Layer Systems Architecture, Cab Arch Closure, 8-7/8-6/4-17, 4-2 Standpipe Physics, 20-6 R2m/R3m, Clearances, Sankey & Unified Thermal Scale -> {'PASS' if g26_ok else 'FAIL'}")
+    for m in g26_msgs:
+        print(f"  - {m}")
+    all_ok &= g26_ok
 
     snap = hw_guard.read_metrics()
     print(f"\n[Thermal/Power Guard] Post-run telemetry: CPU={snap['cpu_c']:.1f}°C | GPU={snap['gpu_c']:.1f}°C | GPU_Power={snap['gpu_w']:.1f}W")
     print("=" * 88)
     if all_ok:
-        print(" [ALL GATES 1-25 PASSED] STAGE 20 (FULL-VEHICLE 35-EDGE FLUID-LVS TOPOLOGY + 8-CHAMBER ISOLATION + DYNAMIC VALVE STATES) VERIFIED 100%")
+        print(" [ALL GATES 1-26 PASSED] STAGE 21 (5-LAYER SYSTEMS ARCHITECTURE + 107 STEP PARTS + 36-EDGE FLUID-LVS + CLOSED BOILER SANKEY + UNIFIED THERMAL SCALE) VERIFIED 100%")
         print("=" * 88)
         return 0
     else:

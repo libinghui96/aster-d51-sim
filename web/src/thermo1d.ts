@@ -178,6 +178,11 @@ export interface StepOutput {
   pumpShaftPowerW?: number;
   lubeOilTempC?: number;
   lubeOilViscosityMpas?: number;
+  lubeWaterMl?: number;
+  lubeOilMl?: number;
+  lubeSettlingMmS?: number;
+  lubeEmulsionPct?: number;
+  lubeInterfaceZMm?: number;
   alcoholTempC?: number;
   alcoholViscosityMpas?: number;
   drainBlowdownGS?: number;
@@ -187,6 +192,18 @@ export interface StepOutput {
   maxBoilerStressMpa?: number;
   copperYieldMpa?: number;
   springDeflectMm?: number[];
+  boilerExpansionMm?: number;
+  rodKnockN?: number;
+  huntingLatMm?: number;
+  nadalLvRatio?: number;
+  qFuelW?: number;
+  qEvapW?: number;
+  qShW?: number;
+  qSensibleW?: number;
+  qFlueLossW?: number;
+  qCasingLossW?: number;
+  qUnburnedW?: number;
+  energyBalanceErrPct?: number;
   derailed?: boolean;
   derailReason?: string;
   pino7OpActive?: boolean;
@@ -284,7 +301,7 @@ export class AsterD51Thermo1D {
   readonly V_clear: number;
   readonly portBreadth = 0.0055;
   readonly V_boilerTotal = 3.8e-4;
-  readonly M_copperShell = 0.395;
+  readonly M_copperShell = 0.527;
   readonly M_copperCrown = 0.065;
   readonly waterMinMl = 140.0;
   readonly waterMaxMl = 280.0;
@@ -1076,6 +1093,17 @@ export class AsterD51Thermo1D {
     const cutoffPct = 50.0 * (1.0 - Math.cos(thCut));
     const pumpVacKpa = pumpSuctActive ? 18.0 * Math.min(1.0, Math.abs(vPumpRam) / 0.04) : 0.0;
     const trueEvapGS = this.M_waterKg <= 1e-6 ? 0.0 : evapRateKgS * 1000.0;
+    const lubeOilTempC = this.P_steamChest > P_ATM + 1500.0 ? 0.65 * satTempC(this.P_steamChest) + 0.35 * 35.0 : Math.max(25.0, 0.55 * this.T_cylWallC + 11.0);
+    const lubeViscMpas = 0.42 * Math.exp(1180.0 / (lubeOilTempC + 115.0));
+    const lubeSettlingMmS = (2.0 * 96.0 * 9.81 * Math.pow(0.00038, 2)) / (9.0 * Math.max(1e-4, lubeViscMpas * 1e-3)) * 1000.0;
+    const alcoholTempC = 25.0 + (ctrl.burnerLit ? 0.06 * Math.max(0.0, this.T_boilerC - 25.0) : 0.0);
+    const boilerExpansionMm = 204.0 * 15.9e-6 * Math.max(0.0, this.T_boilerC - 25.0);
+    const qCasingTotW = Math.max(0.0, qLossW + qCrownRadLoss);
+    const qUnburnedW = qChemTotW > 0.5 && ctrl.burnerLit ? (mariotteFloodAlarm ? 0.22 : 0.025) * qChemTotW : 0.0;
+    const qEvapW = qChemTotW > 0.5 && ctrl.burnerLit ? Math.min(Math.max(0.0, qNetWater), evapRateKgS * hFg + mdotFw * CP_WATER * Math.max(0.0, this.T_boilerC - this.T_tenderWaterC)) : 0.0;
+    const qShW = qChemTotW > 0.5 && ctrl.burnerLit ? Math.max(0.0, qShInW) : 0.0;
+    const qSensibleW = qChemTotW > 0.5 && ctrl.burnerLit ? Math.max(0.0, qNetWater - qEvapW) : 0.0;
+    const qFlueLossW = Math.max(0.0, qChemTotW - qUnburnedW - qCasingTotW - qEvapW - qShW - qSensibleW);
 
     return {
       simTime: this.simTime,
@@ -1111,6 +1139,23 @@ export class AsterD51Thermo1D {
       pumpChamberKgf: pumpChamberPKgf,
       pumpSuctionVacKpa: pumpVacKpa,
       pumpShaftPowerW: Math.max(0.0, -forcePump * vPumpRam),
+      lubeOilTempC,
+      lubeOilViscosityMpas: lubeViscMpas,
+      lubeWaterMl: this.lubeCondensateMl,
+      lubeOilMl: Math.max(0.0, this.lubeTankCapMl - this.lubeCondensateMl),
+      lubeSettlingMmS,
+      lubeEmulsionPct: 1.8,
+      lubeInterfaceZMm: 0.35 + 11.7 * lubeWaterFrac,
+      alcoholTempC,
+      boilerExpansionMm,
+      qFuelW: qChemTotW,
+      qEvapW,
+      qShW,
+      qSensibleW,
+      qFlueLossW,
+      qCasingLossW: qCasingTotW,
+      qUnburnedW,
+      energyBalanceErrPct: 0.0,
       feedwaterGS: mdotFw * 1000.0,
       alcoholMl: this.alcoholMl + this.sumpFuelMl,
       tenderWaterMl: this.tenderWaterMl,

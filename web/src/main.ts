@@ -44,8 +44,9 @@ const INTERACTIVE_PART_META: Record<string, { label: string; kind: InteractivePa
   cab_sight_drain_vis: { label: "13-5#3/1-1 右外縁(-Y) 11-7 水面計下部同軸ドレン栓 (クリックでフラッシュ洗浄)", kind: "toggle" },
   cab_blowdown_vis: { label: "11-16/11-17 左床下横向き(+Y)マイナス溝排水弁 (ドラッグで缶底排泥ブロー)", kind: "drag" },
   cab_fire_door_vis: { label: "12-1 低位中央・底ヒンジバタフライ火室扉 (ドラッグで開閉・二次空気流入)", kind: "drag" },
-  cab_bypass_vis: { label: "4-17/6-9/8-7 左運転台(+Y)床面・黒染平滑ハブ給水バイパス弁レバー (ドラッグで 31-14 戻水量調整)", kind: "drag" },
-  cab_drain_lever_vis: { label: "8-6 右床面・100%水平スライドローレットドレンノブ → 8-10 双耳ガイド → 8-5 (クリックでシリンダ排液開閉)", kind: "toggle" },
+  cab_bypass_vis: { label: "4-17/6-9/8-7 左運転台(+Y)床面・黒染平滑ハブ給水バイパス弁レバー (反時計回りで 31-14 戻水量調整)", kind: "drag" },
+  bypass_valve_4_17_vis: { label: "4-17 床下横置真鍮バイパスバルブ本体＋LN5-7Aロックナット＋4-15中空管ボルト (ドラッグでバイパス調整)", kind: "drag" },
+  cab_drain_lever_vis: { label: "8-6 右床板上(Z=+29.4mm)・8-10双耳スタンド水平スライドローレットドレンノブ (クリックでシリンダ排液開閉)", kind: "toggle" },
   dome_lid_vis: { label: "29-12/29-13 カマボコ砂箱前部ワイヤヒンジ蓋 (クリックで開閉)", kind: "toggle" },
   drain_pull_rod_vis: { label: "8-5 右床下ドレン弁水平引き棒 (クリックで8段排液リンク開閉)", kind: "toggle" },
   tender_handpump_vis: { label: "31-3/31-5 炭水車水槽内・4節リンク手動ポンプ立柱 (クリックで圧送)", kind: "pump" },
@@ -704,7 +705,12 @@ async function main() {
         } else if (meshKey === "superheater_piping" || meshKey === "exhaust_blast_pipe") {
           mat = matSuperheater.clone();
           attachSuperheaterShader(mat as THREE.MeshStandardMaterial, fluidVis.uniforms);
-        } else if (meshKey === "feedwater_piping") {
+        } else if (
+          meshKey === "feedwater_piping" ||
+          meshKey === "bypass_valve_4_17" ||
+          meshKey === "boiler_riser_6_8" ||
+          meshKey === "bypass_return_4_16"
+        ) {
           mat = matFeedwater.clone();
           attachFeedwaterShader(mat as THREE.MeshStandardMaterial, fluidVis.uniforms, false);
         } else if (gName === "umb_hose_feed" || gName === "umb_hose_return") {
@@ -786,6 +792,9 @@ async function main() {
           meshKey === "superheater_piping" ||
           meshKey === "exhaust_blast_pipe" ||
           meshKey === "feedwater_piping" ||
+          meshKey === "bypass_valve_4_17" ||
+          meshKey === "boiler_riser_6_8" ||
+          meshKey === "bypass_return_4_16" ||
           gName === "umb_hose_fuel" ||
           gName === "umb_hose_feed" ||
           gName === "umb_hose_return"
@@ -1079,7 +1088,8 @@ async function main() {
       case "cab_sight_drain_vis": return ctrl.sightDrainValve ? "吹抜中" : "閉";
       case "cab_blowdown_vis": return `${Math.round(ctrl.blowdownValve * 100)}%`;
       case "cab_fire_door_vis": return `${Math.round(ctrl.fireboxDoor * 100)}% 開`;
-      case "cab_bypass_vis": return `${Math.round(ctrl.bypassValve * 100)}%`;
+      case "cab_bypass_vis":
+      case "bypass_valve_4_17_vis": return `${Math.round(ctrl.bypassValve * 100)}%`;
       case "cab_drain_lever_vis": return ctrl.drainCock ? "開 (排液)" : "閉";
       case "dome_lid_vis": return ctrl.domeLidOpen ? "開" : "閉";
       case "drain_pull_rod_vis": return ctrl.drainCock ? "開 (排液)" : "閉";
@@ -1130,7 +1140,7 @@ async function main() {
       if (gn === "cab_regulator_vis") ctrl.regulator = Math.max(0, Math.min(1, dragStartVal + delta));
       else if (gn === "cab_reverser_wheel_vis") ctrl.reverser = Math.max(-1, Math.min(1, dragStartVal + delta * 1.4));
       else if (gn === "cab_blower_vis") ctrl.blowerValve = Math.max(0, Math.min(1, dragStartVal + delta));
-      else if (gn === "cab_bypass_vis") ctrl.bypassValve = Math.max(0, Math.min(1, dragStartVal + delta));
+      else if (gn === "cab_bypass_vis" || gn === "bypass_valve_4_17_vis") ctrl.bypassValve = Math.max(0, Math.min(1, dragStartVal + delta));
       else if (gn === "cab_blowdown_vis") ctrl.blowdownValve = Math.max(0, Math.min(1, dragStartVal + delta));
       else if (gn === "tender_fuel_valve_vis") ctrl.fuelValve = Math.max(0, Math.min(1, dragStartVal + delta));
       else if (gn === "cab_fire_door_vis") ctrl.fireboxDoor = Math.max(0, Math.min(1, dragStartVal + delta));
@@ -1160,7 +1170,7 @@ async function main() {
         gn === "cab_regulator_vis" ? ctrl.regulator :
         gn === "cab_reverser_wheel_vis" ? ctrl.reverser :
         gn === "cab_blower_vis" ? ctrl.blowerValve :
-        gn === "cab_bypass_vis" ? ctrl.bypassValve :
+        (gn === "cab_bypass_vis" || gn === "bypass_valve_4_17_vis") ? ctrl.bypassValve :
         gn === "cab_blowdown_vis" ? ctrl.blowdownValve :
         gn === "tender_fuel_valve_vis" ? ctrl.fuelValve :
         ctrl.fireboxDoor;
@@ -1223,6 +1233,10 @@ async function main() {
   const syncOverlayButtons = () => {
     btnFlowDir?.classList.toggle("active", flowDirEnabled);
     btnPipeLabels?.classList.toggle("active", pipeLabelsEnabled);
+    const thermalBar = document.getElementById("thermal-scale-bar");
+    if (thermalBar) {
+      thermalBar.style.display = (selCam.value === "xray" || flowDirEnabled) ? "flex" : "none";
+    }
     if (!pipeLabelsEnabled) {
       pipeLabelsLayer.innerHTML = "";
     }
@@ -1357,7 +1371,7 @@ async function main() {
       j_cab_pg_needle: -2.10 + pNorm * 4.20,
       j_cab_blowdown: 3.14 * ctrl.blowdownValve,
       j_cab_fire_door: +1.40 * ctrl.fireboxDoor,
-      j_cab_bypass: -1.35 * ctrl.bypassValve,
+      j_cab_bypass: +1.30 * ctrl.bypassValve,
       j_cab_drain: ctrl.drainCock ? -0.0038 : 0.0038,
       j_dome_lid: ctrl.domeLidOpen ? 1.15 : 0.0,
       j_safety_poppet_1: svLiftWasm,
@@ -1783,11 +1797,21 @@ async function main() {
       const wickMlS = out.wickCapillaryMlS ?? sp.wickCapillaryMlS ?? 0.0;
       const chtEl = document.getElementById("txt-cht");
       if (chtEl) {
+        const qEvap = out.qEvapW ?? 0.0;
+        const qFlue = out.qFlueLossW ?? 0.0;
         chtEl.textContent =
           out.burnerLumenConnected === false || sp.burnerLumenConnected === false
             ? `管路不通 0.00ml/s | ${lossW.toFixed(1)}W (${casC.toFixed(0)}°C)`
-            : `η=${etaPct.toFixed(1)}% | ${lossW.toFixed(1)}W (${casC.toFixed(0)}°C) | ${wickMlS.toFixed(2)}ml/s`;
+            : `η=${etaPct.toFixed(1)}% (蒸${qEvap.toFixed(0)}W/排煙${qFlue.toFixed(0)}W/殻${lossW.toFixed(0)}W)`;
         chtEl.classList.toggle("val-hot", casC >= 110.0 || wickTipC >= 420.0);
+      }
+      const sysEl = document.getElementById("txt-sys-clearance");
+      if (sysEl) {
+        const sprArr = out.springDeflectMm ?? [0.65];
+        const sprMean = sprArr.length > 0 ? sprArr.slice(0, 6).reduce((a, b) => a + b, 0) / Math.min(6, sprArr.length) : 0.65;
+        const expMm = out.boilerExpansionMm ?? 0.0;
+        const vStk = out.lubeSettlingMmS ?? 0.0;
+        sysEl.textContent = `懸架撓${sprMean.toFixed(2)}mm | 膨張+${expMm.toFixed(2)}mm | 油水沈降${vStk.toFixed(2)}mm/s`;
       }
 
       if (aiMode !== "off" && aiStatusText) {

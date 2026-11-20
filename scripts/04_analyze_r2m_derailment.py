@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 scripts/04_analyze_r2m_derailment.py
-对比先导台车支点 (20-6) 在 R2m 孔位与 R3m 孔位 (相差 10mm) 下通过 R=2.0m 弯道时的动力学表现：
-  1. 外侧钢轨轮缘侧向导向力 Y (N)
-  2. Nadal 脱线系数 Y/Q (安全阈值 < 0.80)
-  3. 先导台车水平偏转角 (deg) 与第 1 动轮轴箱横动量 (mm)
+对比 イラスト 20 図 20.1 气缸前盖 (1-36/1-13) 上 20-6 尻棒2 (活塞假尾杆护套底座) 在 R2m 外移孔位 (|Y|=36.35mm, 外移 +3.85mm)
+与 R3m 同轴孔位 (|Y|=32.50mm) 下通过 R=2.0m 最小曲线半径时的动力学与三维运动包络净空表现：
+  1. 先导轮外缘与气缸前活塞假杆护套 (20-2 / 20-6) 的最小三维表面净空 (mm)
+  2. 外侧钢轨轮缘侧向导向力 Y (N) 与 Nadal 脱线系数 Y/Q (安全阈值 < 0.80)
+  3. 先导台车水平偏转角 (deg)、摇枕横动旷量 (mm) 与第 1 动轮轴箱横动量 (mm)
 """
 
 import argparse
@@ -37,7 +38,7 @@ class CurveMetrics:
 
 
 def build_pivot_variant_xml(base_xml_path: Path, pivot_mode: str, tmp_dir: Path) -> Path:
-    """基于 d51_r2m.xml 派生 R2m 与 R3m 两种先导支点 (20-6) 构型，自动保持 meshdir 绝对路径正确。"""
+    """基于 d51_r2m.xml 派生 図 20.1 中 20-6 尻棒2 的 R2m 外侧孔位 (|Y|=36.35mm) 与 R3m 同轴孔位 (|Y|=32.50mm) 构型。"""
     tree = ET.parse(base_xml_path)
     root = tree.getroot()
 
@@ -46,43 +47,16 @@ def build_pivot_variant_xml(base_xml_path: Path, pivot_mode: str, tmp_dir: Path)
         mesh_abs = (base_xml_path.parent / compiler.get("meshdir")).resolve()
         compiler.set("meshdir", str(mesh_abs))
 
-    lead_arm = root.find(".//body[@name='leading_truck_arm']")
-    lead_ws = root.find(".//body[@name='leading_wheelset']")
-    j_yaw = root.find(".//joint[@name='j_leading_yaw']")
-    if lead_arm is None or lead_ws is None or j_yaw is None:
-        raise RuntimeError("XML 中未找到 leading_truck_arm，请确认已生成 models/d51_r2m.xml")
-
-    lead_axle_x = float(lead_arm.attrib["pos"].split()[0]) + float(lead_ws.attrib["pos"].split()[0])
-    arm_pos = [float(v) for v in lead_arm.attrib["pos"].split()]
-    if pivot_mode == "R2m":
-        arm_len, yaw_lim, yaw_stiff = 0.052, 0.28, 0.35
-    else:
-        arm_len, yaw_lim, yaw_stiff = 0.062, 0.090, 0.65
-
-    old_arm_len = float(lead_ws.attrib["pos"].split()[0])
-    arm_pos[0] = lead_axle_x - arm_len
-    lead_arm.set("pos", f"{arm_pos[0]:.6f} {arm_pos[1]:.6f} {arm_pos[2]:.6f}")
-    lead_ws.set("pos", f"{arm_len:.6f} 0 0")
-    j_yaw.set("range", f"{-yaw_lim:.6f} {yaw_lim:.6f}")
-    j_yaw.set("stiffness", f"{yaw_stiff:.4f}")
-
-    # 同步调整 19-2 先导台车架可视化网格与质心偏移 (切换 20-6 双孔定位槽至 R2m/R3m 孔位)
-    frame_vis = lead_arm.find("geom[@name='lead_frame_vis']")
-    if frame_vis is not None:
-        frame_vis.set("pos", f"{arm_len:.6f} 0 0")
-    inert = lead_arm.find("inertial")
-    if inert is not None:
-        ip = [float(v) for v in inert.attrib["pos"].split()]
-        ip[0] += arm_len - old_arm_len
-        inert.set("pos", f"{ip[0]:.6f} {ip[1]:.6f} {ip[2]:.6f}")
-    arm_bar = lead_arm.find("geom[@name='lead_arm_bar']")
-    if arm_bar is not None:
-        arm_bar.set("pos", f"{0.5 * arm_len:.6f} 0 0")
-        old_sz = arm_bar.attrib["size"].split()
-        arm_bar.set("size", f"{0.5 * arm_len:.6f} {old_sz[1]} {old_sz[2]}")
+    y_pts_abs = 0.036350 if pivot_mode == "R2m" else 0.032500
+    for tag, sgn in (("L", +1.0), ("R", -1.0)):
+        pts_geom = root.find(f".//geom[@name='piston_tail_sheath_vis_{tag}']")
+        if pts_geom is not None:
+            p_xyz = [float(v) for v in pts_geom.attrib["pos"].split()]
+            p_xyz[1] = sgn * y_pts_abs
+            pts_geom.set("pos", f"{p_xyz[0]:.6f} {p_xyz[1]:.6f} {p_xyz[2]:.6f}")
 
     tmp_dir.mkdir(parents=True, exist_ok=True)
-    out_xml = tmp_dir / f"d51_pivot_{pivot_mode}.xml"
+    out_xml = tmp_dir / f"d51_tailrod_20_6_{pivot_mode}.xml"
     tree.write(out_xml, encoding="utf-8")
     return out_xml
 

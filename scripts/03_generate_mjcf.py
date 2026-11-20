@@ -353,7 +353,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     default = ET.SubElement(mj, "default")
     ET.SubElement(default, "geom", condim="3", solref="0.0015 1.0", solimp="0.95 0.99 0.0001")
     ET.SubElement(default, "joint", solreflimit="0.002 1.0", solimplimit="0.98 0.995 0.0001")
-    ET.SubElement(default, "equality", solref="0.0010 1.0", solimp="0.9992 0.9999 0.00002")
+    ET.SubElement(default, "equality", solref="0.00045 1.0", solimp="0.9996 0.99996 0.000005")
 
     mesh_dir = Path("models/meshes")
     asset = ET.SubElement(mj, "asset")
@@ -431,6 +431,9 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     mp_pet = parts_mp["smokebox_petticoat"]
     mp_tsv = parts_mp["tandem_safety_valves"]
     mp_fw_pipe = parts_mp["feedwater_piping"]
+    mp_byp_4_17 = parts_mp["bypass_valve_4_17"]
+    mp_riser_6_8 = parts_mp["boiler_riser_6_8"]
+    mp_ret_4_16 = parts_mp["bypass_return_4_16"]
     mp_lub = parts_mp["displacement_lubricator"]
     mp_burner = parts_mp["alcohol_burner"]
     mp_wick = parts_mp["burner_wick"]
@@ -448,6 +451,13 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     mp_mbL, mp_mbR = parts_mp["motion_bracket_L"], parts_mp["motion_bracket_R"]
     cyl_pos_L = np.array([rc_cfg["cylinder_center_x"] * s, +rc_cfg["cylinder_center_y"] * s, rc_cfg["cylinder_center_z"] * s])
     cyl_pos_R = np.array([rc_cfg["cylinder_center_x"] * s, -rc_cfg["cylinder_center_y"] * s, rc_cfg["cylinder_center_z"] * s])
+    pts_y_off_m = (
+        float(rc_cfg.get("front_tail_rod_20_6_r2m_outboard_mm", 3.85)) * s
+        if mode == "curve_r2m"
+        else 0.0
+    )
+    pts_pos_L = cyl_pos_L + np.array([0.0, +pts_y_off_m, 0.0])
+    pts_pos_R = cyl_pos_R + np.array([0.0, -pts_y_off_m, 0.0])
     mb_pos_L = np.array([tx_m, +y_vg_abs, tz_m])
     mb_pos_R = np.array([tx_m, -y_vg_abs, tz_m])
     rev_stand_pos = np.array([-0.127500, +0.032500, 0.025500])
@@ -477,6 +487,9 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             (mp_pet["mass_kg"], np.array(mp_pet["com_m"]), full_to_mat3(mp_pet["fullinertia"])),
             (mp_tsv["mass_kg"], np.array(mp_tsv["com_m"]), full_to_mat3(mp_tsv["fullinertia"])),
             (mp_fw_pipe["mass_kg"], np.array(mp_fw_pipe["com_m"]), full_to_mat3(mp_fw_pipe["fullinertia"])),
+            (mp_byp_4_17["mass_kg"], np.array(mp_byp_4_17["com_m"]), full_to_mat3(mp_byp_4_17["fullinertia"])),
+            (mp_riser_6_8["mass_kg"], np.array(mp_riser_6_8["com_m"]), full_to_mat3(mp_riser_6_8["fullinertia"])),
+            (mp_ret_4_16["mass_kg"], np.array(mp_ret_4_16["com_m"]), full_to_mat3(mp_ret_4_16["fullinertia"])),
             (mp_lub["mass_kg"], np.array(mp_lub["com_m"]), full_to_mat3(mp_lub["fullinertia"])),
             (mp_burner["mass_kg"], np.array(mp_burner["com_m"]), full_to_mat3(mp_burner["fullinertia"])),
             (mp_wick["mass_kg"], np.array(mp_wick["com_m"]) + np.array([-0.093, 0.0, 0.0]), full_to_mat3(mp_wick["fullinertia"])),
@@ -492,8 +505,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             (mp_cylR["mass_kg"], np.array(mp_cylR["com_m"]) + cyl_pos_R, full_to_mat3(mp_cylR["fullinertia"])),
             (mp_sbL["mass_kg"], np.array(mp_sbL["com_m"]) + cyl_pos_L, full_to_mat3(mp_sbL["fullinertia"])),
             (mp_sbR["mass_kg"], np.array(mp_sbR["com_m"]) + cyl_pos_R, full_to_mat3(mp_sbR["fullinertia"])),
-            (mp_ptsL["mass_kg"], np.array(mp_ptsL["com_m"]) + cyl_pos_L, full_to_mat3(mp_ptsL["fullinertia"])),
-            (mp_ptsR["mass_kg"], np.array(mp_ptsR["com_m"]) + cyl_pos_R, full_to_mat3(mp_ptsR["fullinertia"])),
+            (mp_ptsL["mass_kg"], np.array(mp_ptsL["com_m"]) + pts_pos_L, full_to_mat3(mp_ptsL["fullinertia"])),
+            (mp_ptsR["mass_kg"], np.array(mp_ptsR["com_m"]) + pts_pos_R, full_to_mat3(mp_ptsR["fullinertia"])),
             (mp_vssL["mass_kg"], np.array(mp_vssL["com_m"]) + cyl_pos_L, full_to_mat3(mp_vssL["fullinertia"])),
             (mp_vssR["mass_kg"], np.array(mp_vssR["com_m"]) + cyl_pos_R, full_to_mat3(mp_vssR["fullinertia"])),
             (mp_rev_stand["mass_kg"], np.array(mp_rev_stand["com_m"]) + rev_stand_pos, full_to_mat3(mp_rev_stand["fullinertia"])),
@@ -579,6 +592,21 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         pos="0 0 0", mass="0", contype="0", conaffinity="0"
     )
     ET.SubElement(
+        frame, "geom", name="bypass_valve_4_17_vis", type="mesh",
+        mesh="m_bypass_valve_4_17", material="mat_brass",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
+        frame, "geom", name="boiler_riser_6_8_vis", type="mesh",
+        mesh="m_boiler_riser_6_8", material="mat_brass",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
+        frame, "geom", name="bypass_return_4_16_vis", type="mesh",
+        mesh="m_bypass_return_4_16", material="mat_brass",
+        pos="0 0 0", mass="0", contype="0", conaffinity="0"
+    )
+    ET.SubElement(
         frame, "geom", name="displacement_lubricator_vis", type="mesh",
         mesh="m_displacement_lubricator", material="mat_brass",
         pos="0 0 0", mass="0", contype="0", conaffinity="0"
@@ -642,12 +670,12 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         "R": solve_side_pose(q_rad_R, cfg),
     }
 
-    # 1. 四对 Boxpok 驱动动轮 (第 3 主动轮采用加长曲柄销 + 7-10 回动曲柄复合惯量)
+    # 1. 四对 Boxpok 驱动动轮 (第 3 主动轮采用加长曲柄销 + 7-10 回动曲柄复合惯量; 図 5.1 精确还原首轴 ±1.20mm 与第2-4轴 ±0.30/±0.20mm 轴箱旷量)
     axle_xs = [
         (1, w_cfg["axle_x"]["drive_1"] * s, w_cfg["axle_lateral_play_half"]["drive_1"] * s),
         (2, w_cfg["axle_x"]["drive_2"] * s, w_cfg["axle_lateral_play_half"]["drive_2"] * s),
         (3, w_cfg["axle_x"]["drive_3"] * s, w_cfg["axle_lateral_play_half"]["drive_3"] * s),
-        (4, w_cfg["axle_x"]["drive_4"] * s, max(0.0004, w_cfg["axle_lateral_play_half"]["drive_4"] * s)),
+        (4, w_cfg["axle_x"]["drive_4"] * s, w_cfg["axle_lateral_play_half"]["drive_4"] * s),
     ]
     y_w_off = y_gauge_half + 0.0008
     m_axle_rod = math.pi * (0.003**2) * (2.0 * y_gauge_half) * rho_sus
@@ -765,16 +793,21 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
                 ET.SubElement(ft_rock, "joint", joint=ja_n, coef="37.037")
                 ET.SubElement(ft_rock, "joint", joint=jb_n, coef="-37.037")
 
-    # 2. 19-2 铸铁先导径向台车架 (含 20-6 R2m/R3m 双孔支座 + 19-1 侧倾 + 19-3 横移摇枕 + 19-8 螺旋弹簧) 与 19-11 Delta 式从轮铸铁台车架
+    # 2. 19-2 铸铁先导径向台车架 (19-6 单固定支点 X=+112.0mm + 19-1 侧倾销 + 19-3 ±2.0mm 横移摇枕旷量 + 19-8 螺旋拉簧) 与 19-11 Delta 式从轮铸铁台车架
     tz_truck = -(r_drv - r_trk)
     mp_tL, mp_tR = parts_mp["truck_wheel_L"], parts_mp["truck_wheel_R"]
     y_tw_off = y_gauge_half + 0.00038
 
     lead_axle_x = w_cfg["axle_x"]["leading"] * s
-    lead_pivot_x = lead_axle_x - (0.052 if mode == "curve_r2m" else 0.062)
-    lead_arm_len = lead_axle_x - lead_pivot_x
+    lead_arm_len = float(w_cfg.get("leading_pivot_arm_mm", 56.0)) * s
+    lead_pivot_x = lead_axle_x - lead_arm_len
+    lead_bolster_lat_m = float(
+        cfg.get("mechanical_clearances_mm", {}).get("leading_truck_bolster_lateral_half_mm", 2.00)
+    ) * s
     if mode == "curve_r2m":
-        lead_init_yaw = -0.080
+        wx_la = loco_wx + lead_axle_x
+        wy_la_curve = -R_curve + math.sqrt(R_curve**2 - wx_la**2)
+        lead_init_yaw = math.asin(max(-0.24, min(0.24, (wy_la_curve - loco_wy) / lead_arm_len)))
         lead_arm = ET.SubElement(
             frame, "body", name="leading_truck_arm",
             pos=f"{lead_pivot_x:.6f} 0 {tz_truck:.6f}", euler=f"0 0 {lead_init_yaw:.6f}"
@@ -782,13 +815,13 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         ET.SubElement(
             lead_arm, "joint", name="j_leading_yaw", type="hinge", axis="0 0 1",
             ref=f"{lead_init_yaw:.6f}", springref="0",
-            limited="true", range="-0.30 0.30", stiffness="0.20", damping="0.16"
+            limited="true", range="-0.30 0.30", stiffness="0.22", damping="0.16"
         )
     else:
         lead_arm = ET.SubElement(frame, "body", name="leading_truck_arm", pos=f"{lead_pivot_x:.6f} 0 {tz_truck:.6f}")
         ET.SubElement(
             lead_arm, "joint", name="j_leading_yaw", type="hinge", axis="0 0 1",
-            limited="true", range="-0.30 0.30", stiffness="0.20", damping="0.16"
+            limited="true", range="-0.30 0.30", stiffness="0.22", damping="0.16"
         )
     attach_part_inertial(lead_arm, parts_mp["leading_truck_frame"], offset_xyz=(lead_arm_len, 0.0, 0.0))
     ET.SubElement(
@@ -799,11 +832,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     if on_rails:
         ET.SubElement(
             lead_arm, "joint", name="j_leading_roll", type="hinge", axis="1 0 0",
-            limited="true", range="-0.045 0.045", armature="0.0006", stiffness="0.35", damping="0.04"
+            limited="true", range="-0.065 0.065", armature="0.0006", stiffness="0.35", damping="0.04"
         )
         ET.SubElement(
             lead_arm, "joint", name="j_leading_lat", type="slide", axis="0 1 0",
-            limited="true", range="-0.00022 0.00022", armature="0.002", stiffness="650", damping="8.0"
+            limited="true", range=f"{-lead_bolster_lat_m:.6f} {lead_bolster_lat_m:.6f}", armature="0.002", stiffness="420", damping="8.0"
         )
     ET.SubElement(
         lead_arm, "geom", name="lead_frame_vis", type="mesh",
@@ -1106,20 +1139,20 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_cab_firebox_door", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
     )
 
-    # 6-9 / 8-7 驾驶室左地板 (+Y=+8.5mm, X=-135.5mm, Z=+22.4mm) 低矮光滑圆筒发黑旁通针阀手柄 (向下同轴直插床下阶梯圆筒 4-17, イラスト 4, 6, 8 & p45)
+    # 6-9 / 8-7 驾驶室左地板 (+Y=+8.5mm, X=-135.5mm, Z=+22.4mm) 低矮光滑圆筒发黑旁通针阀手柄 (Step 8(5)/図 8.3: 右旋针阀 q=0 全闭 +162° 距左阶梯 >=4.7mm, 逆时针 +0..+1.31 rad 向中央内侧旋转开启, 零穿模!)
     byp_lev = ET.SubElement(frame, "body", name="cab_bypass_lever", pos="-0.135500 0.008500 0.022400")
     attach_part_inertial(byp_lev, parts_mp["cab_bypass_lever"])
     ET.SubElement(
         byp_lev, "joint", name="j_cab_bypass", type="hinge", axis="0 0 1",
-        limited="true", range="-1.57 1.57", damping="0.002"
+        limited="true", range="0.0 1.31", damping="0.002"
     )
     ET.SubElement(
         byp_lev, "geom", name="cab_bypass_vis", type="mesh",
         mesh="m_cab_bypass_lever", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
     )
 
-    # 8-6 ドレンバルブ: 驾驶室右地板缺口上方 (-140.0, -19.0, +22.2mm) 100% 纯水平同轴推拉滚花圆柱握柄 (pitch=0.0°, slide axis="1 0 0", イラスト 8 & 図 8.1)
-    drn_lev = ET.SubElement(frame, "body", name="cab_drain_lever", pos="-0.140000 -0.020800 0.022200")
+    # 8-6 ドレンバルブ: 驾驶室右地板台面之上 (-140.0, -25.0, +29.4mm, Z_min=+26.22mm > Z_floor=+25.50mm) 经 8-10 立式双导耳支撑的 100% 水平同轴推拉滚花握柄 (イラスト 8, 図 8.1 & p45)
+    drn_lev = ET.SubElement(frame, "body", name="cab_drain_lever", pos="-0.140000 -0.025000 0.029400")
     attach_part_inertial(drn_lev, parts_mp["cab_drain_lever"])
     ET.SubElement(
         drn_lev, "joint", name="j_cab_drain", type="slide", axis="1 0 0",
@@ -1187,10 +1220,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             pos=f"{rc_cfg['cylinder_center_x']*s:.6f} {y_cyl:.6f} {rc_cfg['cylinder_center_z']*s:.6f}",
             mass="0", contype="0", conaffinity="0"
         )
+        y_pts = y_cyl + sgn * pts_y_off_m
         ET.SubElement(
             frame, "geom", name=f"piston_tail_sheath_vis_{tag}", type="mesh",
             mesh=f"m_piston_tail_sheath_{tag}", material="mat_black_iron",
-            pos=f"{rc_cfg['cylinder_center_x']*s:.6f} {y_cyl:.6f} {rc_cfg['cylinder_center_z']*s:.6f}",
+            pos=f"{rc_cfg['cylinder_center_x']*s:.6f} {y_pts:.6f} {rc_cfg['cylinder_center_z']*s:.6f}",
             mass="0", contype="0", conaffinity="0"
         )
         ET.SubElement(
