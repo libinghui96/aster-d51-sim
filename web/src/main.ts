@@ -1576,7 +1576,18 @@ async function main() {
         if (isRollerMode) {
           data.qfrc_applied[idxMap.qvelW3] = -0.0022 * w3 - 0.00012 * w3 * Math.abs(w3);
         } else {
-          data.qfrc_applied[idxMap.qvelW3] = -0.0055 * w3 - 0.00048 * w3 * Math.abs(w3);
+          const vx = data.qvel[0];
+          const vy = data.qvel[1];
+          const vSpd = Math.hypot(vx, vy);
+          if (vSpd > 1e-5) {
+            const fDavis = 0.22 + 2.20 * vSpd + 8.80 * vSpd * vSpd;
+            data.qfrc_applied[0] = -fDavis * (vx / vSpd);
+            data.qfrc_applied[1] = -fDavis * (vy / vSpd);
+          } else {
+            data.qfrc_applied[0] = 0.0;
+            data.qfrc_applied[1] = 0.0;
+          }
+          data.qfrc_applied[idxMap.qvelW3] = -0.0024 * w3 - 0.00016 * w3 * Math.abs(w3);
           if (tb >= 0) {
             model.body_mass[tb] = tenderDryMass + (out.tenderWaterMl + out.alcoholMl * 0.789) * 1e-3;
           }

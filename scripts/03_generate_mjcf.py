@@ -353,7 +353,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     default = ET.SubElement(mj, "default")
     ET.SubElement(default, "geom", condim="3", solref="0.0015 1.0", solimp="0.95 0.99 0.0001")
     ET.SubElement(default, "joint", solreflimit="0.002 1.0", solimplimit="0.98 0.995 0.0001")
-    ET.SubElement(default, "equality", solref="0.00045 1.0", solimp="0.9996 0.99996 0.000005")
+    ET.SubElement(default, "equality", solref="0.00030 1.0", solimp="0.9998 0.99998 0.000002")
 
     mesh_dir = Path("models/meshes")
     asset = ET.SubElement(mj, "asset")
@@ -391,11 +391,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             y_r = sgn * (y_gauge_half + rail_half_w)
             ET.SubElement(
                 world, "geom", name=f"rail_{side_tag}", type="box",
-                pos=f"1.8 {y_r:.6f} 0.002", size=f"4.8 {rail_half_w:.6f} 0.002",
+                pos=f"30.0 {y_r:.6f} 0.002", size=f"38.0 {rail_half_w:.6f} 0.002",
                 contype="1", conaffinity="2", friction="0.46 0.002 0.0001", rgba="0.70 0.72 0.75 1"
             )
         # 直线轨道真实枕木碰撞体阵列 (脱轨落道后车轮轮缘实时犁击枕木产生剧烈减速与颠簸阻力!)
-        for sl_i, sx_m in enumerate(np.arange(-1.20, 5.40, 0.032)):
+        for sl_i, sx_m in enumerate(np.arange(-1.80, 14.20, 0.032)):
             ET.SubElement(
                 world, "geom", name=f"sleeper_trk_{sl_i:03d}", type="box",
                 pos=f"{sx_m:.6f} 0.000000 0.0006",
@@ -694,7 +694,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         )
         ET.SubElement(
             abox, "joint", name=f"j_susp_z{idx}", type="slide", axis="0 0 1",
-            springref="-0.0017" if on_rails else "0",
+            springref="-0.0019" if on_rails else "0",
             limited="true", range="-0.0035 0.0035", stiffness="950", damping="12"
         )
         ET.SubElement(
@@ -708,7 +708,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             )
 
         wbody = ET.SubElement(abox, "body", name=f"wheelset_{idx}", pos="0 0 0")
-        ET.SubElement(wbody, "joint", name=f"j_wheel_{idx}", type="hinge", axis="0 1 0", damping="0.0012")
+        ET.SubElement(wbody, "joint", name=f"j_wheel_{idx}", type="hinge", axis="0 1 0", damping="0.0010")
 
         is_main = idx == 3
         w_key_L = "main_driving_wheel_L" if is_main else "driving_wheel_L"
@@ -749,7 +749,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         wheel_bodies[idx] = wbody
 
     # O3-3 + Stage 18: イラスト 3 三跨共 6 根 3-4 跷跷板均衡梁动态摇臂刚体 + <tendon> 弹性均载耦合!
-    eq_springlen = "-0.0017" if on_rails else "0"
+    eq_springlen = "-0.0019" if on_rails else "0"
     for eq_name, j_a, j_b in [
         ("tendon_eq_front", "j_susp_z1", "j_susp_z2"),
         ("tendon_eq_mid", "j_susp_z2", "j_susp_z3"),
@@ -826,8 +826,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     attach_part_inertial(lead_arm, parts_mp["leading_truck_frame"], offset_xyz=(lead_arm_len, 0.0, 0.0))
     ET.SubElement(
         lead_arm, "joint", name="j_leading_susp", type="slide", axis="0 0 1",
-        springref="-0.0069" if on_rails else "0",
-        limited="true", range="-0.0045 0.0045", stiffness="1050", damping="16"
+        springref="-0.0035" if on_rails else "0",
+        limited="true", range="-0.0045 0.0045", stiffness="850", damping="16"
     )
     if on_rails:
         ET.SubElement(
@@ -844,7 +844,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         pos=f"{lead_arm_len:.6f} 0 0", contype="0", conaffinity="0", mass="0"
     )
     lead_ws = ET.SubElement(lead_arm, "body", name="leading_wheelset", pos=f"{lead_arm_len:.6f} 0 0")
-    ET.SubElement(lead_ws, "joint", name="j_leading_spin", type="hinge", axis="0 1 0", damping="0.0004")
+    ET.SubElement(lead_ws, "joint", name="j_leading_spin", type="hinge", axis="0 1 0", damping="0.000004")
     attach_composite_inertial(
         lead_ws,
         [
@@ -879,8 +879,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     attach_part_inertial(trail_arm, parts_mp["trailing_truck_frame"])
     ET.SubElement(
         trail_arm, "joint", name="j_trailing_susp", type="slide", axis="0 0 1",
-        springref="-0.0055" if on_rails else "0",
-        limited="true", range="-0.004 0.004", stiffness="1050", damping="16"
+        springref="-0.0030" if on_rails else "0",
+        limited="true", range="-0.004 0.004", stiffness="850", damping="16"
     )
     ET.SubElement(
         trail_arm, "geom", name="trail_frame_vis", type="mesh",
@@ -888,7 +888,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         pos="0 0 0", contype="0", conaffinity="0", mass="0"
     )
     trail_ws = ET.SubElement(trail_arm, "body", name="trailing_wheelset", pos=f"{trail_arm_dx:.6f} 0 0")
-    ET.SubElement(trail_ws, "joint", name="j_trailing_spin", type="hinge", axis="0 1 0", damping="0.0004")
+    ET.SubElement(trail_ws, "joint", name="j_trailing_spin", type="hinge", axis="0 1 0", damping="0.000004")
     attach_composite_inertial(
         trail_ws,
         [
@@ -1742,7 +1742,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
 
                 t_ws = ET.SubElement(t_abox, "body", name=f"tender_wheelset_{w_num}", pos="0 0 0")
                 if on_rails:
-                    ET.SubElement(t_ws, "joint", name=f"j_twheel_{w_num}", type="hinge", axis="0 1 0", damping="0.0005")
+                    ET.SubElement(t_ws, "joint", name=f"j_twheel_{w_num}", type="hinge", axis="0 1 0", damping="0.000004")
                 attach_composite_inertial(
                     t_ws,
                     [

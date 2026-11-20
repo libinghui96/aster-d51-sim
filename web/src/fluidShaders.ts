@@ -72,13 +72,270 @@ export function temperatureToThermalCss(tempC: number): string {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
+/** 精确 G1 圆弧导角三维折线曲线 (彻底杜绝 CatmullRom 在短 U 弯处产生尖刺自交过冲，100% 贴合 CAD make_swept_tube!) */
+class ExactFilletedPipeCurve3 {
+  readonly pts: THREE.Vector3[];
+  readonly cumLen: Float64Array;
+  readonly totalLength: number;
+
+  constructor(ptsM: THREE.Vector3[]) {
+    this.pts = ptsM.length >= 2 ? ptsM : [new THREE.Vector3(), new THREE.Vector3(0.001, 0, 0)];
+    this.cumLen = new Float64Array(this.pts.length);
+    let acc = 0.0;
+    for (let i = 1; i < this.pts.length; i++) {
+      acc += this.pts[i].distanceTo(this.pts[i - 1]);
+      this.cumLen[i] = acc;
+    }
+    this.totalLength = Math.max(1e-6, acc);
+  }
+
+  getPointAt(u: number, target = new THREE.Vector3()): THREE.Vector3 {
+    const s = Math.max(0.0, Math.min(1.0, u)) * this.totalLength;
+    let lo = 0;
+    let hi = this.pts.length - 1;
+    while (lo + 1 < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.cumLen[mid] <= s) lo = mid;
+      else hi = mid;
+    }
+    const segLen = Math.max(1e-9, this.cumLen[hi] - this.cumLen[lo]);
+    const f = Math.max(0.0, Math.min(1.0, (s - this.cumLen[lo]) / segLen));
+    return target.lerpVectors(this.pts[lo], this.pts[hi], f);
+  }
+
+  getTangentAt(u: number, target = new THREE.Vector3()): THREE.Vector3 {
+    const s = Math.max(0.0, Math.min(1.0, u)) * this.totalLength;
+    let lo = 0;
+    let hi = this.pts.length - 1;
+    while (lo + 1 < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.cumLen[mid] <= s) lo = mid;
+      else hi = mid;
+    }
+    target.subVectors(this.pts[hi], this.pts[lo]);
+    if (target.lengthSq() < 1e-16 && hi + 1 < this.pts.length) {
+      target.subVectors(this.pts[hi + 1], this.pts[lo]);
+    }
+    return target.lengthSq() > 1e-16 ? target.normalize() : target.set(1, 0, 0);
+  }
+}
+
+function buildFilletedPointsM(ptsMm: [number, number, number][], bendRadiusMm: number): THREE.Vector3[] {
+  const raw = ptsMm.map(([x, y, z]) => new THREE.Vector3(x, y, z));
+  if (raw.length <= 2) {
+    return subdivideStraightRunsM(raw, 4.5);
+  }
+  const outMm: THREE.Vector3[] = [raw[0].clone()];
+  const vIn = new THREE.Vector3();
+  const vOut = new THREE.Vector3();
+  const vNext = new THREE.Vector3();
+  let i = 1;
+  while (i < raw.length - 1) {
+    // 专门识别 180° 半圆回弯 (如 17-5 四程过热器 U 型弯与 17-3 烟室 J 型弯): 两段反向平行主管夹一段短横桥
+    if (i + 2 < raw.length) {
+      vIn.subVectors(raw[i], raw[i - 1]);
+      vOut.subVectors(raw[i + 1], raw[i]);
+      vNext.subVectors(raw[i + 2], raw[i + 1]);
+      const lIn = vIn.length();
+      const lBridge = vOut.length();
+      const lNext = vNext.length();
+      if (lIn > 3.5 && lNext > 3.5 && lBridge > 1.2 && lBridge <= 7.2) {
+        const uIn = vIn.clone().divideScalar(lIn);
+        const uBridge = vOut.clone().divideScalar(lBridge);
+        const uNext = vNext.clone().divideScalar(lNext);
+        if (uIn.dot(uNext) < -0.94 && Math.abs(uIn.dot(uBridge)) < 0.18) {
+          const rU = 0.5 * lBridge;
+          const trim = Math.min(rU, 0.45 * lIn, 0.45 * lNext);
+          const pEnter = raw[i].clone().addScaledVector(uIn, -trim);
+          const center = raw[i]
+            .clone()
+            .add(raw[i + 1])
+            .multiplyScalar(0.5)
+            .addScaledVector(uIn, -trim);
+          const nArc = 18;
+          for (let k = 0; k <= nArc; k++) {
+            const ang = (Math.PI * k) / nArc;
+            // ang=0 -> pEnter (-rU * uBridge), ang=pi/2 -> apex (+rU * uIn), ang=pi -> pExit (+rU * uBridge)
+            const pt = center
+              .clone()
+              .addScaledVector(uBridge, -rU * Math.cos(ang))
+              .addScaledVector(uIn, trim * Math.sin(ang));
+            if (pt.distanceToSquared(outMm[outMm.length - 1]) > 1e-6) {
+              outMm.push(pt);
+            }
+          }
+          i += 2;
+          continue;
+        }
+      }
+    }
+
+    vIn.subVectors(raw[i], raw[i - 1]);
+    vOut.subVectors(raw[i + 1], raw[i]);
+    const l1 = vIn.length();
+    const l2 = vOut.length();
+    if (l1 < 1e-4 || l2 < 1e-4) {
+      i++;
+      continue;
+    }
+    const u1 = vIn.clone().divideScalar(l1);
+    const u2 = vOut.clone().divideScalar(l2);
+    const cosTurn = Math.max(-1.0, Math.min(1.0, u1.dot(u2)));
+    const turnAng = Math.acos(cosTurn);
+    if (turnAng < 0.04 || turnAng > Math.PI - 0.02) {
+      outMm.push(raw[i].clone());
+      i++;
+      continue;
+    }
+    const halfTan = Math.tan(0.5 * turnAng);
+    const maxTrim = Math.min(0.45 * l1, 0.45 * l2);
+    const dt = Math.min(bendRadiusMm * halfTan, maxTrim);
+    const rEff = dt / Math.max(1e-5, halfTan);
+    const pA = raw[i].clone().addScaledVector(u1, -dt);
+    const pB = raw[i].clone().addScaledVector(u2, +dt);
+    // 圆心位于角平分内法向: nIn = normalize(u2 - cosTurn * u1)
+    const nIn = u2.clone().addScaledVector(u1, -cosTurn).normalize();
+    const arcCenter = pA.clone().addScaledVector(nIn, rEff);
+    const eRadA = pA.clone().sub(arcCenter).divideScalar(Math.max(1e-5, rEff));
+    const nSteps = Math.max(8, Math.round((turnAng / (0.5 * Math.PI)) * 10));
+    for (let k = 0; k <= nSteps; k++) {
+      const phi = (turnAng * k) / nSteps;
+      const pt = arcCenter
+        .clone()
+        .addScaledVector(eRadA, rEff * Math.cos(phi))
+        .addScaledVector(u1, rEff * Math.sin(phi));
+      if (k === nSteps) pt.copy(pB);
+      if (pt.distanceToSquared(outMm[outMm.length - 1]) > 1e-6) {
+        outMm.push(pt);
+      }
+    }
+    i++;
+  }
+  outMm.push(raw[raw.length - 1].clone());
+  return subdivideStraightRunsM(outMm, 4.5);
+}
+
+function subdivideStraightRunsM(ptsMm: THREE.Vector3[], maxSegMm: number): THREE.Vector3[] {
+  const resM: THREE.Vector3[] = [ptsMm[0].clone().multiplyScalar(0.001)];
+  for (let i = 1; i < ptsMm.length; i++) {
+    const a = ptsMm[i - 1];
+    const b = ptsMm[i];
+    const dist = a.distanceTo(b);
+    const nSub = Math.max(1, Math.ceil(dist / maxSegMm));
+    for (let s = 1; s <= nSub; s++) {
+      resM.push(new THREE.Vector3().lerpVectors(a, b, s / nSub).multiplyScalar(0.001));
+    }
+  }
+  return resM;
+}
+
+/** 基于无扭转 Bishop 平行输运标架精确扫掠圆管网格 (零尖角折扁、零竖直管扭麻花、精确弧长 vUv.x!) */
+function buildBishopPipeGeometry(curve: ExactFilletedPipeCurve3, radiusM: number, radialSegs = 12): THREE.BufferGeometry {
+  const pts = curve.pts;
+  const nRings = pts.length;
+  const verts = new Float32Array(nRings * (radialSegs + 1) * 3);
+  const norms = new Float32Array(nRings * (radialSegs + 1) * 3);
+  const uvs = new Float32Array(nRings * (radialSegs + 1) * 2);
+  const indices: number[] = [];
+
+  const tangents: THREE.Vector3[] = [];
+  for (let i = 0; i < nRings; i++) {
+    const t = new THREE.Vector3();
+    if (i === 0) t.subVectors(pts[1], pts[0]);
+    else if (i === nRings - 1) t.subVectors(pts[nRings - 1], pts[nRings - 2]);
+    else t.subVectors(pts[i + 1], pts[i - 1]);
+    tangents.push(t.lengthSq() > 1e-16 ? t.normalize() : new THREE.Vector3(1, 0, 0));
+  }
+
+  const normal = new THREE.Vector3();
+  const binormal = new THREE.Vector3();
+  const refUp = Math.abs(tangents[0].z) < 0.88 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+  normal.crossVectors(tangents[0], refUp).normalize();
+  const rotQ = new THREE.Quaternion();
+
+  for (let i = 0; i < nRings; i++) {
+    if (i > 0) {
+      rotQ.setFromUnitVectors(tangents[i - 1], tangents[i]);
+      normal.applyQuaternion(rotQ);
+      normal.addScaledVector(tangents[i], -normal.dot(tangents[i])).normalize();
+    }
+    binormal.crossVectors(tangents[i], normal).normalize();
+    const uCoord = curve.cumLen[i] / curve.totalLength;
+
+    for (let j = 0; j <= radialSegs; j++) {
+      const phi = (2.0 * Math.PI * j) / radialSegs;
+      const cs = Math.cos(phi);
+      const sn = Math.sin(phi);
+      const nx = cs * normal.x + sn * binormal.x;
+      const ny = cs * normal.y + sn * binormal.y;
+      const nz = cs * normal.z + sn * binormal.z;
+      const idx = i * (radialSegs + 1) + j;
+      verts[3 * idx] = pts[i].x + radiusM * nx;
+      verts[3 * idx + 1] = pts[i].y + radiusM * ny;
+      verts[3 * idx + 2] = pts[i].z + radiusM * nz;
+      norms[3 * idx] = nx;
+      norms[3 * idx + 1] = ny;
+      norms[3 * idx + 2] = nz;
+      uvs[2 * idx] = uCoord;
+      uvs[2 * idx + 1] = j / radialSegs;
+    }
+  }
+
+  for (let i = 0; i < nRings - 1; i++) {
+    for (let j = 0; j < radialSegs; j++) {
+      const a = i * (radialSegs + 1) + j;
+      const b = (i + 1) * (radialSegs + 1) + j;
+      const c = (i + 1) * (radialSegs + 1) + (j + 1);
+      const d = i * (radialSegs + 1) + (j + 1);
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.BufferAttribute(verts, 3));
+  geom.setAttribute("normal", new THREE.BufferAttribute(norms, 3));
+  geom.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+  geom.setIndex(indices);
+  return geom;
+}
+
+/** 构造纤细高辨识度三维燕尾流线型流向飞镖网格 (单位底半径 1.0, 全长 2.75, 头部明亮聚焦!) */
+function createStreamlinedFlowDartGeometry(): THREE.BufferGeometry {
+  // Profile in XY revolved around +Y axis: notched tail (-0.95) -> flared skirt (-1.15, r=0.92) -> sleek nose (+1.60, r=0)
+  const profile = [
+    new THREE.Vector2(0.0, -0.62),
+    new THREE.Vector2(0.92, -1.12),
+    new THREE.Vector2(0.76, -0.55),
+    new THREE.Vector2(0.38, +0.48),
+    new THREE.Vector2(0.0, +1.62),
+  ];
+  const geom = new THREE.LatheGeometry(profile, 12);
+  const pos = geom.attributes.position;
+  const vCols = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    // 尖端 (+1.62) 叠加高对比度亮白光晕，尾部保持纯正局部热色谱，任何背景与缩放倍率下一眼辨明流向！
+    const tipBoost = Math.max(0.0, Math.min(1.0, (y + 0.5) / 2.1));
+    const lum = 0.82 + 0.52 * tipBoost * tipBoost;
+    vCols[3 * i] = lum;
+    vCols[3 * i + 1] = lum;
+    vCols[3 * i + 2] = lum;
+  }
+  geom.setAttribute("color", new THREE.BufferAttribute(vCols, 3));
+  geom.computeVertexNormals();
+  return geom;
+}
+
 interface InternalPipeRuntime {
   id: string;
   partNo: string;
   title: string;
   zone: "tender" | "umbilical" | "cab" | "boiler" | "underframe" | "cylinder";
   frame: "loco" | "tender" | "umbilical";
-  curve: THREE.CatmullRomCurve3;
+  curve: ExactFilletedPipeCurve3;
+  branchCurves: ExactFilletedPipeCurve3[];
+  branchMeshes: THREE.Mesh[];
+  branchArrowCounts: number[];
   umbEndsMm?: { tdr: [number, number, number]; loco: [number, number, number] };
   radiusM: number;
   mesh: THREE.Mesh;
@@ -86,10 +343,10 @@ interface InternalPipeRuntime {
   arrowCount: number;
   phase: number;
   labelT: number;
-  colorA: THREE.Color;
-  colorB: THREE.Color;
+  tempProfile: [number, number, number, number];
+  arrowColTmp: THREE.Color;
   colorCss: string;
-  evalTempC: (out: StepOutput, sp: SpatialFluidState) => number;
+  evalTempProfileC: (out: StepOutput, sp: SpatialFluidState) => [number, number, number, number];
   evalFlow: (out: StepOutput, sp: SpatialFluidState) => {
     signedRate: number; // >0 along curvepts[0]->[-1], <0 reversed!
     fill: number;       // 0..1 lumen presence
@@ -100,12 +357,7 @@ interface InternalPipeRuntime {
 
 const ARROW_BASE_AXIS = new THREE.Vector3(0, 1, 0);
 
-function mmPtsToCurve(ptsMm: [number, number, number][]): THREE.CatmullRomCurve3 {
-  const v = ptsMm.map(([x, y, z]) => new THREE.Vector3(x * 0.001, y * 0.001, z * 0.001));
-  return new THREE.CatmullRomCurve3(v, false, "catmullrom", 0.18);
-}
-
-function createPipeLumenMaterial(colA: THREE.Color, colB: THREE.Color): THREE.ShaderMaterial {
+function createPipeLumenMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -114,8 +366,7 @@ function createPipeLumenMaterial(colA: THREE.Color, colB: THREE.Color): THREE.Sh
       uPhase: { value: 0.0 },
       uFill: { value: 0.8 },
       uActive: { value: 0.0 },
-      uColA: { value: colA.clone() },
-      uColB: { value: colB.clone() },
+      uTemps: { value: new THREE.Vector4(25.0, 25.0, 25.0, 25.0) },
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
@@ -128,17 +379,38 @@ function createPipeLumenMaterial(colA: THREE.Color, colB: THREE.Color): THREE.Sh
       uniform float uPhase;
       uniform float uFill;
       uniform float uActive;
-      uniform vec3 uColA;
-      uniform vec3 uColB;
+      uniform vec4 uTemps;
       varying vec2 vUv;
+
+      vec3 thermalColorGLSL(float tc) {
+        float t = clamp(tc, 20.0, 750.0);
+        if (t <= 45.0)  return mix(vec3(0.114, 0.306, 0.847), vec3(0.024, 0.714, 0.831), (t - 20.0) / 25.0);
+        if (t <= 80.0)  return mix(vec3(0.024, 0.714, 0.831), vec3(0.063, 0.725, 0.506), (t - 45.0) / 35.0);
+        if (t <= 105.0) return mix(vec3(0.063, 0.725, 0.506), vec3(0.918, 0.702, 0.031), (t - 80.0) / 25.0);
+        if (t <= 148.0) return mix(vec3(0.918, 0.702, 0.031), vec3(0.961, 0.620, 0.043), (t - 105.0) / 43.0);
+        if (t <= 210.0) return mix(vec3(0.961, 0.620, 0.043), vec3(0.976, 0.451, 0.086), (t - 148.0) / 62.0);
+        if (t <= 420.0) return mix(vec3(0.976, 0.451, 0.086), vec3(0.937, 0.267, 0.267), (t - 210.0) / 210.0);
+        return mix(vec3(0.937, 0.267, 0.267), vec3(0.996, 0.941, 0.541), (t - 420.0) / 330.0);
+      }
+
+      float sampleAxialTemp(float x) {
+        float s = clamp(x, 0.0, 1.0) * 3.0;
+        if (s <= 1.0) return mix(uTemps.x, uTemps.y, s);
+        if (s <= 2.0) return mix(uTemps.y, uTemps.z, s - 1.0);
+        return mix(uTemps.z, uTemps.w, s - 2.0);
+      }
+
       void main() {
         if (uFill < 0.02) discard;
-        // 流动液团/气团脉动条纹: 严格沿 vUv.x 方向以 uPhase 相位推进 (正负速度自动反转!)
-        float wave = 0.5 + 0.5 * sin(vUv.x * 37.699 - uPhase);
-        float bolus = mix(0.45, pow(wave, 1.8), clamp(uActive, 0.0, 1.0));
-        vec3 col = mix(uColA, uColB, bolus);
-        float alpha = uFill * mix(0.28, 0.52 + 0.40 * bolus, clamp(uActive, 0.0, 1.0));
-        gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.94));
+        // 沿程连续热传导/对流温度场 T(s) + 微幅流动热脉冲: 邻接共享节点严格 C0 连续无突变!
+        float wave = 0.5 + 0.5 * sin(vUv.x * 43.982 - uPhase);
+        float act = clamp(uActive, 0.0, 1.0);
+        float bolus = mix(0.48, pow(wave, 1.65), act);
+        float tBase = sampleAxialTemp(vUv.x);
+        vec3 col = thermalColorGLSL(tBase + act * 6.5 * (bolus - 0.45));
+        col += vec3(0.10, 0.11, 0.12) * act * pow(wave, 3.2);
+        float alpha = uFill * mix(0.36, 0.56 + 0.34 * bolus, act);
+        gl_FragColor = vec4(clamp(col, 0.0, 1.0), clamp(alpha, 0.0, 0.93));
       }
     `,
   });
@@ -161,6 +433,8 @@ export class FluidPartVisualizer {
   private waterVolumeMesh: THREE.Mesh;
   private steamHeadspaceMesh: THREE.Mesh;
   private smokeboxBlastMeshes: THREE.Mesh[] = [];
+  private blowerJetMat: THREE.ShaderMaterial;
+  private blowerJetMeshes: THREE.Mesh[] = [];
 
   private bubblePoints: THREE.Points;
   private bubblePositions: Float32Array;
@@ -597,6 +871,25 @@ export class FluidPartVisualizer {
       this.root.add(bjMesh);
     }
 
+    // 17-3 通風ノズル (+130.0, +4.2, +35.2mm) 独立活汽引射细射流锥 (停车开通风阀时自 J 字管喷口直射 18-28 喇叭口制造烟室负压!)
+    this.blowerJetMat = this.smokeboxBlastMat.clone();
+    this.blowerJetMat.uniforms = {
+      uTime: { value: 0.0 },
+      uJet: { value: 0.0 },
+      uDryness: { value: 0.98 },
+    };
+    for (const ang of [0.0, Math.PI * 0.5]) {
+      const blwGeom = new THREE.PlaneGeometry(0.0085, 0.048, 4, 10);
+      blwGeom.rotateX(Math.PI * 0.5);
+      blwGeom.rotateZ(ang);
+      blwGeom.translate(0.130, +0.0042, 0.0592);
+      const blwMesh = new THREE.Mesh(blwGeom, this.blowerJetMat);
+      blwMesh.renderOrder = 5;
+      blwMesh.visible = false;
+      this.blowerJetMeshes.push(blwMesh);
+      this.root.add(blwMesh);
+    }
+
     // 180 颗核态沸腾上升蒸汽泡 (从紫铜火室顶板及 5 根烟管外壁核化升起至自由液面破裂)
     this.bubblePositions = new Float32Array(this.bubbleCount * 3);
     this.bubbleSeeds = new Float32Array(this.bubbleCount);
@@ -792,8 +1085,9 @@ export class FluidPartVisualizer {
       return mesh;
     };
 
-    this.cylHeadMeshes = [makeCylChamberMesh(+0.0360), makeCylChamberMesh(-0.0360)];
-    this.cylCrankMeshes = [makeCylChamberMesh(+0.0360), makeCylChamberMesh(-0.0360)];
+    // 左右 ø15mm 活塞工作腔精确同轴对齐主气缸中心 Y = ±32.5mm (杜绝 ±36.0mm 外偏造成单侧视觉遮挡!)
+    this.cylHeadMeshes = [makeCylChamberMesh(+0.0325), makeCylChamberMesh(-0.0325)];
+    this.cylCrankMeshes = [makeCylChamberMesh(+0.0325), makeCylChamberMesh(-0.0325)];
 
     const makeCondensateMesh = (yCenter: number): THREE.Mesh => {
       const g = new THREE.BoxGeometry(0.025, 0.0085, 0.0026);
@@ -810,7 +1104,7 @@ export class FluidPartVisualizer {
       this.root.add(mesh);
       return mesh;
     };
-    this.cylCondMeshes = [makeCondensateMesh(+0.0360), makeCondensateMesh(-0.0360)];
+    this.cylCondMeshes = [makeCondensateMesh(+0.0325), makeCondensateMesh(-0.0325)];
 
     const makePortGlow = (xPos: number, yPos: number): THREE.Mesh => {
       const g = new THREE.BoxGeometry(0.0024, 0.0062, 0.0075);
@@ -829,10 +1123,10 @@ export class FluidPartVisualizer {
       return mesh;
     };
     this.portGlowMeshes = [
-      makePortGlow(0.1335, +0.0360), // L Head port
-      makePortGlow(0.1185, +0.0360), // L Crank port
-      makePortGlow(0.1335, -0.0360), // R Head port
-      makePortGlow(0.1185, -0.0360), // R Crank port
+      makePortGlow(0.1342, +0.0346), // L Head port
+      makePortGlow(0.1262, +0.0346), // L Crank port
+      makePortGlow(0.1342, -0.0346), // R Head port
+      makePortGlow(0.1262, -0.0346), // R Crank port
     ];
 
     // 4-2 前车架卧式置换注油器油水分层内芯 + 内部银焊竖直溢流立管 (Roscoe Standpipe: X=+0.1462, Y=0, Z∈[-0.0006,+0.0109])
@@ -1080,6 +1374,8 @@ export class FluidPartVisualizer {
       zone: InternalPipeRuntime["zone"];
       frame: InternalPipeRuntime["frame"];
       ptsMm: [number, number, number][];
+      extraBranchesMm?: [number, number, number][][];
+      bendRadiusMm?: number;
       umbEndsMm?: { tdr: [number, number, number]; loco: [number, number, number] };
       radiusMm: number;
       arrows: number;
@@ -1288,7 +1584,7 @@ export class FluidPartVisualizer {
         }),
       },
 
-      // === C. 机车底盘给水泵、燃烧器、注油器与烟管流道 (8 路) ===
+      // === C. 机车底盘给水泵、燃烧器、注油器与全部 5 烟管流道 ===
       {
         id: "loco_23_1_burner",
         partNo: "23-1",
@@ -1296,8 +1592,13 @@ export class FluidPartVisualizer {
         zone: "underframe",
         frame: "loco",
         ptsMm: [[-150.5, 0.0, 3.6], [-132.0, 0.0, 10.2], [-93.0, 0.0, 10.2], [-77.0, 0.0, 10.2], [-61.0, 0.0, 10.2], [-61.0, 0.0, 17.5]],
-        radiusMm: 1.25,
-        arrows: 5,
+        extraBranchesMm: [
+          [[-93.0, 0.0, 10.2], [-93.0, 0.0, 17.5]],
+          [[-77.0, 0.0, 10.2], [-77.0, 0.0, 17.5]],
+        ],
+        bendRadiusMm: 2.2,
+        radiusMm: 1.18,
+        arrows: 8,
         labelT: 0.38,
         colHexA: 0xd98a12,
         colHexB: 0xffe066,
@@ -1315,8 +1616,9 @@ export class FluidPartVisualizer {
         zone: "underframe",
         frame: "loco",
         ptsMm: [[-150.8, -19.2, -8.5], [-142.5, -19.2, -8.5], [-136.0, -8.2, 8.5], [-85.0, -8.2, 8.5], [-38.8, -8.2, 8.5], [-38.8, -8.2, -6.2], [-38.8, 0.0, -6.2]],
+        bendRadiusMm: 2.4,
         radiusMm: 0.78,
-        arrows: 5,
+        arrows: 9,
         labelT: 0.56,
         colHexA: 0x0969da,
         colHexB: 0x4cc9f0,
@@ -1334,8 +1636,9 @@ export class FluidPartVisualizer {
         zone: "underframe",
         frame: "loco",
         ptsMm: [[-38.8, 0.0, -6.2], [-38.8, 0.0, 9.6], [-38.8, -8.2, 13.8], [-85.0, -8.2, 14.3], [-128.0, -8.2, 14.8], [-135.5, -5.5, 15.0]],
+        bendRadiusMm: 2.4,
         radiusMm: 0.78,
-        arrows: 5,
+        arrows: 9,
         labelT: 0.42,
         colHexA: 0x0284c7,
         colHexB: 0x38f8ff,
@@ -1353,8 +1656,9 @@ export class FluidPartVisualizer {
         zone: "cab",
         frame: "loco",
         ptsMm: [[-135.5, -11.4, 15.0], [-131.5, -11.4, 15.0], [-115.8, -11.8, 16.2], [-115.8, -11.8, 47.5], [-109.2, -11.8, 47.5]],
+        bendRadiusMm: 2.4,
         radiusMm: 0.78,
-        arrows: 3,
+        arrows: 6,
         labelT: 0.62,
         colHexA: 0x0284c7,
         colHexB: 0x7ef9ff,
@@ -1372,8 +1676,9 @@ export class FluidPartVisualizer {
         zone: "cab",
         frame: "loco",
         ptsMm: [[-135.5, 8.5, 15.0], [-135.5, 8.5, 11.2], [-138.2, 13.7, 11.2], [-141.5, 19.2, 6.2], [-144.5, 19.2, -8.5], [-150.8, 19.2, -8.5]],
+        bendRadiusMm: 2.2,
         radiusMm: 0.78,
-        arrows: 3,
+        arrows: 5,
         labelT: 0.50,
         colHexA: 0x0891b2,
         colHexB: 0x67e8f9,
@@ -1391,8 +1696,9 @@ export class FluidPartVisualizer {
         zone: "underframe",
         frame: "loco",
         ptsMm: [[146.2, 0.0, 10.9], [146.2, 0.0, -0.6], [146.2, 0.0, -3.4], [142.0, 4.2, -3.4], [136.5, 7.5, 3.2], [123.5, 7.5, 5.2], [123.5, 7.5, 18.5]],
+        bendRadiusMm: 2.0,
         radiusMm: 0.62,
-        arrows: 4,
+        arrows: 6,
         labelT: 0.54,
         colHexA: 0x10b981,
         colHexB: 0xf59e0b,
@@ -1405,43 +1711,50 @@ export class FluidPartVisualizer {
       {
         id: "boil_flues_upper",
         partNo: "12-6(上2煙管)",
-        title: "上段ø11.5過熱大煙管×2 高温燃焼ガス流",
+        title: "左右上段ø11.5過熱大煙管×2(Y=±11.5) 高温燃焼ガス流",
         zone: "boiler",
         frame: "loco",
         ptsMm: [[-48.0, 11.5, 46.5], [22.0, 11.5, 46.5], [92.0, 11.5, 46.5]],
-        radiusMm: 2.10,
-        arrows: 4,
+        extraBranchesMm: [
+          [[-48.0, -11.5, 46.5], [22.0, -11.5, 46.5], [92.0, -11.5, 46.5]],
+        ],
+        radiusMm: 1.95,
+        arrows: 10,
         labelT: 0.45,
         colHexA: 0xea580c,
         colHexB: 0xfef08a,
         css: "#fb923c",
         evalFlow: (out, sp) => ({
           signedRate: sp.flueGasProfileC[0] > 60.0 || out.smokeboxVacuumPa > 4.0 ? Math.max(0.05, out.smokeboxVacuumPa * 0.018) : 0.0,
-          fill: sp.flueGasProfileC[0] > 60.0 ? 0.55 : 0.0,
+          fill: sp.flueGasProfileC[0] > 60.0 ? 0.48 : 0.0,
           unit: "g/s",
         }),
       },
       {
         id: "boil_flues_lower",
         partNo: "12-6(下3火管)",
-        title: "下段ø8.0火管×3 燃焼ガス熱伝達流",
+        title: "下段ø8.0火管×3(Y=-13/0/+13) 燃焼ガス熱伝達流",
         zone: "boiler",
         frame: "loco",
         ptsMm: [[-48.0, 0.0, 33.2], [22.0, 0.0, 33.2], [92.0, 0.0, 33.2]],
-        radiusMm: 1.75,
-        arrows: 4,
+        extraBranchesMm: [
+          [[-48.0, +13.0, 35.0], [22.0, +13.0, 35.0], [92.0, +13.0, 35.0]],
+          [[-48.0, -13.0, 35.0], [22.0, -13.0, 35.0], [92.0, -13.0, 35.0]],
+        ],
+        radiusMm: 1.55,
+        arrows: 10,
         labelT: 0.55,
         colHexA: 0xdc2626,
         colHexB: 0xfdba74,
         css: "#f97316",
         evalFlow: (out, sp) => ({
           signedRate: sp.flueGasProfileC[0] > 60.0 || out.smokeboxVacuumPa > 4.0 ? Math.max(0.04, out.smokeboxVacuumPa * 0.015) : 0.0,
-          fill: sp.flueGasProfileC[0] > 60.0 ? 0.52 : 0.0,
+          fill: sp.flueGasProfileC[0] > 60.0 ? 0.46 : 0.0,
           unit: "g/s",
         }),
       },
 
-      // === D. 锅炉—驾驶室跨界连续管网与四程过热器 (9 路) ===
+      // === D. 锅炉—驾驶室跨界连续管网与左右双U四程过热器 ===
       {
         id: "boil_13_4_11_15_turret",
         partNo: "13-4→11-15",
@@ -1449,8 +1762,9 @@ export class FluidPartVisualizer {
         zone: "cab",
         frame: "loco",
         ptsMm: [[-98.5, 0.0, 70.5], [-98.5, 0.0, 72.4], [-118.5, 0.0, 72.4], [-118.5, 8.2, 72.4], [-118.5, 8.2, 66.5], [-130.0, 8.2, 66.5]],
+        bendRadiusMm: 2.2,
         radiusMm: 0.90,
-        arrows: 4,
+        arrows: 5,
         labelT: 0.48,
         colHexA: 0x93c5fd,
         colHexB: 0xffffff,
@@ -1467,9 +1781,10 @@ export class FluidPartVisualizer {
         title: "加減管→後妻板同軸貫通→缶内ドライパイプ",
         zone: "boiler",
         frame: "loco",
-        ptsMm: [[-124.5, 8.2, 66.5], [-124.5, -3.6, 66.5], [-124.5, -3.6, 48.0], [-112.8, -3.6, 48.0], [-105.0, -3.6, 54.5], [-96.0, 0.0, 58.8], [0.0, 0.0, 58.8], [96.5, 0.0, 58.8], [109.5, 0.0, 58.8]],
-        radiusMm: 1.05,
-        arrows: 6,
+        ptsMm: [[-124.5, 8.2, 66.5], [-124.5, -3.6, 66.5], [-124.5, -3.6, 48.0], [-112.8, -3.6, 48.0], [-105.0, -3.6, 54.5], [-96.0, 0.0, 58.8], [0.0, 0.0, 58.8], [96.5, 0.0, 58.8], [108.5, 0.0, 58.8]],
+        bendRadiusMm: 3.2,
+        radiusMm: 1.02,
+        arrows: 14,
         labelT: 0.22,
         colHexA: 0x7dd3fc,
         colHexB: 0xfef3c7,
@@ -1481,38 +1796,59 @@ export class FluidPartVisualizer {
       },
       {
         id: "boil_17_5_sh_4pass",
-        partNo: "17-5→17-4",
-        title: "双U四程スーパーヒータ→過熱蒸気降下管",
+        partNo: "17-5(L)→17-4",
+        title: "左上煙管(+Y=+11.5) 半円U過熱ループ→過熱蒸気降下管",
         zone: "boiler",
         frame: "loco",
-        ptsMm: [[109.5, 0.0, 58.8], [109.5, 11.5, 48.8], [-24.0, 11.5, 48.8], [-24.0, 11.5, 44.2], [109.5, 11.5, 44.2], [109.5, 0.0, 44.2], [109.5, 0.0, 26.5], [119.5, 0.0, 21.8], [123.5, 0.0, 18.5]],
-        radiusMm: 0.92,
-        arrows: 6,
-        labelT: 0.80,
+        ptsMm: [[108.5, 0.0, 58.8], [108.5, 0.0, 48.35], [108.5, 11.5, 48.35], [-24.0, 11.5, 48.35], [-24.0, 11.5, 44.65], [108.5, 11.5, 44.65], [108.5, 0.0, 44.65], [108.5, 0.0, 26.5], [119.5, 0.0, 21.8], [123.5, 0.0, 18.5]],
+        bendRadiusMm: 1.85,
+        radiusMm: 0.88,
+        arrows: 16,
+        labelT: 0.82,
         colHexA: 0xfb923c,
         colHexB: 0xfef08a,
         css: "#fb923c",
         evalFlow: (out) => {
-          const regFlow = Math.max(0.0, (out.steamOutGS ?? out.steamGenGS) - (out.blowerGS ?? 0) - out.whistleSteamGS - (out.safetyGS ?? 0));
-          return { signedRate: out.steamChestKgf > 0.02 ? Math.max(0.03, regFlow) : 0.0, fill: out.steamChestKgf > 0.02 ? 0.94 : 0.18, unit: "g/s" };
+          const regFlow = 0.5 * Math.max(0.0, (out.steamOutGS ?? out.steamGenGS) - (out.blowerGS ?? 0) - out.whistleSteamGS - (out.safetyGS ?? 0));
+          return { signedRate: out.steamChestKgf > 0.02 ? Math.max(0.025, regFlow) : 0.0, fill: out.steamChestKgf > 0.02 ? 0.94 : 0.18, unit: "g/s" };
+        },
+      },
+      {
+        id: "boil_17_5_sh_loop_R",
+        partNo: "17-5(R)→17-4",
+        title: "右上煙管(-Y=-11.5) 半円U過熱ループ→下クロスヘッダ合流",
+        zone: "boiler",
+        frame: "loco",
+        ptsMm: [[108.5, 0.0, 48.35], [108.5, -11.5, 48.35], [-24.0, -11.5, 48.35], [-24.0, -11.5, 44.65], [108.5, -11.5, 44.65], [108.5, 0.0, 44.65], [108.5, 0.0, 26.5], [119.5, 0.0, 21.8], [123.5, 0.0, 18.5]],
+        bendRadiusMm: 1.85,
+        radiusMm: 0.88,
+        arrows: 15,
+        labelT: 0.35,
+        colHexA: 0xfb923c,
+        colHexB: 0xfef08a,
+        css: "#fb923c",
+        evalFlow: (out) => {
+          const regFlow = 0.5 * Math.max(0.0, (out.steamOutGS ?? out.steamGenGS) - (out.blowerGS ?? 0) - out.whistleSteamGS - (out.safetyGS ?? 0));
+          return { signedRate: out.steamChestKgf > 0.02 ? Math.max(0.025, regFlow) : 0.0, fill: out.steamChestKgf > 0.02 ? 0.94 : 0.18, unit: "g/s" };
         },
       },
       {
         id: "boil_13_8_17_3_blower",
         partNo: "13-8→17-3",
-        title: "通風弁→後妻板同軸貫通ステー管→煙室ノズル",
+        title: "通風弁→炉内ステー管→17-3煙室J字180°通風ノズル(停車強制ドラフト)",
         zone: "boiler",
         frame: "loco",
-        ptsMm: [[-128.0, 8.2, 63.2], [-128.0, 8.2, 54.5], [-120.5, 2.6, 48.0], [-112.8, 2.6, 48.0], [-106.0, 2.6, 48.8], [-44.0, 2.6, 48.8], [86.0, 4.0, 40.5], [96.2, 4.0, 40.5], [96.2, 4.0, 29.5], [125.0, 3.6, 29.5], [130.0, 3.6, 24.8], [130.0, 3.6, 35.2]],
-        radiusMm: 0.62,
-        arrows: 6,
-        labelT: 0.15,
+        ptsMm: [[-128.0, 8.2, 66.0], [-128.0, 8.2, 54.5], [-120.5, 2.6, 48.0], [-112.8, 2.6, 48.0], [-105.0, 2.6, 49.5], [-44.0, 2.6, 49.5], [86.0, 4.2, 40.5], [124.2, 4.2, 40.5], [124.2, 4.2, 23.8], [130.0, 4.2, 23.8], [130.0, 4.2, 35.2]],
+        bendRadiusMm: 2.8,
+        radiusMm: 0.58,
+        arrows: 14,
+        labelT: 0.86,
         colHexA: 0x67e8f9,
         colHexB: 0xffffff,
         css: "#67e8f9",
         evalFlow: (out) => ({
           signedRate: out.blowerGS ?? 0.0,
-          fill: (out.blowerGS ?? 0.0) > 0.002 ? 0.92 : 0.16,
+          fill: (out.blowerGS ?? 0.0) > 0.002 ? 0.94 : 0.22,
           unit: "g/s",
         }),
       },
@@ -1523,8 +1859,9 @@ export class FluidPartVisualizer {
         zone: "cab",
         frame: "loco",
         ptsMm: [[-117.6, 15.2, 65.5], [-117.6, 20.2, 65.5], [-117.6, 20.2, 25.5], [-114.5, 20.2, 25.5], [-72.0, 20.2, 25.5]],
-        radiusMm: 0.65,
-        arrows: 4,
+        bendRadiusMm: 2.0,
+        radiusMm: 0.62,
+        arrows: 7,
         labelT: 0.45,
         colHexA: 0xa5f3fc,
         colHexB: 0xffffff,
@@ -1542,8 +1879,9 @@ export class FluidPartVisualizer {
         zone: "cab",
         frame: "loco",
         ptsMm: [[-124.5, 0.8, 66.5], [-124.5, 0.8, 62.0], [-123.5, -6.5, 43.0], [-122.8, -11.8, 39.0], [-122.0, -16.5, 43.2], [-122.0, -16.5, 57.5]],
-        radiusMm: 0.58,
-        arrows: 3,
+        bendRadiusMm: 2.4,
+        radiusMm: 0.56,
+        arrows: 5,
         labelT: 0.62,
         colHexA: 0x38bdf8,
         colHexB: 0xe0f2fe,
@@ -1561,8 +1899,9 @@ export class FluidPartVisualizer {
         zone: "cab",
         frame: "loco",
         ptsMm: [[-106.8, -15.2, 58.3], [-106.8, -17.5, 60.5], [-118.5, -17.5, 60.5], [-118.5, -31.3, 60.5], [-118.5, -31.3, 55.0]],
-        radiusMm: 0.72,
-        arrows: 3,
+        bendRadiusMm: 1.8,
+        radiusMm: 0.68,
+        arrows: 4,
         labelT: 0.55,
         colHexA: 0x93c5fd,
         colHexB: 0xffffff,
@@ -1580,8 +1919,9 @@ export class FluidPartVisualizer {
         zone: "cab",
         frame: "loco",
         ptsMm: [[-43.2, -20.8, 32.6], [-82.0, -20.8, 32.6], [-118.5, -20.8, 32.6], [-118.5, -31.3, 32.6], [-118.5, -31.3, 38.0]],
-        radiusMm: 0.76,
-        arrows: 4,
+        bendRadiusMm: 2.0,
+        radiusMm: 0.72,
+        arrows: 8,
         labelT: 0.68,
         colHexA: 0x0ea5e9,
         colHexB: 0x67e8f9,
@@ -1589,7 +1929,6 @@ export class FluidPartVisualizer {
         evalFlow: (out, sp) => {
           const vMmS = out.sightGlassVelMmS ?? 0.0;
           const purge = out.sightPurgeGS > 0.002 ? 0.45 + out.sightPurgeGS : 0.0;
-          // 液面上升 (vMmS>0) 或吹扫冲洗时水从湿锅筒 (-43.2) 流向 11-7 (+); 液面蒸发下降 (vMmS<0) 时水反向回流锅筒 (-)!
           const signed = purge > 0 ? purge : Math.abs(vMmS) > 0.04 ? vMmS * 0.05 : sp.waterFreeZMm > 33.0 ? 0.02 * (out.feedwaterGS - out.steamGenGS) : 0.0;
           return {
             signedRate: signed,
@@ -1605,8 +1944,9 @@ export class FluidPartVisualizer {
         zone: "underframe",
         frame: "loco",
         ptsMm: [[-42.5, 0.0, 17.2], [-42.5, 0.0, 15.6], [-54.0, 7.2, 15.4], [-72.0, 16.2, 15.2], [-108.0, 16.2, 15.5], [-115.5, 16.2, 15.8], [-115.5, 19.2, 12.0]],
-        radiusMm: 0.72,
-        arrows: 4,
+        bendRadiusMm: 2.2,
+        radiusMm: 0.70,
+        arrows: 7,
         labelT: 0.72,
         colHexA: 0x0284c7,
         colHexB: 0xe0f2fe,
@@ -1618,17 +1958,18 @@ export class FluidPartVisualizer {
         }),
       },
 
-      // === E. 左右主气缸给汽支管、四条可逆进排汽斜道、排汽总管与四口排液阀 (8 路) ===
+      // === E. 左右对称双气缸给汽室、四条可逆进排汽斜道、左右双排汽支管与左右全 4 口排液阀 ===
       {
         id: "cyl_7_9_inlet_L",
         partNo: "7-9→1-20(L)",
-        title: "左シリンダ蒸気室・含油過熱給気管",
+        title: "左シリンダ蒸気室(+Y)・含油過熱給気横管&蒸気室ヘッダ",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[123.5, 0.0, 18.5], [123.5, 20.5, 18.5], [123.5, 34.5, 18.5]],
-        radiusMm: 1.35,
-        arrows: 3,
-        labelT: 0.65,
+        ptsMm: [[123.5, 0.0, 18.5], [123.5, 20.5, 18.5], [123.5, 34.7, 18.5], [123.5, 34.7, 16.2], [134.2, 34.7, 16.2]],
+        bendRadiusMm: 1.8,
+        radiusMm: 1.15,
+        arrows: 5,
+        labelT: 0.52,
         colHexA: 0xf97316,
         colHexB: 0xfef08a,
         css: "#fb923c",
@@ -1641,13 +1982,14 @@ export class FluidPartVisualizer {
       {
         id: "cyl_7_9_inlet_R",
         partNo: "7-9→1-20(R)",
-        title: "右シリンダ蒸気室・含油過熱給気管",
+        title: "右シリンダ蒸気室(-Y)・含油過熱給気横管&蒸気室ヘッダ",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[123.5, 0.0, 18.5], [123.5, -20.5, 18.5], [123.5, -34.5, 18.5]],
-        radiusMm: 1.35,
-        arrows: 3,
-        labelT: 0.65,
+        ptsMm: [[123.5, 0.0, 18.5], [123.5, -20.5, 18.5], [123.5, -34.7, 18.5], [123.5, -34.7, 16.2], [134.2, -34.7, 16.2]],
+        bendRadiusMm: 1.8,
+        radiusMm: 1.15,
+        arrows: 5,
+        labelT: 0.52,
         colHexA: 0xf97316,
         colHexB: 0xfef08a,
         css: "#fb923c",
@@ -1663,10 +2005,11 @@ export class FluidPartVisualizer {
         title: "左前ポート (滑弁→ピストン給気 / ピストン→滑弁排気 可逆)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[133.8, 34.7, 15.6], [137.2, 33.2, 8.8], [138.6, 32.5, 1.5]],
-        radiusMm: 0.76,
-        arrows: 3,
-        labelT: 0.50,
+        ptsMm: [[130.2, 34.7, 15.6], [134.2, 34.7, 15.6], [138.8, 33.0, 9.6], [139.2, 32.5, 2.2]],
+        bendRadiusMm: 1.6,
+        radiusMm: 0.74,
+        arrows: 4,
+        labelT: 0.55,
         colHexA: 0xf97316,
         colHexB: 0xfef08a,
         css: "#f97316",
@@ -1691,10 +2034,11 @@ export class FluidPartVisualizer {
         title: "左後ポート (滑弁→ピストン給気 / ピストン→滑弁排気 可逆)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[126.2, 34.7, 15.6], [119.2, 33.2, 8.8], [113.8, 32.5, 1.5]],
-        radiusMm: 0.76,
-        arrows: 3,
-        labelT: 0.50,
+        ptsMm: [[129.8, 34.7, 15.6], [126.2, 34.7, 15.6], [120.5, 33.0, 9.6], [114.2, 32.5, 2.2]],
+        bendRadiusMm: 1.6,
+        radiusMm: 0.74,
+        arrows: 4,
+        labelT: 0.55,
         colHexA: 0xf97316,
         colHexB: 0xfef08a,
         css: "#f97316",
@@ -1719,10 +2063,11 @@ export class FluidPartVisualizer {
         title: "右前ポート (滑弁→ピストン給気 / ピストン→滑弁排気 可逆)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[133.8, -34.7, 15.6], [137.2, -33.2, 8.8], [138.6, -32.5, 1.5]],
-        radiusMm: 0.76,
-        arrows: 3,
-        labelT: 0.50,
+        ptsMm: [[130.2, -34.7, 15.6], [134.2, -34.7, 15.6], [138.8, -33.0, 9.6], [139.2, -32.5, 2.2]],
+        bendRadiusMm: 1.6,
+        radiusMm: 0.74,
+        arrows: 4,
+        labelT: 0.55,
         colHexA: 0xf97316,
         colHexB: 0xfef08a,
         css: "#f97316",
@@ -1747,10 +2092,11 @@ export class FluidPartVisualizer {
         title: "右後ポート (滑弁→ピストン給気 / ピストン→滑弁排気 可逆)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[126.2, -34.7, 15.6], [119.2, -33.2, 8.8], [113.8, -32.5, 1.5]],
-        radiusMm: 0.76,
-        arrows: 3,
-        labelT: 0.50,
+        ptsMm: [[129.8, -34.7, 15.6], [126.2, -34.7, 15.6], [120.5, -33.0, 9.6], [114.2, -32.5, 2.2]],
+        bendRadiusMm: 1.6,
+        radiusMm: 0.74,
+        arrows: 4,
+        labelT: 0.55,
         colHexA: 0xf97316,
         colHexB: 0xfef08a,
         css: "#f97316",
@@ -1772,12 +2118,13 @@ export class FluidPartVisualizer {
       {
         id: "cyl_7_8_20_7_blast",
         partNo: "1-9(L)→7-8→20-7",
-        title: "左シリンダ排気内孔→7-8合流管→20-7ブラストノズル(ø4.2)",
+        title: "左シリンダ中央排気腔(+Y)→7-8合流管→20-7ブラストノズル(ø4.2)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[130.0, 34.5, 15.6], [130.0, 27.5, 13.0], [130.0, 21.1, 12.5], [130.0, 0.0, 12.5], [130.0, 0.0, 35.0]],
-        radiusMm: 1.25,
-        arrows: 4,
+        ptsMm: [[130.0, 34.5, 15.6], [130.0, 27.5, 12.8], [130.0, 21.1, 12.5], [130.0, 0.0, 12.5], [130.0, 0.0, 35.0]],
+        bendRadiusMm: 2.2,
+        radiusMm: 1.16,
+        arrows: 6,
         labelT: 0.76,
         colHexA: 0xeab308,
         colHexB: 0xfde047,
@@ -1790,32 +2137,58 @@ export class FluidPartVisualizer {
       },
       {
         id: "cyl_7_8_exhaust_R",
-        partNo: "1-9(R)→7-8",
-        title: "右シリンダ中央排気腔→内壁ソケット→7-8排気合流管",
+        partNo: "1-9(R)→7-8→20-7",
+        title: "右シリンダ中央排気腔(-Y)→内壁ソケット→7-8排気合流管→20-7",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[130.0, -34.5, 15.6], [130.0, -27.5, 13.0], [130.0, -21.1, 12.5], [130.0, 0.0, 12.5]],
-        radiusMm: 1.22,
-        arrows: 3,
-        labelT: 0.45,
+        ptsMm: [[130.0, -34.5, 15.6], [130.0, -27.5, 12.8], [130.0, -21.1, 12.5], [130.0, 0.0, 12.5], [130.0, 0.0, 35.0]],
+        bendRadiusMm: 2.2,
+        radiusMm: 1.14,
+        arrows: 6,
+        labelT: 0.42,
         colHexA: 0xeab308,
         colHexB: 0xfde047,
         css: "#eab308",
         evalFlow: (out) => ({
-          signedRate: (out.exhaustGS ?? out.exhaustPlume * 0.35) * 0.5,
+          signedRate: out.exhaustGS ?? out.exhaustPlume * 0.35,
           fill: (out.exhaustGS ?? 0) > 0.005 || out.exhaustPlume > 0.04 ? 0.92 : 0.18,
           unit: "g/s",
         }),
       },
       {
         id: "cyl_1_16_drains",
-        partNo: "1-16×4",
-        title: "シリンダ底ばねポペット二相フラッシュドレン弁",
+        partNo: "1-16×2(R)",
+        title: "右シリンダ前後底ばねポペット二相排液弁(-Y)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[130.8, -30.8, -6.2], [130.8, -30.8, -15.5]],
-        radiusMm: 0.65,
-        arrows: 2,
+        ptsMm: [[130.8, -30.8, -6.2], [130.8, -30.8, -16.8]],
+        extraBranchesMm: [
+          [[120.8, -30.8, -6.2], [120.8, -30.8, -16.8]],
+        ],
+        radiusMm: 0.62,
+        arrows: 3,
+        labelT: 0.60,
+        colHexA: 0x06b6d4,
+        colHexB: 0xe0f2fe,
+        css: "#22d3ee",
+        evalFlow: (out) => ({
+          signedRate: out.drainBlowdownGS ?? (out.drainPlume * 0.18),
+          fill: (out.drainBlowdownGS ?? 0) > 0.002 || out.drainPlume > 0.02 ? 0.95 : 0.14,
+          unit: "g/s",
+        }),
+      },
+      {
+        id: "cyl_1_16_drains_L",
+        partNo: "1-16×2(L)",
+        title: "左シリンダ前後底ばねポペット二相排液弁(+Y)",
+        zone: "cylinder",
+        frame: "loco",
+        ptsMm: [[130.8, 30.8, -6.2], [130.8, 30.8, -16.8]],
+        extraBranchesMm: [
+          [[120.8, 30.8, -6.2], [120.8, 30.8, -16.8]],
+        ],
+        radiusMm: 0.62,
+        arrows: 3,
         labelT: 0.60,
         colHexA: 0x06b6d4,
         colHexB: 0xe0f2fe,
@@ -1832,116 +2205,202 @@ export class FluidPartVisualizer {
     let nTdrArrows = 0;
     let nWorldArrows = 0;
 
-    const makePipeTempEvaluator = (id: string): InternalPipeRuntime["evalTempC"] => {
+    // 全车耦合节点—沿程连续温度场评估器: 共享物理接头的上下游管道在端点处严格保持 C0 温度连续，消除跳变断层！
+    const makePipeTempProfileEvaluator = (id: string): InternalPipeRuntime["evalTempProfileC"] => {
       return (out, sp) => {
-        if (id === "tdr_36_6_mariotte" || id === "tdr_34_2_fuel" || id === "umb_st7_fuel") {
-          return out.alcoholTempC ?? 28.0;
+        const tBoil = out.boilerTempC;
+        const tTdr = out.tenderWaterTempC;
+        const tAlc = out.alcoholTempC ?? 28.0;
+        const tWick = Math.max(tAlc + 6.0, Math.min(94.0, out.wickTipTempC ?? 78.0));
+        const tPump = tTdr + 0.05 * Math.max(0.0, tBoil - tTdr);
+        const tByp = tTdr + 0.12 * Math.max(0.0, tBoil - tTdr);
+        const tRetUmb = tTdr + 0.08 * Math.max(0.0, tBoil - tTdr);
+        const tRetEnd = tTdr + 0.04 * Math.max(0.0, tBoil - tTdr);
+        const tClack = out.feedwaterGS > 0.01 ? 0.18 * tByp + 0.82 * tBoil : 0.08 * tByp + 0.92 * tBoil;
+        const tTurret = Math.max(25.0, tBoil - 1.2);
+        const tSh = Math.max(tBoil, out.superheatTempC);
+        const tChest = Math.max(25.0, tSh - 1.5);
+        const tOil = out.lubeOilTempC ?? Math.max(30.0, 0.62 * out.cylWallTempC);
+        const tExh = out.boilerPressureKgf > 0.05 ? Math.max(98.0, Math.min(118.0, 0.78 * out.cylWallTempC + 10.0)) : out.cylWallTempC;
+        const tSiphEnd = 25.0 + 0.14 * Math.max(0.0, tBoil - 25.0);
+        const tSgBot = 25.0 + 0.72 * Math.max(0.0, tBoil - 25.0);
+
+        switch (id) {
+          case "tdr_36_6_mariotte":
+            return [tAlc, tAlc, tAlc + 0.5, tAlc + 1.0];
+          case "tdr_34_2_fuel":
+            return [tAlc + 1.0, tAlc + 1.2, tAlc + 1.6, tAlc + 2.0];
+          case "umb_st7_fuel":
+            return [tAlc + 2.0, tAlc + 2.5, tAlc + 3.2, tAlc + 4.0];
+          case "loco_23_1_burner":
+            return [tAlc + 4.0, tAlc + 0.25 * (tWick - tAlc), tAlc + 0.62 * (tWick - tAlc), tWick];
+          case "tdr_31_5_31_13_hp":
+          case "tdr_31_9_drain":
+            return [tTdr, tTdr, tTdr + 0.3, tTdr + 0.6];
+          case "tdr_34_6_feed_R":
+            return [tTdr + 0.6, tTdr + 0.8, tTdr + 1.0, tTdr + 1.2];
+          case "umb_bt5_feed":
+            return [tTdr + 1.2, tTdr + 1.5, tTdr + 1.8, tTdr + 2.2];
+          case "loco_6_10_suction":
+            return [tTdr + 2.2, 0.70 * tTdr + 0.30 * tPump, 0.35 * tTdr + 0.65 * tPump, tPump];
+          case "loco_6_5_6_6_deliv":
+            return [tPump, 0.72 * tPump + 0.28 * tByp, 0.35 * tPump + 0.65 * tByp, tByp];
+          case "loco_6_8_13_2_riser":
+            return [tByp, 0.72 * tByp + 0.28 * tClack, 0.34 * tByp + 0.66 * tClack, tClack];
+          case "loco_4_16_byp_ret":
+            return [tByp, 0.68 * tByp + 0.32 * tRetUmb, 0.34 * tByp + 0.66 * tRetUmb, tRetUmb];
+          case "umb_bt5_return":
+            return [tRetUmb, 0.66 * tRetUmb + 0.34 * tRetEnd, 0.33 * tRetUmb + 0.67 * tRetEnd, tRetEnd];
+          case "tdr_34_6_ret_L":
+            return [tRetEnd, 0.75 * tRetEnd + 0.25 * tTdr, 0.50 * tRetEnd + 0.50 * tTdr, 0.35 * tRetEnd + 0.65 * tTdr];
+          case "tdr_31_14_gooseneck":
+            return [0.35 * tRetEnd + 0.65 * tTdr, 0.25 * tRetEnd + 0.75 * tTdr, 0.15 * tRetEnd + 0.85 * tTdr, tTdr + 1.0];
+          case "loco_4_2_lub_oil":
+            return [tOil, tOil + 0.15 * (tSh - tOil), tOil + 0.52 * (tSh - tOil), tSh];
+          case "boil_flues_upper":
+          case "boil_flues_lower": {
+            const g0 = Math.max(tBoil, sp.flueGasProfileC[0] ?? tBoil);
+            const g1 = Math.max(tBoil, sp.flueGasProfileC[2] ?? tBoil);
+            const g2 = Math.max(tBoil, sp.flueGasProfileC[5] ?? tBoil);
+            const g3 = Math.max(tBoil, sp.flueGasProfileC[7] ?? tBoil);
+            return [g0, g1, g2, g3];
+          }
+          case "boil_13_4_11_15_turret":
+            return [tBoil, tBoil - 0.4, tBoil - 0.8, tTurret];
+          case "boil_13_9_drypipe":
+            return [tTurret, tBoil - 0.6, tBoil, tBoil];
+          case "boil_17_5_sh_4pass":
+          case "boil_17_5_sh_loop_R":
+            return [tBoil, tBoil + 0.36 * (tSh - tBoil), tBoil + 0.74 * (tSh - tBoil), tSh];
+          case "boil_13_8_17_3_blower":
+            return [tTurret, tBoil, tBoil + 0.25 * (tSh - tBoil), Math.max(98.0, tBoil - 8.0)];
+          case "boil_13_3_11_8_whistle":
+            return [tTurret, tTurret - 3.5, tTurret - 8.0, Math.max(96.0, tTurret - 14.0)];
+          case "boil_13_1_siphon":
+            return [tTurret, 0.62 * tTurret + 0.38 * tSiphEnd, 0.22 * tTurret + 0.78 * tSiphEnd, tSiphEnd];
+          case "boil_13_6_sg_steam":
+            return [tBoil, tBoil - 1.5, tBoil - 3.5, tBoil - 5.5];
+          case "boil_13_10_sg_water":
+            return [tBoil - 1.5, 0.68 * tBoil + 0.32 * tSgBot, 0.32 * tBoil + 0.68 * tSgBot, tSgBot];
+          case "boil_13_11_blowdown":
+            return [tBoil - 1.5, tBoil - 4.0, 0.65 * tBoil + 32.0, Math.min(tBoil, 100.0)];
+          case "cyl_7_9_inlet_L":
+          case "cyl_7_9_inlet_R":
+            return [tSh, tSh - 0.5, tChest, tChest];
+          case "cyl_port_L_head": {
+            const adm = (sp.valvePortOpenL[0] ?? 0) >= 0;
+            const tIn = adm ? tChest : tExh;
+            const tOut = adm ? Math.max(tExh, 0.72 * tChest + 0.28 * out.cylWallTempC) : Math.max(92.0, 0.85 * tExh + 0.15 * out.cylWallTempC);
+            return [tIn, 0.68 * tIn + 0.32 * tOut, 0.34 * tIn + 0.66 * tOut, tOut];
+          }
+          case "cyl_port_L_crank": {
+            const adm = (sp.valvePortOpenL[1] ?? 0) >= 0;
+            const tIn = adm ? tChest : tExh;
+            const tOut = adm ? Math.max(tExh, 0.72 * tChest + 0.28 * out.cylWallTempC) : Math.max(92.0, 0.85 * tExh + 0.15 * out.cylWallTempC);
+            return [tIn, 0.68 * tIn + 0.32 * tOut, 0.34 * tIn + 0.66 * tOut, tOut];
+          }
+          case "cyl_port_R_head": {
+            const adm = (sp.valvePortOpenR[0] ?? 0) >= 0;
+            const tIn = adm ? tChest : tExh;
+            const tOut = adm ? Math.max(tExh, 0.72 * tChest + 0.28 * out.cylWallTempC) : Math.max(92.0, 0.85 * tExh + 0.15 * out.cylWallTempC);
+            return [tIn, 0.68 * tIn + 0.32 * tOut, 0.34 * tIn + 0.66 * tOut, tOut];
+          }
+          case "cyl_port_R_crank": {
+            const adm = (sp.valvePortOpenR[1] ?? 0) >= 0;
+            const tIn = adm ? tChest : tExh;
+            const tOut = adm ? Math.max(tExh, 0.72 * tChest + 0.28 * out.cylWallTempC) : Math.max(92.0, 0.85 * tExh + 0.15 * out.cylWallTempC);
+            return [tIn, 0.68 * tIn + 0.32 * tOut, 0.34 * tIn + 0.66 * tOut, tOut];
+          }
+          case "cyl_7_8_20_7_blast":
+          case "cyl_7_8_exhaust_R":
+            return [tExh, tExh - 1.2, tExh - 2.4, Math.max(94.0, tExh - 4.0)];
+          case "cyl_1_16_drains":
+          case "cyl_1_16_drains_L": {
+            const tDrn = Math.max(28.0, Math.min(104.0, 0.82 * out.cylWallTempC));
+            return [tDrn + 4.0, tDrn + 1.5, tDrn, Math.max(26.0, tDrn - 4.0)];
+          }
+          default:
+            return [tBoil, tBoil, tBoil, tBoil];
         }
-        if (id === "loco_23_1_burner") {
-          return Math.min(72.0, (out.alcoholTempC ?? 30.0) + 12.0);
-        }
-        if (id === "tdr_31_5_31_13_hp" || id === "tdr_34_6_feed_R" || id === "umb_bt5_feed" || id === "loco_6_10_suction" || id === "tdr_31_9_drain") {
-          return out.tenderWaterTempC;
-        }
-        if (id === "loco_6_5_6_6_deliv") {
-          return out.tenderWaterTempC + 0.06 * Math.max(0.0, out.boilerTempC - out.tenderWaterTempC);
-        }
-        if (id === "loco_4_16_byp_ret" || id === "umb_bt5_return" || id === "tdr_34_6_ret_L" || id === "tdr_31_14_gooseneck") {
-          return out.tenderWaterTempC + 0.10 * Math.max(0.0, out.boilerTempC - out.tenderWaterTempC);
-        }
-        if (id === "loco_6_8_13_2_riser") {
-          return 0.55 * out.tenderWaterTempC + 0.45 * out.boilerTempC;
-        }
-        if (id === "loco_4_2_lub_oil") {
-          return out.lubeOilTempC ?? Math.max(32.0, 0.62 * out.cylWallTempC);
-        }
-        if (id === "boil_flues_upper") {
-          return Math.max(out.boilerTempC, 0.55 * (sp.flueGasProfileC[1] ?? out.boilerTempC) + 0.45 * (sp.flueGasProfileC[5] ?? out.boilerTempC));
-        }
-        if (id === "boil_flues_lower") {
-          return Math.max(out.boilerTempC, 0.48 * (sp.flueGasProfileC[2] ?? out.boilerTempC) + 0.52 * (sp.flueGasProfileC[6] ?? out.boilerTempC));
-        }
-        if (id === "boil_17_5_sh_4pass" || id === "cyl_7_9_inlet_L" || id === "cyl_7_9_inlet_R") {
-          return out.superheatTempC;
-        }
-        if (id === "boil_13_1_siphon") {
-          return 25.0 + 0.35 * Math.max(0.0, out.boilerTempC - 25.0);
-        }
-        if (id === "boil_13_10_sg_water") {
-          return 25.0 + 0.72 * Math.max(0.0, out.boilerTempC - 25.0);
-        }
-        if (id === "cyl_port_L_head") {
-          return (sp.valvePortOpenL[0] ?? 0) >= 0 ? out.superheatTempC : Math.max(28.0, Math.min(112.0, 0.78 * out.cylWallTempC + 8.0));
-        }
-        if (id === "cyl_port_L_crank") {
-          return (sp.valvePortOpenL[1] ?? 0) >= 0 ? out.superheatTempC : Math.max(28.0, Math.min(112.0, 0.78 * out.cylWallTempC + 8.0));
-        }
-        if (id === "cyl_port_R_head") {
-          return (sp.valvePortOpenR[0] ?? 0) >= 0 ? out.superheatTempC : Math.max(28.0, Math.min(112.0, 0.78 * out.cylWallTempC + 8.0));
-        }
-        if (id === "cyl_port_R_crank") {
-          return (sp.valvePortOpenR[1] ?? 0) >= 0 ? out.superheatTempC : Math.max(28.0, Math.min(112.0, 0.78 * out.cylWallTempC + 8.0));
-        }
-        if (id === "cyl_7_8_20_7_blast" || id === "cyl_7_8_exhaust_R") {
-          return out.boilerPressureKgf > 0.05 ? Math.max(98.0, Math.min(118.0, 0.76 * out.cylWallTempC + 10.0)) : out.cylWallTempC;
-        }
-        if (id === "cyl_1_16_drains") {
-          return Math.max(28.0, Math.min(104.0, 0.75 * out.cylWallTempC));
-        }
-        return out.boilerTempC;
       };
     };
 
+    const countArrowsForCurve = (c: ExactFilletedPipeCurve3, isUmb: boolean): number => {
+      if (isUmb) return 6;
+      const lenMm = c.totalLength * 1000.0;
+      return Math.max(3, Math.min(22, Math.round(lenMm / 8.5)));
+    };
+
     for (const s of specs) {
-      const colA = new THREE.Color(s.colHexA);
-      const colB = new THREE.Color(s.colHexB);
-      const mat = createPipeLumenMaterial(colA, colB);
-      const curve = s.frame === "umbilical"
-        ? new THREE.CatmullRomCurve3(s.ptsMm.map(([x, y, z]) => new THREE.Vector3(x, y, z)))
-        : mmPtsToCurve(s.ptsMm);
-      const segs = Math.max(16, s.ptsMm.length * 10);
-      const geom = new THREE.TubeGeometry(curve, segs, s.radiusMm * 0.001, 10, false);
+      const mat = createPipeLumenMaterial();
+      const bendR = s.bendRadiusMm ?? Math.max(1.6, s.radiusMm * 2.0);
+      const mainCurve =
+        s.frame === "umbilical"
+          ? new ExactFilletedPipeCurve3(s.ptsMm.map(([x, y, z]) => new THREE.Vector3(x, y, z)))
+          : new ExactFilletedPipeCurve3(buildFilletedPointsM(s.ptsMm, bendR));
+      const radiusM = s.radiusMm * 0.001;
+      const geom = buildBishopPipeGeometry(mainCurve, radiusM, 12);
       const mesh = new THREE.Mesh(geom, mat);
       mesh.renderOrder = 6;
       mesh.visible = false;
-      if (s.frame === "loco") {
-        this.root.add(mesh);
-        nLocoArrows += s.arrows;
-      } else if (s.frame === "tender") {
-        this.tenderRoot.add(mesh);
-        nTdrArrows += s.arrows;
-      } else {
-        this.worldRoot.add(mesh);
-        nWorldArrows += s.arrows;
+
+      const branchCurves: ExactFilletedPipeCurve3[] = [mainCurve];
+      const branchMeshes: THREE.Mesh[] = [mesh];
+      const branchArrowCounts: number[] = [countArrowsForCurve(mainCurve, s.frame === "umbilical")];
+
+      if (s.extraBranchesMm && s.frame !== "umbilical") {
+        for (const ebPts of s.extraBranchesMm) {
+          const bc = new ExactFilletedPipeCurve3(buildFilletedPointsM(ebPts, bendR));
+          const bm = new THREE.Mesh(buildBishopPipeGeometry(bc, radiusM, 12), mat);
+          bm.renderOrder = 6;
+          bm.visible = false;
+          branchCurves.push(bc);
+          branchMeshes.push(bm);
+          branchArrowCounts.push(countArrowsForCurve(bc, false));
+        }
       }
+
+      const totPipeArrows = branchArrowCounts.reduce((a, b) => a + b, 0);
+      const targetGroup = s.frame === "loco" ? this.root : s.frame === "tender" ? this.tenderRoot : this.worldRoot;
+      for (const bm of branchMeshes) {
+        targetGroup.add(bm);
+      }
+      if (s.frame === "loco") nLocoArrows += totPipeArrows;
+      else if (s.frame === "tender") nTdrArrows += totPipeArrows;
+      else nWorldArrows += totPipeArrows;
+
       this.pipeRuntimes.push({
         id: s.id,
         partNo: s.partNo,
         title: s.title,
         zone: s.zone,
         frame: s.frame,
-        curve,
+        curve: mainCurve,
+        branchCurves,
+        branchMeshes,
+        branchArrowCounts,
         umbEndsMm: s.umbEndsMm,
-        radiusM: s.radiusMm * 0.001,
+        radiusM,
         mesh,
         mat,
-        arrowCount: s.arrows,
+        arrowCount: totPipeArrows,
         phase: Math.random() * 6.28,
         labelT: s.labelT,
-        colorA: colA,
-        colorB: colB,
+        tempProfile: [25, 25, 25, 25],
+        arrowColTmp: new THREE.Color(),
         colorCss: s.css,
-        evalTempC: makePipeTempEvaluator(s.id),
+        evalTempProfileC: makePipeTempProfileEvaluator(s.id),
         evalFlow: s.evalFlow,
       });
     }
 
-    // 额外补充右排气支臂 + 23-1 前两芯垂直立孔内芯 (纯几何同步跟随主通道)
-    const arrowGeom = new THREE.ConeGeometry(0.00185, 0.0052, 12);
+    // 纤细流线型三维燕尾飞镖流向指示器 (随各管径自适应缩放 0.48~0.98mm、约 8.5mm 紧密等距排列、尖端高亮!)
+    const arrowGeom = createStreamlinedFlowDartGeometry();
     const arrowMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
+      vertexColors: true,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.94,
       depthTest: false,
       depthWrite: false,
     });
@@ -2183,16 +2642,21 @@ export class FluidPartVisualizer {
     // 3. X-Ray 内窥零件级三维流体场更新 (水位低于 19.0mm 即 <0.5ml 时锅水彻底蒸干消失!)
     const waterZ = sp.waterFreeZMm * 0.001;
     const hasBoilerWater = waterZ > 0.0190 && (out.boilerWaterMl === undefined || out.boilerWaterMl > 0.3);
-    const blastJetStrength = Math.min(
-      1.0,
-      out.exhaustPlume * 1.15 + ((out.blowerGS ?? 0) > 0.002 ? Math.min(0.85, (out.blowerGS ?? 0) * 8.0) : 0.0)
-    );
+    const exhaustJetOnly = Math.min(1.0, out.exhaustPlume * 1.15);
+    const blowerJetOnly = (out.blowerGS ?? 0) > 0.002 ? Math.min(1.0, 0.22 + (out.blowerGS ?? 0) * 8.5) : 0.0;
+    const blastJetStrength = Math.min(1.0, exhaustJetOnly + 0.35 * blowerJetOnly);
     this.waterSurfaceMesh.visible = xray && hasBoilerWater;
     this.waterVolumeMesh.visible = xray && hasBoilerWater;
     this.steamHeadspaceMesh.visible = xray && (out.boilerPressureKgf > 0.03 || sp.boilingIntensity > 0.03);
     for (const bm of this.smokeboxBlastMeshes) {
-      bm.visible = xray && blastJetStrength > 0.02;
+      bm.visible = xray && exhaustJetOnly > 0.02;
     }
+    for (const blm of this.blowerJetMeshes) {
+      blm.visible = (xray || showFlowArrows) && blowerJetOnly > 0.02;
+    }
+    this.blowerJetMat.uniforms.uTime.value = this.elapsed;
+    this.blowerJetMat.uniforms.uJet.value = blowerJetOnly;
+    this.blowerJetMat.uniforms.uDryness.value = 0.98;
     this.bubblePoints.visible = xray && hasBoilerWater && sp.boilingIntensity > 0.02;
     this.sliceMesh.visible = xray;
     this.lubeCoreMesh.visible = xray;
@@ -2206,7 +2670,10 @@ export class FluidPartVisualizer {
 
     const pipesVisible = xray || showFlowArrows;
     for (const pr of this.pipeRuntimes) {
-      pr.mesh.visible = pipesVisible && (pr.frame === "loco" || hasTdr);
+      const vis = pipesVisible && (pr.frame === "loco" || hasTdr);
+      for (const bm of pr.branchMeshes) {
+        bm.visible = vis;
+      }
     }
     this.locoArrowInst.visible = showFlowArrows;
     this.tenderArrowInst.visible = showFlowArrows && hasTdr;
@@ -2351,7 +2818,7 @@ export class FluidPartVisualizer {
         continue;
       }
 
-      // 动态更新跨车三平行软管曲线端点 (严格跟随牵引杆与 R2m 过弯姿态!)
+      // 动态更新跨车三平行软管悬链线端点 (严格跟随牵引杆与 R2m 过弯姿态!)
       if (pr.frame === "umbilical" && pr.umbEndsMm && tenderMatrix) {
         const isRet = pr.id === "umb_bt5_return";
         const pTdr = this.tmpVecA
@@ -2362,60 +2829,85 @@ export class FluidPartVisualizer {
           .applyMatrix4(locoMatrix);
         const pStart = isRet ? pLoco : pTdr;
         const pEnd = isRet ? pTdr : pLoco;
-        pr.curve.points[0].copy(pStart);
-        pr.curve.points[1].lerpVectors(pStart, pEnd, 0.5).setZ(0.5 * (pStart.z + pEnd.z) - 0.0018);
-        pr.curve.points[2].copy(pEnd);
+        const nUmb = 12;
+        const umbPts: THREE.Vector3[] = [];
+        for (let s = 0; s <= nUmb; s++) {
+          const f = s / nUmb;
+          const pt = new THREE.Vector3().lerpVectors(pStart, pEnd, f);
+          pt.z -= 0.0018 * Math.sin(Math.PI * f);
+          umbPts.push(pt);
+        }
+        const newUmbCurve = new ExactFilletedPipeCurve3(umbPts);
+        pr.curve = newUmbCurve;
+        pr.branchCurves[0] = newUmbCurve;
         pr.mesh.geometry.dispose();
-        pr.mesh.geometry = new THREE.TubeGeometry(pr.curve, 18, pr.radiusM, 8, false);
+        pr.mesh.geometry = buildBishopPipeGeometry(newUmbCurve, pr.radiusM, 10);
       }
 
       const st = pr.evalFlow(out, sp);
-      const pipeTempC = pr.evalTempC(out, sp);
-      temperatureToThermalColor(pipeTempC - 12.0, pr.colorA);
-      temperatureToThermalColor(pipeTempC + 10.0, pr.colorB);
-      const dynCss = temperatureToThermalCss(pipeTempC);
+      const prof = pr.evalTempProfileC(out, sp);
+      pr.tempProfile[0] = prof[0];
+      pr.tempProfile[1] = prof[1];
+      pr.tempProfile[2] = prof[2];
+      pr.tempProfile[3] = prof[3];
+      const pipeMidTempC = 0.25 * (prof[0] + prof[1] + prof[2] + prof[3]);
+      const dynCss = temperatureToThermalCss(pipeMidTempC);
       const lvsG = sp.edgeConductances?.[pr.id] ?? 1.0;
       const lvsOpen = lvsG > 0.02;
       const effSigned = lvsOpen ? st.signedRate : 0.0;
       const absRate = Math.abs(effSigned);
       const signDir = effSigned >= 0 ? 1.0 : -1.0;
       const isFlowing = absRate > 0.0025;
-      const speed = isFlowing ? signDir * (2.6 + Math.min(18.0, absRate * 14.0)) : 0.0;
+      const speed = isFlowing ? signDir * (2.4 + Math.min(15.0, absRate * 12.5)) : 0.0;
       pr.phase = (pr.phase + dt * speed) % 628.318;
 
       pr.mat.uniforms.uPhase.value = pr.phase;
       pr.mat.uniforms.uFill.value = lvsOpen ? st.fill : 0.08;
       pr.mat.uniforms.uActive.value = isFlowing ? Math.min(1.0, 0.38 + absRate * 2.5) : 0.0;
-      pr.mat.uniforms.uColA.value.copy(pr.colorA);
-      if (st.colOverride) {
-        pr.mat.uniforms.uColB.value.setRGB(st.colOverride[0], st.colOverride[1], st.colOverride[2]);
-      } else {
-        pr.mat.uniforms.uColB.value.copy(pr.colorB);
-      }
+      pr.mat.uniforms.uTemps.value.set(prof[0], prof[1], prof[2], prof[3]);
 
       if (showFlowArrows) {
         const inst =
           pr.frame === "loco" ? this.locoArrowInst : pr.frame === "tender" ? this.tenderArrowInst : this.worldArrowInst;
-        for (let k = 0; k < pr.arrowCount; k++) {
-          const idx = pr.frame === "loco" ? iLoco++ : pr.frame === "tender" ? iTdr++ : iWorld++;
-          if (!isFlowing || st.fill < 0.05) {
-            this.tmpMat.makeScale(0, 0, 0);
+        // 纤细自适应管径飞镖尺寸 (半径 0.46~0.92mm, 轴向长径比 2.55, 贴合管腔中心不遮挡相邻阀体!)
+        const dartRadM = Math.max(0.00046, Math.min(0.00092, pr.radiusM * 0.78));
+        const flowBoost = 0.90 + 0.24 * Math.min(1.0, absRate * 2.0);
+        const rScale = dartRadM * flowBoost;
+        const lenScale = dartRadM * (1.12 + 0.22 * Math.min(1.0, absRate * 2.0));
+
+        for (let bIdx = 0; bIdx < pr.branchCurves.length; bIdx++) {
+          const bCurve = pr.branchCurves[bIdx];
+          const bCount = pr.branchArrowCounts[bIdx];
+          for (let k = 0; k < bCount; k++) {
+            const idx = pr.frame === "loco" ? iLoco++ : pr.frame === "tender" ? iTdr++ : iWorld++;
+            if (!isFlowing || st.fill < 0.05) {
+              this.tmpMat.makeScale(0, 0, 0);
+              inst.setMatrixAt(idx, this.tmpMat);
+              continue;
+            }
+            const rawS = ((k + 0.5) / bCount + (pr.phase / 18.84955)) % 1.0;
+            const u = Math.max(0.03, Math.min(0.97, rawS < 0 ? rawS + 1.0 : rawS));
+            bCurve.getPointAt(u, this.tmpVecA);
+            bCurve.getTangentAt(u, this.tmpTan);
+            if (signDir < 0) {
+              this.tmpTan.negate();
+            }
+            this.tmpQuat.setFromUnitVectors(ARROW_BASE_AXIS, this.tmpTan.normalize());
+            this.tmpScale.set(rScale, lenScale, rScale);
+            this.tmpMat.compose(this.tmpVecA, this.tmpQuat, this.tmpScale);
             inst.setMatrixAt(idx, this.tmpMat);
-            continue;
+
+            // 飞镖颜色严格采样当前弧长 u 处的局部连续温度 T(u)
+            const s3 = u * 3.0;
+            const localT =
+              s3 <= 1.0
+                ? prof[0] + (prof[1] - prof[0]) * s3
+                : s3 <= 2.0
+                  ? prof[1] + (prof[2] - prof[1]) * (s3 - 1.0)
+                  : prof[2] + (prof[3] - prof[2]) * (s3 - 2.0);
+            temperatureToThermalColor(localT + 8.0, pr.arrowColTmp);
+            inst.setColorAt(idx, pr.arrowColTmp);
           }
-          const rawS = ((k + 0.5) / pr.arrowCount + (pr.phase / 18.84955)) % 1.0;
-          const u = Math.max(0.04, Math.min(0.96, rawS < 0 ? rawS + 1.0 : rawS));
-          pr.curve.getPointAt(u, this.tmpVecA);
-          pr.curve.getTangentAt(u, this.tmpTan);
-          if (signDir < 0) {
-            this.tmpTan.negate();
-          }
-          this.tmpQuat.setFromUnitVectors(ARROW_BASE_AXIS, this.tmpTan.normalize());
-          const sc = 0.85 + 0.35 * Math.min(1.0, absRate * 2.2);
-          this.tmpScale.set(sc, sc * 1.15, sc);
-          this.tmpMat.compose(this.tmpVecA, this.tmpQuat, this.tmpScale);
-          inst.setMatrixAt(idx, this.tmpMat);
-          inst.setColorAt(idx, st.colOverride ? pr.mat.uniforms.uColB.value : pr.colorB);
         }
       }
 
@@ -2431,8 +2923,8 @@ export class FluidPartVisualizer {
         const valStr = !lvsOpen
           ? "LVS断流"
           : st.unit === "給気" || st.unit === "排気"
-            ? `${pipeTempC.toFixed(0)}°C · ${st.unit} ${(absRate * 100).toFixed(0)}%`
-            : `${pipeTempC.toFixed(0)}°C · ${absRate.toFixed(2)} ${st.unit}`;
+            ? `${pipeMidTempC.toFixed(0)}°C · ${st.unit} ${(absRate * 100).toFixed(0)}%`
+            : `${pipeMidTempC.toFixed(0)}°C · ${absRate.toFixed(2)} ${st.unit}`;
         this.calloutSnapshots.push({
           id: pr.id,
           partNo: pr.partNo,
@@ -2440,7 +2932,7 @@ export class FluidPartVisualizer {
           zone: pr.zone,
           worldPos: wp,
           colorCss: dynCss,
-          tempC: pipeTempC,
+          tempC: pipeMidTempC,
           flowText: valStr,
           dirSymbol,
           active: isFlowing,

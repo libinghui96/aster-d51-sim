@@ -433,21 +433,21 @@ class AsterD51Thermo1D:
         self.boiler_efficiency_pct: float = 0.0
         self.edge_conds: Dict[str, float] = {}
         self.fluid_lvs_verified: bool = True
-        self.fluid_lvs_open_edges: int = 36
-        self.fluid_lvs_total_edges: int = 36
+        self.fluid_lvs_open_edges: int = 38
+        self.fluid_lvs_total_edges: int = 38
         lvs_rep_p = Path("configs/d51_fluid_lvs_report.json")
         if lvs_rep_p.exists():
             try:
                 lvs_raw = json.loads(lvs_rep_p.read_text(encoding="utf-8"))
                 self.edge_conds = {str(k): float(v) for k, v in lvs_raw.get("edge_conductances", {}).items()}
                 self.fluid_lvs_verified = bool(lvs_raw.get("all_passed", True))
-                self.fluid_lvs_open_edges = int(lvs_raw.get("open_edges", 36))
-                self.fluid_lvs_total_edges = int(lvs_raw.get("total_edges", 36))
+                self.fluid_lvs_open_edges = int(lvs_raw.get("open_edges", 38))
+                self.fluid_lvs_total_edges = int(lvs_raw.get("total_edges", 38))
             except Exception:
                 pass
 
     def set_edge_conductances(self, conds: Dict[str, float]) -> None:
-        """注入或更新 Fluid-LVS 实测 35 路三维管道流导系数 (任何管道堵塞 G=0 时对应回路物理断流，零硬编码 if)。"""
+        """注入或更新 Fluid-LVS 实测 38 路三维管道流导系数 (任何管道堵塞 G=0 时对应回路物理断流，零硬编码 if)。"""
         self.edge_conds.update({str(k): float(v) for k, v in conds.items()})
         if self.edge_conds:
             self.fluid_lvs_total_edges = max(self.fluid_lvs_total_edges, len(self.edge_conds))
@@ -822,7 +822,8 @@ class AsterD51Thermo1D:
             ctrl.burner_lit = False
 
         # --- 2. 蒸汽室 (Steam Chest)、华氏配气截止率检测与双缸 4 子步开口系真实气体膨胀做功 + 两相排液/水锤 ---
-        g_main_steam = self._chain_g("boil_13_4_11_15_turret", "boil_13_9_drypipe", "boil_17_5_sh_4pass")
+        g_sh_parallel = 0.5 * (self._edge_g("boil_17_5_sh_4pass") + self._edge_g("boil_17_5_sh_loop_R"))
+        g_main_steam = min(self._chain_g("boil_13_4_11_15_turret", "boil_13_9_drypipe"), g_sh_parallel)
         a_regulator = 3.2e-6 * (ctrl.regulator ** 1.35) * g_main_steam
         t_boil_k = self.T_boiler_c + 273.15
         has_steam = self.P_boiler > P_ATM + 400.0
@@ -884,12 +885,14 @@ class AsterD51Thermo1D:
         hydrolock_R = False
         v_sc_vol = 2.8e-5
 
+        drn_open_L = bool(ctrl.drain_cock and self._edge_g("cyl_1_16_drains_L") > 0.02)
+        drn_open_R = bool(ctrl.drain_cock and self._edge_g("cyl_1_16_drains") > 0.02)
         for _ in range(n_sub):
             in_L, exh_L, drn_L, cgen_L, pind_L, fh_L, hl_L = self._step_cylinder_side(
-                dt_sub, self.P_cyl_L, self.T_gas_L, self.M_cond_L, q_pL, v_pL, self.calib.q_fdc_L, areas_L, ctrl.drain_cock, self.ext_pino_cyl_L
+                dt_sub, self.P_cyl_L, self.T_gas_L, self.M_cond_L, q_pL, v_pL, self.calib.q_fdc_L, areas_L, drn_open_L, self.ext_pino_cyl_L
             )
             in_R, exh_R, drn_R, cgen_R, pind_R, fh_R, hl_R = self._step_cylinder_side(
-                dt_sub, self.P_cyl_R, self.T_gas_R, self.M_cond_R, q_pR, v_pR, self.calib.q_fdc_R, areas_R, ctrl.drain_cock, self.ext_pino_cyl_R
+                dt_sub, self.P_cyl_R, self.T_gas_R, self.M_cond_R, q_pR, v_pR, self.calib.q_fdc_R, areas_R, drn_open_R, self.ext_pino_cyl_R
             )
             in_tot = in_L + in_R
             # 填料函老化外漏损失

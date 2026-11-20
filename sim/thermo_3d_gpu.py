@@ -244,8 +244,8 @@ class Spatial3DSnapshot:
     sg_steam_lumen_cond: float = 1.0
     sg_water_lumen_cond: float = 1.0
     fluid_lvs_verified: bool = True
-    fluid_lvs_open_edges: int = 36
-    fluid_lvs_total_edges: int = 36
+    fluid_lvs_open_edges: int = 38
+    fluid_lvs_total_edges: int = 38
     edge_conductances: Dict[str, float] = field(default_factory=dict)
     wick_capillary_ml_s: float = 0.0
     wick_saturation: float = 0.90

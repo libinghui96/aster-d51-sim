@@ -613,13 +613,13 @@ class CoSimRunner:
         if self.is_roller_mode:
             self.data.qfrc_applied[self.qvel_w3] = -0.0022 * omega_3 - 0.00012 * omega_3 * abs(omega_3)
         else:
-            # 轨道模式: 轴承滚动摩擦与风阻；若车轮脱轨跌落枕木/道床，立即产生真实犁木陷滞阻力制停列车 (杜绝脱轨仍正常滑行!)
+            # 轨道模式: 整车耦合运行阻力 (Davis 滚动滞回 + 全车气动风阻施加于车体平动自由度，杜绝单刹主动轮导致导轮/煤水车轮速失配!)
             is_der, der_msg = self._evaluate_wheel_rail_derailment()
             tel.derailed = is_der
             tel.derail_reason = der_msg
+            vx, vy = float(self.data.qvel[0]), float(self.data.qvel[1])
+            v_spd = math.hypot(vx, vy)
             if is_der:
-                vx, vy = float(self.data.qvel[0]), float(self.data.qvel[1])
-                v_spd = math.hypot(vx, vy)
                 if v_spd > 1e-5:
                     f_plow = min(48.0, 26.0 + 65.0 * v_spd)
                     self.data.qfrc_applied[0] = -f_plow * (vx / v_spd)
@@ -629,9 +629,14 @@ class CoSimRunner:
                     self.data.qfrc_applied[1] = 0.0
                 self.data.qfrc_applied[self.qvel_w3] = -0.35 * omega_3 - 0.08 * math.tanh(omega_3 * 4.0)
             else:
-                self.data.qfrc_applied[0] = 0.0
-                self.data.qfrc_applied[1] = 0.0
-                self.data.qfrc_applied[self.qvel_w3] = -0.0038 * omega_3 - 0.00032 * omega_3 * abs(omega_3)
+                if v_spd > 1e-5:
+                    f_davis = 0.22 + 2.20 * v_spd + 8.80 * v_spd * v_spd
+                    self.data.qfrc_applied[0] = -f_davis * (vx / v_spd)
+                    self.data.qfrc_applied[1] = -f_davis * (vy / v_spd)
+                else:
+                    self.data.qfrc_applied[0] = 0.0
+                    self.data.qfrc_applied[1] = 0.0
+                self.data.qfrc_applied[self.qvel_w3] = -0.0024 * omega_3 - 0.00016 * omega_3 * abs(omega_3)
 
         if not self.use_gpu_3d:
             tel.spring_deflect_mm = [round(abs(z) * 1000.0, 3) for z in susp_z_m]
