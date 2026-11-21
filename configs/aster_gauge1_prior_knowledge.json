@@ -1,0 +1,102 @@
+{
+  "schema_version": "1.0",
+  "title": "Aster Hobby Gauge-1 Live Steam Engineering Prior Knowledge & 2010 JNR D51 Specification Reconciliation",
+  "primary_sources": [
+    "data/raw_pdfs/aster-manual.pdf (MANUAL OF ASTER MODEL LIVE STEAM ENGINES, 43 pages, J. T. van Riemsdijk / Aster Hobby)",
+    "data/raw_pdfs/2010_JNR_D51-standard.pdf (Aster 2010 JNR D51 Standard & Super-Detail Official Spec Sheet)",
+    "data/raw_pdfs/d51_illustrations.pdf & data/raw_pdfs/d51_manual.pdf (Assembly Blueprints Sheets 1-37, Templates 1-6 & Japanese Trial-Run Manual)",
+    "https://www.asterhobby.com/railwayhistory.html (110 Historical Locomotive Models 1975-2023 -> configs/aster_railwayhistory_catalog.json)"
+  ],
+  "reconciliation_hierarchy": {
+    "tier_1_part_dimensions": "d51_illustrations.pdf & d51_manual.pdf BOM standard codes (PR-15, PF3-1.9, PN3.2-1, PN7-1.9, SB-ø3/ø4) and 300-DPI blueprint photogrammetry",
+    "tier_2_locomotive_specs": "2010_JNR_D51-standard.pdf (1/30 JNR Gauge-1 scale, Type-C boiler class, R2m min curve radius, 7.8 kg reference consist weight)",
+    "tier_3_implicit_physics_priors": "aster-manual.pdf first-principles design rules whenever assembly drawings leave internal clearances, acoustics, or heat-transfer paths implicit"
+  },
+  "gauge1_scale_and_adhesion_priors": {
+    "track_gauge_mm": 45.0,
+    "wheel_back_to_back_post_1980_mm": 40.0,
+    "wheel_back_to_back_pre_1980_mm": 39.0,
+    "standard_gauge_1435mm_scale_ratio": 32.0,
+    "jnr_narrow_gauge_1067mm_scale_ratio": 30.0,
+    "tractive_effort_formula": "0.85 * P_boiler * d_bore^2 * stroke / D_driver",
+    "factor_of_adhesion_valid_range": [0.20, 0.33],
+    "speed_regime_transition": "Adhesion- and cylinder-tractive-effort-limited at starting/low speed; boiler evaporation rate and cutoff-expansion efficiency limited at cruising speed"
+  },
+  "boiler_families": {
+    "pot_boiler": {"era": "1975-1977", "wet_firebox_legs": false, "forced_draft_required": false, "thermal_efficiency_band": [0.16, 0.24]},
+    "smithies_water_tube": {"era": "1976-2005", "wet_firebox_legs": false, "forced_draft_required": true, "thermal_efficiency_band": [0.28, 0.40]},
+    "locomotive_wet_firebox": {"era": "1978-2020", "wet_firebox_legs": true, "forced_draft_required": true, "thermal_efficiency_band": [0.32, 0.48]},
+    "watanabe_mixed_type": {
+      "era": "1980-1996",
+      "d51_siblings": ["1986_JNR_D51_327", "1992_JNR_D51_498"],
+      "structure": "1 central large flue + 3 small fire tubes + 6 firebox cross/water tubes (300 cc)",
+      "wet_firebox_legs": false,
+      "forced_draft_required": true
+    },
+    "van_riemsdijk_type_c": {
+      "inventor": "John T. van Riemsdijk",
+      "d51_models": ["2007_JNR_D51_Streamlined", "2010_JNR_D51_Standard"],
+      "pressure_vessel_part": "12-6 (recessed-bottom circular C1100 copper barrel with stayed end plates & 5 full-length copper smoke tubes; ZERO wet copper side waterlegs)",
+      "firebox_duct_part": "12-4 (separate M2.6x4 bolted SUS304 stainless-steel firebox & rear upward flame-reversal duct lined with Templates 1/2/3 alumina-silica ceramic fiber sheet)",
+      "wet_firebox_legs": false,
+      "forced_draft_required": true,
+      "self_throttling_on_dry_out": true,
+      "refractory_liner_temp_range_c": [460.0, 690.0],
+      "flue_entry_nusselt_enhancement": "1 + (d_h / L_flue)^(2/3)",
+      "thermal_efficiency_band": [0.36, 0.58]
+    }
+  },
+  "cylinder_and_valve_gear_priors": {
+    "quartering_right_minus_left_deg": -90.0,
+    "exhaust_beats_per_rev": 4,
+    "jnr_d51_cross_ported_block": true,
+    "cross_porting_reason": "Allows outside-admission flat bronze D-slide valve (1-6) to retain authentic JNR inside-admission piston-valve external Walschaerts linkage geometry (aster-manual.pdf p.29 Fig.33)",
+    "slide_valve_buckle_vertical_free_play_mm": 0.50,
+    "slide_valve_lift_relief_physics": "Unrestrained 0.50 mm vertical play in buckle 1-5 allows D-valve 1-6 to lift off mirror face 1-9 when P_cyl > P_steam_chest + dP_lift, venting trapped condensate/compression overpressure back into steam chest",
+    "walschaerts_return_crank_phase_deg": 90.0,
+    "expansion_link_slot_radius_rule": "R_slot == L_radius_rod (Constant Lead at both FDC and BDC across forward/neutral/reverse)",
+    "drain_cock_type": "Suzuki-type mechanically linked 4-port spring-poppet cylinder drain cocks (1-16..19, aster-manual.pdf p.31 Fig.36)"
+  },
+  "whistle_aero_acoustics_priors": {
+    "valve_part": "11-1 spring-loaded stainless ball valve unseated by 11-2 pin and 11-3 3-hole cab lever",
+    "resonator_part": "11-8 concealed oversized cylindrical brass stopped pipe (OD 6.2 mm, ID 4.30 mm, total length 44.4 mm, stopped cavity L_cav = 29.2 mm)",
+    "dummy_scale_whistle_part": "30-2 (static dummy on boiler top; scale <8 mm whistle would squeak ultrasonically >15 kHz)",
+    "mounting_and_drainage": "Mounted horizontally in warm left firebox-cheek zone (Y=+20.2 mm, Z=+25.5 mm) with 3.2 mm mouth window facing strictly downward (-Z) for continuous gravity condensate drainage (aster-manual.pdf p.17 Fig.16)",
+    "mouth_cutup_mm": 3.20,
+    "effective_acoustic_length_mm": 39.0,
+    "brass_thermal_mass_j_per_k": 2.96,
+    "two_phase_sound_speed_law": "c_mix(T, x) = sqrt(x * gamma_tp(x) * R_steam * T_K), rising from ~362 m/s in cold condensing wet steam (x~0.62) to ~475 m/s in warm dry steam (x~0.96)",
+    "quarter_wave_odd_modes": [1, 3, 5, 7],
+    "fundamental_freq_glide_hz": [2320.0, 3120.0]
+  },
+  "safety_pump_lubricator_burner_priors": {
+    "safety_valve_type": "Twin spring-loaded stainless-ball pop valves (28-6 x2)",
+    "safety_pop_pressure_kgf_cm2": 4.00,
+    "safety_reseat_blowdown_kgf_cm2": 0.44,
+    "roscoe_capillary_id_mm": 0.85,
+    "roscoe_ambient_subcooling_law": "Condensation displacement rate proportional to max(0, T_sat(P_chest) - T_lubricator_wall(T_amb, v_air))",
+    "mariotte_sump_level_rule": "Beveled air-pipe mouth in 34-2 sump sets constant hydrostatic fuel head equal to 23-1 burner cup height; opening 36-5 cap or solar tank heating breaks vacuum and floods burner",
+    "ceramic_wick_protrusion_mm": [5.0, 6.0],
+    "clean_alcohol_flame_color": "blue (yellow tips indicate fuel-rich flooding or water contamination)"
+  },
+  "d51_2010_reconciled_specifications": {
+    "model_name": "Aster Hobby 2010 JNR D51 Standard / Super-Detail (1-D-1 Mikado)",
+    "scale_ratio": 30.0,
+    "gauge_mm": 45.0,
+    "min_curve_radius_mm": 2000.0,
+    "overall_lwh_mm": [695.0, 107.0, 140.0],
+    "reference_weight_kg": {"total": 7.8, "engine": 5.5, "tender": 2.3},
+    "cylinder_bore_mm_blueprint_pr15": 15.0,
+    "cylinder_bore_mm_brochure_nominal": 14.0,
+    "piston_stroke_mm_blueprint": 20.0,
+    "boiler_type": "Type C (van Riemsdijk stayed copper barrel 12-6 + separate ceramic-lined SUS304 firebox/rear duct 12-4)",
+    "boiler_smoke_tubes": {"total": 5, "upper_superheater_flues_od_mm": [2, 11.5], "lower_fire_tubes_od_mm": [3, 8.0]},
+    "boiler_net_internal_volume_ml": 396.5,
+    "boiler_brochure_70pct_capacity_ml": 300.0,
+    "boiler_sight_glass_50pct_working_ml": 210.0,
+    "tender_water_liner_31_10_brim_ml": 340.0,
+    "tender_water_manual_80pct_fill_ml": 272.0,
+    "tender_alcohol_manual_fill_ml": 130.0,
+    "tender_alcohol_brochure_gross_ml": 200.0
+  }
+}

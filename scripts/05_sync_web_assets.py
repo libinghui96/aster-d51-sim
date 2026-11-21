@@ -50,6 +50,7 @@ def main() -> None:
         "d51_boiler_piping.json",
         "d51_fluid_topology.json",
         "d51_fluid_lvs_report.json",
+        "aster_gauge1_prior_knowledge.json",
         "smokebox_lut.json",
         "auto_fireman_policy.json",
     ):

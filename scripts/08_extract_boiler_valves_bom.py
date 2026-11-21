@@ -332,7 +332,13 @@ def build_boiler_piping_spec(
     total_flue_count = sh_flue_count + fire_tube_count  # 5 本煙管
 
     A_fb_crown_cm2 = (inner_fb_len * inner_fb_w) * 1e-2
-    A_fb_sides_cm2 = (2.0 * inner_fb_len * inner_fb_h + inner_fb_w * inner_fb_h) * 1e-2
+    # Type "C" 锅炉真值: 12-4 为独立干式不锈钢内衬陶瓷导焰风道 (无湿水腿!)，湿蒸发受热面由紫铜退台冠板 + 圆形后管板喉口 + 5 根全长烟管构成
+    A_rear_throat_tubeplate_cm2 = (
+        math.pi * ((0.5 * barrel_id) ** 2)
+        - sh_flue_count * math.pi * ((0.5 * sh_flue_od) ** 2)
+        - fire_tube_count * math.pi * ((0.5 * fire_tube_od) ** 2)
+    ) * 1e-2
+    A_fb_sides_cm2 = (2.0 * inner_fb_len * inner_fb_h + inner_fb_w * inner_fb_h) * 1e-2  # 12-4 干式耐火陶瓷内衬重辐射面积
     A_flues_inner_cm2 = (
         sh_flue_count * math.pi * sh_flue_id * flue_len
         + fire_tube_count * math.pi * fire_tube_id * flue_len
@@ -341,21 +347,17 @@ def build_boiler_piping_spec(
         sh_flue_count * math.pi * sh_flue_od * flue_len
         + fire_tube_count * math.pi * fire_tube_od * flue_len
     ) * 1e-2
-    A_total_evap_cm2 = A_fb_crown_cm2 + A_fb_sides_cm2 + A_flues_wet_cm2
+    A_total_evap_cm2 = A_fb_crown_cm2 + A_rear_throat_tubeplate_cm2 + A_flues_wet_cm2
 
     V_barrel_gross_ml = math.pi * ((0.5 * barrel_id) ** 2) * barrel_len * 1e-3
-    V_lower_waterlegs_ml = 28.5
     V_flues_disp_ml = (
         sh_flue_count * math.pi * ((0.5 * sh_flue_od) ** 2) * flue_len
         + fire_tube_count * math.pi * ((0.5 * fire_tube_od) ** 2) * flue_len
     ) * 1e-3
-    V_inner_fb_disp_ml = 0.62 * (inner_fb_len * inner_fb_w * inner_fb_h) * 1e-3
-    V_stays_and_pipes_disp_ml = 6.5
+    V_stays_and_pipes_disp_ml = 7.2
     V_boiler_net_ml = (
         V_barrel_gross_ml
-        + V_lower_waterlegs_ml
         - V_flues_disp_ml
-        - V_inner_fb_disp_ml
         - V_stays_and_pipes_disp_ml
     )
 
@@ -469,7 +471,10 @@ def build_boiler_piping_spec(
             },
         },
         "boiler_pressure_vessel": {
-            "material": "Oxygen-Free Copper C1100 (Silver-Brazed, Dry Firebox Wrapper 12-4)",
+            "boiler_type": "Aster Type C (van Riemsdijk stayed circular/recessed C1100 copper barrel 12-6 + separate ceramic-lined SUS304 firebox/rear duct 12-4)",
+            "has_wet_firebox_waterlegs": False,
+            "separate_firebox_duct_part": "12-4 火室 (firebox_wrapper_12_4.step, SUS304 + Templates 1/2/3 ceramic liner)",
+            "material": "Oxygen-Free Copper C1100 (Silver-Brazed Stayed Type-C Barrel 12-6) + SUS304 Dry Firebox Duct (12-4)",
             "density_kg_m3": 8940.0,
             "thermal_conductivity_w_mk": 385.0,
             "centerline_z_mm": z_axis,
@@ -1353,6 +1358,11 @@ def main() -> None:
     tpl_meas = measure_1to1_templates(args.ortho_dir, float(kin_cfg["meta"].get("scanner_px_per_mm_300dpi", 11.8415)))
     ill_meas = measure_illustrations_opencv(args.pdf)
     spec = build_boiler_piping_spec(kin_cfg, tpl_meas, ill_meas)
+    if args.out.exists():
+        existing = json.loads(args.out.read_text(encoding="utf-8"))
+        for keep_key in ("1d_3d_port_mating_contracts", "superheater_and_steam_piping", "cab_interior_mechanisms", "feedwater_piping_topology", "displacement_lubricator_system"):
+            if keep_key in existing:
+                spec[keep_key] = existing[keep_key]
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(spec, indent=2, ensure_ascii=False), encoding="utf-8")

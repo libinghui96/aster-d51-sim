@@ -2537,9 +2537,9 @@ def build_boiler_superstructure(cfg: Dict, heavy_equipped: bool = True):
 
 def build_boiler_firebox_flues(cfg: Dict, pip_cfg: Dict):
     """
-    12-6 无氧紫铜银焊受压锅筒 + 5 本煙管 + 干式火室罩接口 (イラスト 12, 16, 17, 100% Y 对称!):
-      - 火室顶板 C1100 精确设于 Z∈[45.8,47.0]mm (t=1.2mm)，彻底根除后封头 Z=47.5..48.0mm 接口被实体铜块封死的断流隐患；
-      - 干式火室两侧 (X∈[-112.5,-46.8], |Y|>18.2, Z<47.0mm) 对称收窄暴露真实侧向走管走廊；
+    12-6 无氧紫铜银焊 van Riemsdijk `Type "C"` 受压锅筒 + 纵向拉撑杆 + 5 本煙管 (イラスト 12 ⑥, aster-manual.pdf pp.9-10 & 2010_JNR_D51-standard.pdf):
+      - 严格还原 Aster `Type "C"` 锅炉真值: 前段 X∈[-47.0, +92.0]mm 为完整圆截面受压紫铜锅筒 (ø53.0mm ID)，后段 X∈[-112.0, -47.0]mm 下腹退台 (Z_bottom=+45.1mm 紫铜冠板顶盖)，零虚构紫铜湿式火室水腿 (`12-4` 干式不锈钢内衬陶瓷火室罩已独立建为 `firebox_wrapper_12_4.step`)；
+      - 内置纵向贯通拉撑铜杆 (Stayed End Plates, Y=±8.5mm, Z=+56.0mm) 承受前后平端板蒸汽张力；
       - 13-6 上蒸汽口 (-106.8, ±17.5, +60.5mm) 径向贯通汽包腔、13-10 下水口 (-43.2, ±20.8, +32.6mm) 轴向贯通湿锅筒水腔！
     """
     pv = pip_cfg["boiler_pressure_vessel"]
@@ -2550,12 +2550,7 @@ def build_boiler_firebox_flues(cfg: Dict, pip_cfg: Dict):
 
     fb = pv["inner_firebox"]
     fb_x0, fb_x1 = [float(v) for v in fb["x_range_mm"]]
-    fb_len = fb_x1 - fb_x0
-    fb_xm = 0.5 * (fb_x0 + fb_x1)
-    fb_w = float(fb["width_mm"])
-    fb_z0 = float(fb["floor_z_mm"])
     z_crown = float(fb["crown_sheet_z_mm"])
-    t_cu = float(fb["wall_thickness_mm"])
 
     fl5 = pv["five_flue_tubes"]
     fl_x0, fl_x1 = [float(v) for v in fl5["x_range_mm"]]
@@ -2569,53 +2564,44 @@ def build_boiler_firebox_flues(cfg: Dict, pip_cfg: Dict):
     full_len = x_front - x_rear
     full_xm = 0.5 * (x_front + x_rear)
     outer_barrel = Pos(full_xm, 0, z_axis) * Rot(0, 90, 0) * Cylinder(radius=r_out, height=full_len)
-    fb_legs = Pos(fb_xm, 0, 0.5 * (fb_z0 + z_axis)) * Box(fb_len + 3.2, fb_w, z_axis - fb_z0)
-    under_fb_trim = Pos(0.5 * (x_rear - 2.0 + fb_x1), 0, 0.5 * (16.0 + fb_z0)) * Box(
-        (fb_x1 - (x_rear - 2.0)), 60.0, fb_z0 - 16.0
-    )
-    dry_fb_side_trim = (
-        Pos(0.5 * (x_rear - 1.0 + fb_x1), +24.2, 31.0) * Box((fb_x1 - (x_rear - 1.0)), 12.0, 31.0)
-        + Pos(0.5 * (x_rear - 1.0 + fb_x1), -24.2, 31.0) * Box((fb_x1 - (x_rear - 1.0)), 12.0, 31.0)
+    # Type "C" 后部退台切口: 切除后段 X < -48.2mm 且 Z < 45.10mm 的下半圆柱，保留 X∈[-48.2,-47.0]mm 完整圆形紫铜后管板承接全部 5 根烟管!
+    type_c_rear_recess = Pos(0.5 * ((x_rear - 2.0) + (fb_x1 - 1.2)), 0.0, 0.5 * (15.0 + 45.10)) * Box(
+        (fb_x1 - 1.2) - (x_rear - 2.0), 60.0, 45.10 - 15.0
     )
     barrel_cavity = Pos(0.5 * (fb_x1 + 2.4 + x_front - 2.4), 0, z_axis) * Rot(0, 90, 0) * Cylinder(
         radius=r_in, height=(x_front - 2.4) - (fb_x1 + 2.4)
     )
-    # 保持燃烧室主受热冠板 Z∈[46.3, 48.5]mm 完整热容厚度，仅在后妻板接口内侧 (X∈[-110.4,-104.6]mm) 设蒸汽连通集箱槽直通汽包腔！
-    fb_h = z_crown - fb_z0
+    # 保持后段燃烧室顶盖紫铜冠板 Z∈[45.10, 47.20]mm (t=2.10mm) 完整受热厚度，在后妻板接口内侧设蒸汽连通集箱槽直通汽包腔
     steam_dome_cavity = (
         (
             Pos(0.5 * (x_rear + 1.6 + fb_x1 + 4.5), 0, z_axis) * Rot(0, 90, 0) * Cylinder(
                 radius=r_in - 0.3, height=(fb_x1 + 4.5) - (x_rear + 1.6)
-            ) & Pos(0.5 * (x_rear + fb_x1 + 4.5), 0, z_crown + 13.0) * Box(
+            ) & Pos(0.5 * (x_rear + fb_x1 + 4.5), 0, z_crown + 11.9) * Box(
                 (fb_x1 + 4.5 - x_rear) + 4.0, 58.0, 24.0
             )
         )
-        - Pos(-51.6, +11.5, 50.2) * Box(12.4, 12.4, 7.2)
-        - Pos(-51.6, -11.5, 50.2) * Box(12.4, 12.4, 7.2)
+        - Pos(-51.6, +11.5, 49.8) * Box(14.8, 14.4, 9.6)
+        - Pos(-51.6, -11.5, 49.8) * Box(14.8, 14.4, 9.6)
     ) + (
-        Pos(-107.5, 0.0, 48.6) * Box(5.8, 28.0, 4.4)
+        Pos(-107.5, 0.0, 48.8) * Box(5.8, 28.0, 4.4)
         & Pos(-107.5, 0.0, z_axis) * Rot(0, 90, 0) * Cylinder(radius=r_in - 0.3, height=8.0)
     )
-    fb_inner_w = 33.8  # |Y_in| <= 16.90mm < |Y_out|=18.20mm (保留两侧 1.30mm 完整紫铜火室侧壁，彻底根除干式走廊切穿火室侧壁串腔!)
-    fb_cav_x0, fb_cav_x1 = -103.4, fb_x1 - t_cu  # X >= -103.4mm 使后妻板 Z=46.4mm 集汽槽下方保留 13mm 实心紫铜喉口壁 (根除 0.10mm 纸片穿孔!)
-    fb_cavity = (
-        Pos(0.5 * (fb_cav_x0 + fb_cav_x1), 0, fb_z0 + 0.5 * (fb_h - t_cu) - 1.0) * Box(
-            fb_cav_x1 - fb_cav_x0, fb_inner_w, fb_h - t_cu + 2.0
-        )
-        + Pos(-52.2, +11.5, 48.6) * Box(8.4, 9.6, 6.8)
-        + Pos(-52.2, -11.5, 48.6) * Box(8.4, 9.6, 6.8)
+    # 上排两根 ø11.5mm 大烟管在后管板 X=-48.2mm 处与退台冠板平滑交汇的导流窝 (四周留 >=2.2mm 实心铜壁与汽包腔零串通!)
+    flue_throat_pockets = (
+        Pos(-50.2, +11.5, 46.5) * Rot(0, 90, 0) * Cylinder(radius=5.0, height=5.0)
+        + Pos(-50.2, -11.5, 46.5) * Rot(0, 90, 0) * Cylinder(radius=5.0, height=5.0)
     )
-    shell_body = (outer_barrel + fb_legs) - under_fb_trim - dry_fb_side_trim - barrel_cavity - steam_dome_cavity - fb_cavity
-    mud_ring = Pos(fb_xm, 0, fb_z0 + 1.0) * Box(fb_len + 3.6, 36.8, 2.0) - Pos(
-        0.5 * (fb_cav_x0 + fb_cav_x1), 0, fb_z0 + 1.0
-    ) * Box(fb_cav_x1 - fb_cav_x0, fb_inner_w, 4.0)
-    firehole_ring = Pos(x_rear - 0.4, 0, 28.8) * Rot(0, 90, 0) * Cylinder(radius=6.2, height=4.4)
+    shell_body = outer_barrel - type_c_rear_recess - barrel_cavity - steam_dome_cavity - flue_throat_pockets
 
-    stays = None
+    # Type "C" 纵向贯通拉撑杆 (Longitudinal Stay Rods, aster-manual.pdf p.9 Fig.6) + 冠板加强撑钉
+    long_stays = (
+        Pos(full_xm, +8.5, 56.0) * Rot(0, 90, 0) * Cylinder(radius=1.10, height=full_len - 0.8)
+        + Pos(full_xm, -8.5, 56.0) * Rot(0, 90, 0) * Cylinder(radius=1.10, height=full_len - 0.8)
+    )
+    stays = long_stays
     for sx in (-95.0, -78.0, -61.0):
         for sy in (-12.0, -4.0, 4.0, 12.0):
-            b = Pos(sx, sy, z_crown + 0.6) * Cylinder(radius=1.1, height=2.2)
-            stays = b if stays is None else (stays + b)
+            stays = stays + Pos(sx, sy, z_crown + 0.6) * Cylinder(radius=1.1, height=2.2)
 
     flues_outer = None
     flues_bore = None
@@ -2635,7 +2621,6 @@ def build_boiler_firebox_flues(cfg: Dict, pip_cfg: Dict):
         flues_outer = (fo + bead) if flues_outer is None else (flues_outer + fo + bead)
         flues_bore = fb_cut if flues_bore is None else (flues_bore + fb_cut)
 
-    firehole_bore = Pos(x_rear + 4.0, 0, 28.8) * Rot(0, 90, 0) * Cylinder(radius=4.6, height=18.0)
     blowdown_bush_bot = Pos(-42.5, 0.0, 17.0) * Cylinder(radius=2.5, height=2.6)
     steam_boss_rear = Pos(-98.5, 0.0, 69.8) * Cylinder(radius=3.6, height=2.2)
     sv_bushes_tandem = (
@@ -2673,10 +2658,54 @@ def build_boiler_firebox_flues(cfg: Dict, pip_cfg: Dict):
     )
 
     return (
-        shell_body + mud_ring + firehole_ring + stays + flues_outer
+        shell_body + stays + flues_outer
         + blowdown_bush_bot + steam_boss_rear + sv_bushes_tandem + sg_throat_bushes
-        - flues_bore - firehole_bore - pv_port_bores
+        - flues_bore - pv_port_bores
     )
+
+
+def build_firebox_wrapper_12_4(cfg: Dict, pip_cfg: Dict):
+    """
+    12-4 独立不锈钢干式火室与后部上升导焰风道 `火室 (SUS304)` (イラスト 12 ④, aster-manual.pdf pp.9-10 Fig.6 & Photo 4):
+      - 1-BOM-1-STEP 真实独立分件 (严禁将 12-4 并入 12-6 紫铜受压锅筒冒充湿式水腿!)；
+      - 采用 1.15mm SUS304 不锈钢板折弯围合成后部耐火燃烧风道 (X∈[-112.0, -47.2]mm, |Y|<=18.05mm, Z∈[20.5, 45.55]mm)，
+        顶部内折贴合面与 12-6 退台紫铜冠板底面 (Z=+45.10mm) 严密座合，前端敞口紧贴 X=-48.2mm 紫铜后管板承接全部 5 根烟管；
+      - 底部中央开放长槽供 23-1 直列三头酒精燃烧器火焰与一次风上行，后壁设 12-1 蝴蝶式火室门座圈 (Z=+28.8mm)，严格左右对称 (|com_y|==0.0000mm)。
+    """
+    x0, x1 = -112.0, -47.2
+    xm = 0.5 * (x0 + x1)
+    lx = x1 - x0
+    z0, z1 = 20.5, 45.55
+    zm = 0.5 * (z0 + z1)
+    lz = z1 - z0
+    w_out = 36.10  # |Y| <= 18.05mm, 完美嵌入 Template 2 陶瓷隔热侧板 (|Y|=18.1..19.1mm) 内侧
+    w_in = 33.80   # |Y| <= 16.90mm, 1.15mm SUS304 不锈钢侧壁
+
+    outer_box = Pos(xm, 0.0, zm) * Box(lx, w_out, lz)
+    # 内部燃烧与上升导焰空腔: 前壁 (-48.6..-47.2mm) 仅在圆锅筒内径 r<=24.2mm 范围内开口对接后管板 5 烟管，四角严密封闭杜绝外漏!
+    inner_main = Pos(0.5 * (-109.6 + (-48.6)), 0.0, 0.5 * (z0 + 1.4 + z1 - 1.2)) * Box(
+        (-48.6) - (-109.6), w_in, (z1 - 1.2) - (z0 + 1.4)
+    )
+    front_throat_port = (
+        Pos(-48.0, 0.0, 44.0) * Rot(0, 90, 0) * Cylinder(radius=24.2, height=4.0)
+        & Pos(-48.0, 0.0, 0.5 * (27.5 + z1 + 1.0)) * Box(4.5, w_in, (z1 + 1.0) - 27.5)
+    )
+    top_crown_window = Pos(0.5 * (-106.0 + (-48.6)), 0.0, z1 - 0.6) * Box(
+        (-48.6) - (-106.0), w_in - 3.2, 3.0
+    )
+    bot_grate_slot = Pos(0.5 * (-106.5 + (-52.0)), 0.0, z0 + 0.7) * Box(
+        (-52.0) - (-106.5), w_in - 3.6, 2.2
+    )
+    # 两侧 M2.6×4 (×6) 内向加强螺钉耳座 (イラスト 12 ④)
+    mount_lugs = None
+    for sx in (-101.0, -79.5, -58.0):
+        for sy in (+16.8, -16.8):
+            lug = Pos(sx, sy, z1 - 1.4) * Box(4.2, 2.4, 2.8)
+            mount_lugs = lug if mount_lugs is None else (mount_lugs + lug)
+
+    firehole_collar = Pos(x0 - 0.4, 0.0, 28.8) * Rot(0, 90, 0) * Cylinder(radius=6.2, height=4.0)
+    firehole_bore = Pos(x0 + 1.0, 0.0, 28.8) * Rot(0, 90, 0) * Cylinder(radius=4.6, height=10.0)
+    return (outer_box - inner_main - front_throat_port - top_crown_window - bot_grate_slot + mount_lugs + firehole_collar) - firehole_bore
 
 
 def build_boiler_insulation(cfg: Dict, pip_cfg: Dict):
@@ -4057,6 +4086,7 @@ def main():
         ("cylinder_block_R", 0.024, RHO_BRASS, lambda: build_cylinder_block(cfg, False)),
         ("boiler_superstructure", 0.045, RHO_BRASS, lambda: build_boiler_superstructure(cfg, not args.standard_stack)),
         ("boiler_firebox_flues", 0.028, RHO_COPPER, lambda: build_boiler_firebox_flues(cfg, pip_cfg)),
+        ("firebox_wrapper_12_4", 0.024, RHO_STAINLESS, lambda: build_firebox_wrapper_12_4(cfg, pip_cfg)),
         ("boiler_insulation", 0.032, RHO_CERAMIC_SHEET, lambda: build_boiler_insulation(cfg, pip_cfg)),
         ("superheater_piping", 0.014, RHO_STAINLESS, lambda: build_superheater_piping(cfg, pip_cfg)),
         ("exhaust_blast_pipe", 0.016, RHO_BRASS, lambda: build_exhaust_blast_pipe(cfg, pip_cfg)),

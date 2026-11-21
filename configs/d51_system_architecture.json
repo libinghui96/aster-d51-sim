@@ -26,7 +26,9 @@
       "4-17": { "jp": "バイパスバルブ本体", "step": "bypass_valve_4_17", "role": "Dedicated stepped horizontal brass body + M5 stud + LN5-7A locknut + +Z 6-9 stem tower + +X 6-8 port + -Z 4-16 port" },
       "20-2": { "jp": "尻棒 x2", "step": "piston_tail_sheath_L/R", "role": "Front piston tail-rod dummy sheath mounted coaxially on 20-6" },
       "20-3_20_5": { "jp": "ダミードレンバルブ(R/L)", "step": "cylinder_block_L/R", "role": "Bottom (-Z = -6.27mm) front cylinder cover dummy relief valve" },
-      "20-6": { "jp": "尻棒2 x2", "step": "piston_tail_sheath_L/R", "role": "Selectable R3m (coaxial |Y|=32.50mm) vs R2m (+3.85mm outboard |Y|=36.35mm) base collar on 1-36/1-13 front cylinder covers (図 20.1)" }
+      "20-6": { "jp": "尻棒2 x2", "step": "piston_tail_sheath_L/R", "role": "Selectable R3m (coaxial |Y|=32.50mm) vs R2m (+3.85mm outboard |Y|=36.35mm) base collar on 1-36/1-13 front cylinder covers (図 20.1)" },
+      "12-4": { "jp": "火室 (SUS304)", "step": "firebox_wrapper_12_4", "role": "Standalone M2.6x4 bolted SUS304 stainless-steel dry firebox & upward rear flame-reversal duct lined with Templates 1/2/3 ceramic fiber sheet (Aster Type-C boiler)" },
+      "12-6": { "jp": "ボイラ (C1100 Type-C)", "step": "boiler_firebox_flues", "role": "Stayed recessed-bottom C1100 copper Type-C pressure barrel + longitudinal stays + 5 full-length copper smoke tubes (zero wet side waterlegs)" }
     }
   },
   "layer_2_enclosure_and_sweep_contracts": {

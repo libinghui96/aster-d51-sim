@@ -1,7 +1,7 @@
 # Aster Hobby JNR D51 真蒸汽机车物理与热力学仿真项目规范 (GEMINI.md)
 
 ## 1. 项目目标与架构概述
-本项目旨在对 **Aster Hobby JNR D51（1/32 比例，Gauge 1 45mm 轨距，1-D-1 Mikado 轴式真蒸汽机车）** 进行高精度三维机械结构还原，并实现 **1D 热流体网络（燃烧、相变蒸发、过热、平面滑阀配气、轴动给水）** 与 **3D 多体动力学（MuJoCo 闭环连杆与轮轨接触）** 的双向紧耦合实时仿真。
+本项目旨在对 **Aster Hobby JNR D51（`1/30` 比例 — 日本国铁 `1067 mm` 窄轨适配 Gauge-1 `45 mm` 轨距，`2010_JNR_D51-standard.pdf` & `aster-manual.pdf` p. 6，1-D-1 Mikado 轴式真蒸汽机车）** 进行高精度三维机械结构还原，并实现 **1D/3D 热流体与气动声学网络（`Type "C"` 干式陶瓷内衬火室二次辐射燃烧、相变蒸发、过热、平面滑阀配气与 `0.50 mm` 垂向抬升泄压、`11-8` 停止管两相流汽笛声学、轴动给水）** 与 **3D 多体动力学（MuJoCo 闭环连杆与 10 轴纯滚动轮轨接触）** 的双向紧耦合实时仿真。
 
 采用三层解耦架构：
 1. **图纸几何真值层 (`configs/d51_kinematics.json` & `scripts/01_extract_pdf_dims.py`)**：从扫描栅格版组装图 PDF 导出纠偏后的 300 DPI 正交切片（位于 `data/ortho_views/`），提取毫米级孔距与轴距。**注意：原始 PDF 为扫描栅格图像而非原生 CAD 矢量图，请勿使用 `page.get_drawings()` 作为唯一提取手段。**
@@ -41,18 +41,19 @@
   3. **齿轮啮合与定比操纵副**：对气缸排液阀齿轮旋塞 (`1-16 / 1-17`) 及逆转长拉杆定比联动 (`8-12 / 8-18`)，允许采用零齿隙 `<equality><joint .../>` 多项式耦合约束。
   4. **1D-3D 拓扑—几何连续性与跨刚体全端口零断口门禁 (`Gate 9`)**：由于 1D 集总热流网络沿逻辑拓扑图积分，单独检查 `boundary_edges == 0` 无法捕获三维断管或悬空碎块；因此每次提交必须通过 `scripts/09_verify_cad_and_clearance.py` 的 **Gate 9**：① 全车所有 `.stl` 必须为单连通固体 (`connected_components == 1`)；② `configs/*_boiler_piping.json` 声明的全部跨刚体/跨网格流体与机械端口在直线及最小曲线半径 (`R2m`) 双姿态下表面局部 ROI 对接间隙必须 `<= 0.50 mm`（跨车柔性软管须随牵引杆铰接摆动，严禁悬空硬伸）。
   5. **「三层黄金分工」物理—算子—认知混合架构铁律 (`Gate 10 & Gate 17`)**：严禁在 3D 热流仿真中手写 `if not airtight: *= 0.05` 等经验漏气/分流系数，亦严禁让大语言模型参与高频 PDE 数值积分或用黑盒网络替代质量/能量守恒律！统一采用：① **L1 解析守恒底座（`2000 Hz`）**：IAPWS-IF97 水/水蒸气状态方程 $(v, u) \mapsto (P, T_{\text{sat}}, x)$ + 有限体积比焓相变与煤水车敞口槽二维浅水波严格守恒；② **L2 轻量级四算子 PINO 层（`250 Hz`, `BF16`）**：对燃烧—5烟管—烟室射流、滑阀—气缸窄缝流、驾驶室分汽包/水面计冲洗及煤水车双泵五止回球/马氏瓶耦合训练 `1.28M` 参数四算子套件（大气破口通过 $p|_{\Gamma_{\text{atm}}} = p_{\text{atm}}$ 硬投影自然涌现负压坍塌、回水切换与开盖漫油）；③ **L3 本地 LLM 慢速认知副驾（`0.5 Hz` 异步）**：由 Ollama `bonsai-2:27b` 异步提供故障根因诊断与操纵建议。
-  6. **五层系统工程抽象架构（`docs/SYSTEM_ARCHITECTURE.md`）、`1-BOM-1-STEP` 107 件解析 B-Rep 建模、全车 38 路双侧对称声明式流体网表三维体素 `Fluid-LVS`、全列车 10 轴等线速度滚动轮轨接触、Roscoe 内立管置换注油器、闭合第一定律桑基热平衡、旷量/差热膨胀与节点连续轴向温度场铁律 (`Gate 16–Gate 27`)**：严禁跨 BOM 编号私自吞并独立功能件（如 `4-17` 旁通阀体、`6-8` 立管、`4-16` 回水管均须独立建 `.step`）、严禁忽略操纵件全行程扫掠包络或把多件重叠 `.stl` 直接拼接做奇偶射线体素化（必须逐件体素化取 `torch.maximum` 真并集！）！全车 **107 件** 刚体与管阀以 **ISO 10303-21 `.step` (`models/step/*.step`)** 为唯一几何真值源，并通过 **`configs/d51_fluid_topology.json` + `sim/fluid_topology_lvs.py`（`Gate 25`）** 在直线与 `R2m` 弯道双姿态下验证全车 38/38 管道 `Zero-Open / Zero-Necking / Zero-Missing-Wall`、8/8 互斥腔室 `Zero-Short` 零串腔及 8/8 动态阀态通断切换；还原全列车耦合 Davis 运行阻力与 10 轴纯滚动等线速接触、`17-3` 平滑 `180°` J 型烟室通风喷嘴（`通風ノズル`）、`4-2` 底部 `-Z` 引出 U 形毛细管 + 罐内垂直溢流内立管（Roscoe Standpipe）重力沉水置换物理、`図 20.1` `20-6` 前盖假杆 `R3m/R2m (+3.85 mm)` 双孔切换、`3-16 / 3-5 / 3-4 / 19-8 / 19-15` 全套受载弹簧、`図 5.1` 轴箱/心盘/连杆旷量与异种金属差热伸长、闭合第一定律锅炉桑基热平衡（残差 `< 0.2%`）；驾驶室前妻板 `21-28` 100% 封闭拱顶、左驾 `8-7` 逆时针 `0..+1.30 rad` 零穿模、右驾 `8-6/8-5` 100% 位于地板上方室内水平推拉；Web 透视采用解析 `G1` 圆弧导角无扭转 Bishop 管网、`20°C..750°C` 节点连续轴向热色谱与 38 路全分支密集流线型可逆导流镖；`0.0 ml` 干锅严格锁死 `0.00 g/s` 零蒸发。
+  6. **五层系统工程抽象架构（`docs/SYSTEM_ARCHITECTURE.md` & `docs/ASTER_LIVE_STEAM_PRIOR.md`）、`1-BOM-1-STEP` 108 件解析 B-Rep 建模、真 van Riemsdijk `Type "C"` 锅炉（`12-6` 退台紫铜锅筒 + `12-4 SUS304` 独立干式火室罩）、`11-8` 停止管两相流汽笛气动声学、全车 38 路双侧对称声明式流体网表三维体素 `Fluid-LVS`、全列车 10 轴等线速度滚动轮轨接触、Roscoe 内立管置换注油器、闭合第一定律桑基热平衡、旷量/差热膨胀与节点连续轴向温度场铁律 (`Gate 16–Gate 28`)**：严禁跨 BOM 编号私自吞并独立功能件（如 `12-4` 不锈钢火室罩、`4-17` 旁通阀体、`6-8` 立管、`4-16` 回水管均须独立建 `.step`）、严禁忽略操纵件全行程扫掠包络或把多件重叠 `.stl` 直接拼接做奇偶射线体素化（必须逐件体素化取 `torch.maximum` 真并集！）；具体零件几何以 `d51_illustrations.pdf` / `d51_manual.pdf` 为最高真值，系统机理与隐含结构遵循 `aster-manual.pdf` 与 `2010_JNR_D51-standard.pdf`！全车 **108 件** 刚体与管阀以 **ISO 10303-21 `.step` (`models/step/*.step`)** 为唯一几何真值源，并通过 **`configs/d51_fluid_topology.json` + `sim/fluid_topology_lvs.py`（`Gate 25`）** 在直线与 `R2m` 弯道双姿态下验证全车 38/38 管道 `Zero-Open / Zero-Necking / Zero-Missing-Wall`、8/8 互斥腔室 `Zero-Short` 零串腔及 8/8 动态阀态通断切换；还原 `Type "C"` 陶瓷火室二次辐射 + Hausen 烟管入口增强热效率、外进气滑阀框 `0.50 mm` 垂向抬升防顶缸泄压、`11-8` 车底朝下排凝黄铜汽笛 Wood-Kieffer 两相湿蒸汽声速与奇次谐波多普勒声学、`1:30` 换算车速与粘着系数 `[0.20, 0.33]`、全列车耦合 Davis 运行阻力与 10 轴纯滚动等线速接触、`17-3` 平滑 `180°` J 型烟室通风喷嘴（`通風ノズル`）、`4-2` 底部 `-Z` 引出 U 形毛细管 + 罐内垂直溢流内立管（Roscoe Standpipe）重力沉水置换物理、`図 20.1` `20-6` 前盖假杆 `R3m/R2m (+3.85 mm)` 双孔切换、`3-16 / 3-5 / 3-4 / 19-8 / 19-15` 全套受载弹簧、`図 5.1` 轴箱/心盘/连杆旷量与异种金属差热伸长、闭合第一定律锅炉桑基热平衡（残差 `< 0.2%`）；驾驶室前妻板 `21-28` 100% 封闭拱顶、左驾 `8-7` 逆时针 `0..+1.30 rad` 零穿模、右驾 `8-6/8-5` 100% 位于地板上方室内水平推拉；Web 透视采用解析 `G1` 圆弧导角无扭转 Bishop 管网、`20°C..750°C` 节点连续轴向热色谱与 38 路全分支密集流线型可逆导流镖；`0.0 ml` 干锅严格锁死 `0.00 g/s` 零蒸发与强迫通风自节流。
 
 ---
 
 ## 4. 常用开发与验证命令
+- 检索 Aster 1975–2023 全系 110 款历史蒸汽机车规格目录并下载车型参考 PDF：`python scripts/12_fetch_aster_catalog.py --query D51 --download`
 - 重新提取正交图纸与无头像素标定：`python scripts/01_extract_pdf_dims.py --pdf data/raw_pdfs/d51_illustrations.pdf --auto-calibrate`
 - 交互式鼠标点选校准华氏连杆孔距：`python scripts/01_extract_pdf_dims.py --pdf data/raw_pdfs/d51_illustrations.pdf --interactive`
 - 重新提取锅炉 5 烟管/双水路/置换注油器/4 头燃烧器真值表：`python scripts/08_extract_boiler_valves_bom.py`
 - 重新构建全车 CAD 网格与材料惯量库：`python scripts/02_build_cad_meshes.py`
 - 重新编译全车 MJCF（滚轮台 / 直线轨道 / R2m 弯道）：`python scripts/03_generate_mjcf.py --mode roller` （或 `--mode track --out models/d51_track.xml` / `--mode curve_r2m --out models/d51_r2m.xml`）
 - 运行全车 38 路流体网表与 8 腔室隔离 GPU 三维体素 Fluid-LVS 验证：`python -m sim.fluid_topology_lvs --xml models/d51_track.xml --topology configs/d51_fluid_topology.json --out configs/d51_fluid_lvs_report.json`
-- 运行五层系统架构、CAD 拓扑完整性、Fluid-LVS、10轴等线速滚动、对称性与 360° 运动包络净空门禁（Gates 1–27）：`python scripts/09_verify_cad_and_clearance.py`
+- 运行五层系统架构、CAD 拓扑完整性、Fluid-LVS、10轴等线速滚动、Type-"C" 锅炉、汽笛声学与全锅炉气体/火焰动力学门禁（Gates 1–29）：`python scripts/09_verify_cad_and_clearance.py`
 - R2m vs R3m 先导支点过弯脱线分析：`python scripts/04_analyze_r2m_derailment.py`
 - RTX 5080 烟室 3D CFD 标定查找表生成：`python scripts/06_gpu_smokebox_cfd.py`
 - RTX 5080 并行参数辨识与自动司炉寻优：`python scripts/07_gpu_fireman_opt.py`

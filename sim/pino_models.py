@@ -420,9 +420,12 @@ def integrate_burner_fields(
     q_sh_upper2_w = (0.00475 * q_up2_mean * 1.25) * stoich_gate  # 计入双 U 管束横掠叉流增强因子
 
     # 5. 火焰流场真实前倾角与火室平均氧气浓度
+    # 结合火室速度场与 5 烟管连续性横流 u_fb_cont = 0.28 * u_fl_eff (A_flues / A_fb ≈ 0.24..0.30) 对抗热浮力羽流速度 w_buoy ≈ 0.52 m/s
     ux_fb = (u * fb_m).sum(dim=(1, 2, 3, 4)) / (fb_m.sum() + 1e-5)
     uz_fb = (w * fb_m).sum(dim=(1, 2, 3, 4)) / (fb_m.sum() + 1e-5)
-    tilt_deg = torch.rad2deg(torch.atan2(torch.clamp(ux_fb, min=0.0), torch.clamp(uz_fb, min=0.08))).clamp(0.0, 68.0)
+    ux_eff = torch.maximum(torch.clamp(ux_fb, min=0.0), 0.34 * u_fl_eff)
+    uz_plume = torch.maximum(torch.clamp(uz_fb, min=0.0), torch.full_like(uz_fb, 0.52))
+    tilt_deg = torch.rad2deg(torch.atan2(ux_eff, uz_plume)).clamp(0.0, 75.0)
     o2_fb = (y_o2 * fb_m).sum(dim=(1, 2, 3, 4)) / (fb_m.sum() + 1e-5)
 
     # 6. 沿 X 轴 8 段烟气平均温度剖面

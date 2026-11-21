@@ -125,7 +125,7 @@
     }
   },
   "boiler_pressure_vessel": {
-    "material": "Oxygen-Free Copper C1100 (Silver-Brazed, Dry Firebox Wrapper 12-4)",
+    "material": "Oxygen-Free Copper C1100 (Silver-Brazed Stayed Type-C Barrel 12-6) + SUS304 Dry Firebox Duct (12-4)",
     "density_kg_m3": 8940.0,
     "thermal_conductivity_w_mk": 385.0,
     "centerline_z_mm": 44.0,
@@ -194,7 +194,7 @@
       }
     },
     "verified_capacities": {
-      "geometric_net_volume_ml": 385.8,
+      "geometric_net_volume_ml": 393.0,
       "locked_thermo_total_volume_ml": 380.0,
       "water_gauge_0pct_ml": 140.0,
       "water_gauge_50pct_ml": 210.0,
@@ -207,8 +207,11 @@
       "firebox_wall_area_cm2": 42.39,
       "flues_gas_side_area_cm2": 175.11,
       "flues_water_side_area_cm2": 205.24,
-      "total_evaporative_area_cm2": 269.41
-    }
+      "total_evaporative_area_cm2": 245.5
+    },
+    "boiler_type": "Aster Type C (van Riemsdijk stayed circular/recessed C1100 copper barrel 12-6 + separate ceramic-lined SUS304 firebox/rear duct 12-4)",
+    "has_wet_firebox_waterlegs": false,
+    "separate_firebox_duct_part": "12-4 火室 (firebox_wrapper_12_4.step, SUS304 + Templates 1/2/3 ceramic liner)"
   },
   "superheater_and_steam_piping": {
     "material": "Stainless Steel SUS304 & Brass C3604",

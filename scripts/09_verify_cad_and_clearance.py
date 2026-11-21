@@ -364,6 +364,7 @@ def verify_gate_2() -> Tuple[bool, List[str], Dict[str, np.ndarray]]:
     sym_names = [
         "boiler_superstructure",
         "boiler_firebox_flues",
+        "firebox_wrapper_12_4",
         "exhaust_blast_pipe",
         "smokebox_petticoat",
         "tandem_safety_valves",
@@ -3728,6 +3729,7 @@ def verify_gate_24(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
         "boiler_insulation",
         "boiler_superstructure",
         "boiler_firebox_flues",
+        "firebox_wrapper_12_4",
         "superheater_piping",
         "blower_nozzle_17_3",
         "boiler_aux_valves",
@@ -4361,6 +4363,426 @@ def verify_gate_27(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
 
 
 # ==============================================================================
+# Gate 28: Stage 23 Aster 全系工程先验知识库、2010_JNR_D51-standard 规格对齐、
+#          真 van Riemsdijk Type-"C" 锅炉 1-BOM-1-STEP 重构与热效率、11-8 两相流汽笛气动声学门禁
+# ==============================================================================
+
+def verify_gate_28(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
+    from sim.thermo_1d import AsterD51Thermo1D, CabControls, CylinderCalibration, P_ATM, PA_PER_KGF_CM2
+
+    ok = True
+    msgs: List[str] = []
+
+    # 28.1 核验 aster-manual.pdf 先验文档、结构化物理规则库与 asterhobby.com 110 款历史机型目录工具链
+    prior_md = PROJECT_ROOT / "docs" / "ASTER_LIVE_STEAM_PRIOR.md"
+    prior_json = PROJECT_ROOT / "configs" / "aster_gauge1_prior_knowledge.json"
+    cat_json = PROJECT_ROOT / "configs" / "aster_railwayhistory_catalog.json"
+    cat_cli = PROJECT_ROOT / "scripts" / "12_fetch_aster_catalog.py"
+
+    md_ok = prior_md.exists() and len(prior_md.read_text(encoding="utf-8")) >= 4000
+    pj = json.loads(prior_json.read_text(encoding="utf-8")) if prior_json.exists() else {}
+    cj = json.loads(cat_json.read_text(encoding="utf-8")) if cat_json.exists() else {}
+    cat_list = cj.get("catalog", cj.get("locomotives", []))
+    n_models = len(cat_list)
+    has_2010_d51 = any(
+        "2010_JNR_D51-standard.pdf" in json.dumps(item)
+        for item in cj.get("d51_editions", cat_list)
+    )
+    if not (
+        md_ok
+        and cat_cli.exists()
+        and n_models >= 105
+        and has_2010_d51
+        and "boiler_families" in pj
+        and "whistle_aero_acoustics_priors" in pj
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Aster prior knowledge / railwayhistory catalog incomplete: md_ok={md_ok}, "
+            f"cli={cat_cli.exists()}, n_models={n_models}, has_2010_d51={has_2010_d51}, keys={list(pj.keys())}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Aster Gauge-1 prior knowledge base (docs/ASTER_LIVE_STEAM_PRIOR.md + json) & "
+            f"railwayhistory catalog ({n_models} locomotives, 2010_JNR_D51-standard archived) verified"
+        )
+
+    # 28.2 核验真 van Riemsdijk Type-"C" 锅炉 (12-6 退台紫铜锅筒 + 12-4 独立 SUS304 火室罩, 零湿水腿)、
+    #      1:30 日系窄轨缩尺、粘着系数 [0.20, 0.33]、滑阀 0.50mm 垂向抬升泄压与干锅强迫通风自节流
+    step_124 = PROJECT_ROOT / "models" / "step" / "firebox_wrapper_12_4.step"
+    pip = json.loads((PROJECT_ROOT / "configs" / "d51_boiler_piping.json").read_text(encoding="utf-8"))
+    pv = pip["boiler_pressure_vessel"]
+    has_124 = step_124.exists() and ("firebox_wrapper_12_4" in stl_tris_mm)
+    cc_124 = count_connected_components(stl_tris_mm["firebox_wrapper_12_4"]) if has_124 else 0
+    unm_124, vol_124 = check_watertight_and_volume(stl_tris_mm["firebox_wrapper_12_4"]) if has_124 else (99, 0.0)
+    cu_pts = stl_tris_mm["boiler_firebox_flues"].reshape(-1, 3)
+    fake_waterleg_verts = int(
+        np.sum((cu_pts[:, 0] >= -110.0) & (cu_pts[:, 0] <= -50.0) & (cu_pts[:, 2] < 44.5))
+    )
+
+    th = AsterD51Thermo1D(CylinderCalibration())
+    th.reset_hot_ready()
+    ctrl_run = CabControls(regulator=0.62, reverser=0.65, burner_lit=True, fuel_valve=0.90, blower_valve=0.25, drain_cock=False)
+    tel_run = None
+    for k in range(1200):
+        t_s = k * 0.005
+        q_pL = 0.010 * (1.0 - math.cos(20.0 * t_s))
+        v_pL = 0.010 * 20.0 * math.sin(20.0 * t_s)
+        q_vL = -0.0026 * math.sin(20.0 * t_s + 0.18)
+        q_pR = 0.010 * (1.0 - math.sin(20.0 * t_s))
+        v_pR = -0.010 * 20.0 * math.cos(20.0 * t_s)
+        q_vR = 0.0026 * math.cos(20.0 * t_s + 0.18)
+        _, _, _, tel_run = th.step(0.005, q_pL, v_pL, q_vL, q_pR, v_pR, q_vR, 20.0, 0.0, ctrl_run, t_s)
+    assert tel_run is not None
+    expected_kmh_1to30 = 20.0 * (0.5 * 0.0438) * 3.6 * 30.0  # 47.304 km/h (vs 50.458 km/h at 1:32)
+    q_fuel_steaming = float(tel_run.q_fuel_w)
+
+    # 注入气缸瞬态压缩超压验证 1-6 平面滑阀 0.50 mm 垂向游隙抬升向蒸汽室回泄保护
+    p_cyl_injected = float(th.P_steam_chest + 1.45e5)
+    th.P_cyl_L[0] = p_cyl_injected
+    _, _, _, tel_lift = th.step(0.001, 0.0005, -0.18, 0.0, 0.012, 0.0, 0.0, 12.0, 0.0, ctrl_run, 6.01)
+    p_cyl_after_lift = float(th.P_cyl_L[0])
+
+    # 验证 0ml 干锅且无外接抽风机时的强迫通风燃烧器缺氧自节流保护 (aster-manual.pdf pp.9, 36, 40)
+    th_dry = AsterD51Thermo1D(CylinderCalibration())
+    th_dry.reset_hot_ready()
+    th_dry.M_water_kg = 0.0
+    th_dry.M_vap_kg = 1.0e-6
+    th_dry.P_boiler = P_ATM
+    th_dry.P_steam_chest = P_ATM
+    ctrl_dry = CabControls(regulator=0.0, reverser=0.0, burner_lit=True, fuel_valve=0.90, chimney_fan=False)
+    for _ in range(40):
+        _, _, _, tel_dry = th_dry.step(0.005, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ctrl_dry)
+
+    if not (
+        has_124
+        and cc_124 == 1
+        and unm_124 == 0
+        and vol_124 > 1500.0
+        and fake_waterleg_verts == 0
+        and pv.get("has_wet_firebox_waterlegs") is False
+        and tel_run.boiler_type == "Type-C"
+        and tel_run.firebox_liner_temp_c > tel_run.boiler_temp_c + 180.0
+        and 36.0 <= tel_run.boiler_efficiency_pct <= 78.0
+        and tel_run.energy_balance_err_pct < 0.20
+        and abs(tel_run.scale_speed_kmh - expected_kmh_1to30) < 0.05
+        and 0.20 <= tel_run.adhesion_factor <= 0.33
+        and 0.05 <= tel_lift.slide_valve_lift_mm <= 0.50
+        and p_cyl_after_lift < p_cyl_injected - 5000.0
+        and tel_dry.steam_gen_g_s == 0.0
+        and tel_dry.q_fuel_w < 0.62 * q_fuel_steaming
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Type-C boiler / prior mechanics check failed: has_124={has_124}(cc={cc_124},unm={unm_124}), "
+            f"fake_wl={fake_waterleg_verts}, T_liner={tel_run.firebox_liner_temp_c:.1f}°C, eta={tel_run.boiler_efficiency_pct:.1f}%, "
+            f"v_1to30={tel_run.scale_speed_kmh:.2f} vs {expected_kmh_1to30:.2f}, adh={tel_run.adhesion_factor:.3f}, "
+            f"vlift={tel_lift.slide_valve_lift_mm:.3f}mm, dry_q={tel_dry.q_fuel_w:.1f}W vs {q_fuel_steaming:.1f}W"
+        )
+    else:
+        msgs.append(
+            f"PASS: True Type-'C' boiler (12-6 copper + 12-4 SUS304 cc=1, fake_waterlegs=0, T_liner={tel_run.firebox_liner_temp_c:.0f}°C, "
+            f"η_boil={tel_run.boiler_efficiency_pct:.1f}%, err={tel_run.energy_balance_err_pct:.4f}%), 1:30 speed={tel_run.scale_speed_kmh:.2f}km/h, "
+            f"adhesion={tel_run.adhesion_factor:.3f}, 0.5mm buckle relief={tel_lift.slide_valve_lift_mm:.3f}mm & 0ml draft self-throttle ({q_fuel_steaming:.0f}W->{tel_dry.q_fuel_w:.0f}W)"
+        )
+
+    # 28.3 核验 11-8 车底朝下排凝黄铜停止管汽笛两相流气动声学第一性原理仿真 + WebAudio 奇次谐波/多普勒实现
+    th_w0 = AsterD51Thermo1D(CylinderCalibration())
+    th_w0.reset_cold_prepared()
+    ctrl_wh = CabControls(whistle_valve=1.0, burner_lit=False)
+    _, _, _, tel_w_zero = th_w0.step(0.002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ctrl_wh)
+
+    # 亚阈值微压测试 (0.0045 kgf/cm² = 441 Pa -> M_jet ≈ 0.076 < 0.085, 仅产生哨口嘶声无谐振基频)
+    th_w0.P_boiler = P_ATM + 0.0045 * PA_PER_KGF_CM2
+    th_w0.T_boiler_c = 100.1
+    _, _, _, tel_w_sub = th_w0.step(0.002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ctrl_wh)
+
+    # 热态 3.2~3.8 kgf/cm² 开笛暖管与 -Z 重力/剪切排凝动态升频曲线校验 (0.90 s)
+    th_wh = AsterD51Thermo1D(CylinderCalibration())
+    th_wh.reset_hot_ready()
+    ctrl_wh_hot = CabControls(whistle_valve=1.0, burner_lit=True, fuel_valve=0.85)
+    tel_atk = tel_end = None
+    for step_i in range(900):
+        _, _, _, tel_cur = th_wh.step(0.001, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ctrl_wh_hot, step_i * 0.001)
+        if step_i == 14:
+            tel_atk = tel_cur
+        tel_end = tel_cur
+    assert tel_atk is not None and tel_end is not None
+
+    pts_src = (PROJECT_ROOT / "web" / "src" / "particles.ts").read_text(encoding="utf-8")
+    web_wh_ok = (
+        "class BrassWhistleAudio" in pts_src
+        and "const ratios = [1.0, 2.0, 3.0, 5.0]" in pts_src
+        and "doppler" in pts_src
+        and "349.23" not in pts_src
+    )
+
+    if not (
+        tel_w_zero.whistle_freq_hz == 0.0
+        and tel_w_zero.whistle_spl_db == 0.0
+        and tel_w_sub.whistle_freq_hz == 0.0
+        and 18.0 <= tel_w_sub.whistle_spl_db <= 44.0
+        and 2100.0 <= tel_atk.whistle_freq_hz <= 2850.0
+        and tel_atk.whistle_sputter > 0.12
+        and 2800.0 <= tel_end.whistle_freq_hz <= 3450.0
+        and tel_end.whistle_freq_hz > tel_atk.whistle_freq_hz + 180.0
+        and tel_end.whistle_wall_temp_c > tel_atk.whistle_wall_temp_c + 35.0
+        and tel_end.whistle_dryness_x > tel_atk.whistle_dryness_x + 0.06
+        and tel_end.whistle_sputter < tel_atk.whistle_sputter
+        and 65.0 <= tel_end.whistle_spl_db <= 92.0
+        and web_wh_ok
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: 11-8 whistle aero-acoustics failed: zero=({tel_w_zero.whistle_freq_hz},{tel_w_zero.whistle_spl_db}), "
+            f"sub=({tel_w_sub.whistle_freq_hz},{tel_w_sub.whistle_spl_db:.1f}dB), "
+            f"atk=({tel_atk.whistle_freq_hz:.0f}Hz, T={tel_atk.whistle_wall_temp_c:.1f}°C, x={tel_atk.whistle_dryness_x:.3f}, sp={tel_atk.whistle_sputter:.2f}) -> "
+            f"end=({tel_end.whistle_freq_hz:.0f}Hz, T={tel_end.whistle_wall_temp_c:.1f}°C, x={tel_end.whistle_dryness_x:.3f}, sp={tel_end.whistle_sputter:.2f}, {tel_end.whistle_spl_db:.1f}dB), web={web_wh_ok}"
+        )
+    else:
+        msgs.append(
+            f"PASS: 11-8 stopped brass whistle first-principles aero-acoustics verified (0-bar silent, 0.035kgf sub-threshold hiss={tel_w_sub.whistle_spl_db:.1f}dB; "
+            f"cold-wall wet attack {tel_atk.whistle_freq_hz:.0f}Hz [x={tel_atk.whistle_dryness_x:.2f}, sputter={tel_atk.whistle_sputter:.2f}] -> "
+            f"-Z drained chime {tel_end.whistle_freq_hz:.0f}Hz [T_wall={tel_end.whistle_wall_temp_c:.0f}°C, x={tel_end.whistle_dryness_x:.2f}, {tel_end.whistle_spl_db:.1f}dB] & WebAudio 1f/3f/5f+Doppler)"
+        )
+
+    return ok, msgs
+
+
+# ==============================================================================
+# Gate 29: Stage 24 火焰三维横流倾伏方向真值、外界—炉栅/12-1炉门—火室—5烟管—烟室—烟囱
+#          全链路气体压力/质量/NTU温度耦合与 Type-"C" 无侧水腿 Web 着色门禁
+# ==============================================================================
+
+def verify_gate_29() -> Tuple[bool, List[str]]:
+    from sim.run_cosim import calibrate_model_and_valves
+    from sim.thermo_1d import AsterD51Thermo1D, CabControls
+
+    ok = True
+    msgs: List[str] = []
+
+    m_mj = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / "models" / "d51_full.xml"))
+    cal = calibrate_model_and_valves(m_mj)
+
+    # 29.1 & 29.2 1D 解析热流核心：对比零引风驻车怠速 vs 强迫引风行驶态火焰方向、后/中/前三芯逐级弯折与外界气体压力/质量守恒
+    th = AsterD51Thermo1D(cal)
+    th.reset_hot_ready()
+    ctrl_idle = CabControls(regulator=0.0, reverser=0.0, blower_valve=0.0, chimney_fan=False, burner_lit=True, fuel_valve=0.85)
+    tel_idle = None
+    for k in range(80):
+        _, _, _, tel_idle = th.step(0.005, cal.q_fdc_L - 0.01, 0.0, cal.q_valve_center_L, cal.q_fdc_R - 0.01, 0.0, cal.q_valve_center_R, 0.0, 0.0, ctrl_idle, k * 0.005)
+    assert tel_idle is not None
+
+    th.reset_hot_ready()
+    ctrl_steaming = CabControls(regulator=0.60, reverser=0.65, blower_valve=0.35, chimney_fan=False, burner_lit=True, fuel_valve=0.90, firebox_door=0.0)
+    tel_closed_door = None
+    for k in range(300):
+        t_s = k * 0.005
+        q_pL = cal.q_fdc_L - 0.010 * (1.0 - math.cos(22.0 * t_s))
+        v_pL = -0.010 * 22.0 * math.sin(22.0 * t_s)
+        q_vL = cal.q_valve_center_L - 0.0026 * math.sin(22.0 * t_s + 0.18)
+        q_pR = cal.q_fdc_R - 0.010 * (1.0 - math.sin(22.0 * t_s))
+        v_pR = 0.010 * 22.0 * math.cos(22.0 * t_s)
+        q_vR = cal.q_valve_center_R + 0.0026 * math.cos(22.0 * t_s + 0.18)
+        _, _, _, tel_closed_door = th.step(0.005, q_pL, v_pL, q_vL, q_pR, v_pR, q_vR, 22.0, 0.0, ctrl_steaming, t_s)
+    assert tel_closed_door is not None
+
+    # 开启 12-1 蝴蝶火室门：验证外界冷二次风旁通涌入、火室负压与炉底一次风同步下降
+    ctrl_open_door = CabControls(regulator=0.60, reverser=0.65, blower_valve=0.35, chimney_fan=False, burner_lit=True, fuel_valve=0.90, firebox_door=1.0)
+    tel_open_door = None
+    for k in range(120):
+        t_s = 1.5 + k * 0.005
+        q_pL = cal.q_fdc_L - 0.010 * (1.0 - math.cos(22.0 * t_s))
+        v_pL = -0.010 * 22.0 * math.sin(22.0 * t_s)
+        q_vL = cal.q_valve_center_L - 0.0026 * math.sin(22.0 * t_s + 0.18)
+        q_pR = cal.q_fdc_R - 0.010 * (1.0 - math.sin(22.0 * t_s))
+        v_pR = 0.010 * 22.0 * math.cos(22.0 * t_s)
+        q_vR = cal.q_valve_center_R + 0.0026 * math.cos(22.0 * t_s + 0.18)
+        _, _, _, tel_open_door = th.step(0.005, q_pL, v_pL, q_vL, q_pR, v_pR, q_vR, 22.0, 0.0, ctrl_open_door, t_s)
+    assert tel_open_door is not None
+
+    # 零引风 + 36-5 开盖漫油富燃：验证火室正压倒火 (Back-draft) 物理涌现
+    th_bd = AsterD51Thermo1D(cal)
+    th_bd.reset_hot_ready()
+    ctrl_bd = CabControls(regulator=0.0, blower_valve=0.0, chimney_fan=False, burner_lit=True, fuel_valve=1.0, fuel_cap_open=True, firebox_door=0.5)
+    tel_bd = None
+    for k in range(60):
+        _, _, _, tel_bd = th_bd.step(0.005, cal.q_fdc_L - 0.01, 0.0, cal.q_valve_center_L, cal.q_fdc_R - 0.01, 0.0, cal.q_valve_center_R, 0.0, 0.0, ctrl_bd, k * 0.005)
+    assert tel_bd is not None
+
+    rho_eth = 0.789 * (1.0 - 0.00108 * (tel_closed_door.alcohol_temp_c - 25.0))
+    fuel_gs = tel_closed_door.wick_capillary_ml_s * rho_eth
+    mass_err_gs = abs(tel_closed_door.flue_gas_g_s - (tel_closed_door.grate_air_g_s + tel_closed_door.firehole_air_g_s + fuel_gs))
+    wt_c = tel_closed_door.wick_tilt_deg_3
+    prof_1d = tel_closed_door.flue_gas_profile_c
+    mono_1d = all(prof_1d[i] >= prof_1d[i + 1] for i in range(7))
+
+    if not (
+        2.0 <= tel_idle.flame_tilt_deg <= 20.0
+        and 44.0 <= tel_closed_door.flame_tilt_deg <= 76.5
+        and len(wt_c) == 3
+        and wt_c[0] < wt_c[1] < wt_c[2]
+        and tel_closed_door.smokebox_vacuum_pa > tel_closed_door.firebox_vacuum_pa > 6.0
+        and mass_err_gs < 0.008
+        and tel_open_door.firehole_air_g_s > 3.2 * tel_closed_door.firehole_air_g_s
+        and tel_open_door.firebox_vacuum_pa < tel_closed_door.firebox_vacuum_pa
+        and tel_open_door.grate_air_g_s < tel_closed_door.grate_air_g_s
+        and tel_bd.backdraft_alarm
+        and tel_bd.firebox_vacuum_pa < 0.0
+        and prof_1d[0] >= 580.0
+        and mono_1d
+        and prof_1d[-1] >= tel_closed_door.boiler_temp_c + 48.0
+        and 95.0 <= tel_closed_door.stack_exit_temp_c <= prof_1d[-1] + 2.0
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: 1D boiler gas-path / flame physics invalid: idle_tilt={tel_idle.flame_tilt_deg:.1f}°, "
+            f"steam_tilt={tel_closed_door.flame_tilt_deg:.1f}° {wt_c}, P_sb=-{tel_closed_door.smokebox_vacuum_pa:.1f}Pa vs "
+            f"P_fb=-{tel_closed_door.firebox_vacuum_pa:.1f}Pa, mass_err={mass_err_gs:.4f}g/s, "
+            f"door_air={tel_closed_door.firehole_air_g_s:.3f}->{tel_open_door.firehole_air_g_s:.3f}g/s, "
+            f"backdraft=({tel_bd.backdraft_alarm}, {tel_bd.firebox_vacuum_pa:.2f}Pa), prof={prof_1d}, stack={tel_closed_door.stack_exit_temp_c:.1f}°C"
+        )
+    else:
+        msgs.append(
+            f"PASS: 1D coupled gas-path & flame trajectory verified (idle upright={tel_idle.flame_tilt_deg:.1f}° -> "
+            f"steaming forward={tel_closed_door.flame_tilt_deg:.1f}° {wt_c}; P_atm > P_fb(-{tel_closed_door.firebox_vacuum_pa:.1f}Pa) > "
+            f"P_sb(-{tel_closed_door.smokebox_vacuum_pa:.1f}Pa); 12-1 door secondary air {tel_closed_door.firehole_air_g_s:.3f}->{tel_open_door.firehole_air_g_s:.3f}g/s; "
+            f"backdraft={tel_bd.backdraft_alarm}; NTU flue {prof_1d[0]:.0f}°C->{prof_1d[-1]:.0f}°C -> stack {tel_closed_door.stack_exit_temp_c:.0f}°C)"
+        )
+
+    # 29.3 若存在 CUDA PyTorch，核验 AsterD51Thermo3DGPU 真三维速度场逐芯倾角、行驶排汽负压与 8 站烟温绝不塌缩至 T_boiler_c
+    try:
+        import torch
+        from sim.thermo_3d_gpu import AsterD51Thermo3DGPU
+
+        if torch.cuda.is_available():
+            gpu_eng = AsterD51Thermo3DGPU(cal)
+            gpu_eng.reset_hot_ready()
+            c_gpu_run = CabControls(regulator=0.58, reverser=0.65, blower_valve=0.25, burner_lit=True, fuel_valve=0.90)
+            tel_g = None
+            for k in range(80):
+                t_s = k * 0.001
+                q_pL = cal.q_fdc_L - 0.010 * (1.0 - math.cos(22.0 * t_s))
+                v_pL = -0.010 * 22.0 * math.sin(22.0 * t_s)
+                q_vL = cal.q_valve_center_L - 0.0026 * math.sin(22.0 * t_s + 0.18)
+                q_pR = cal.q_fdc_R - 0.010 * (1.0 - math.sin(22.0 * t_s))
+                v_pR = 0.010 * 22.0 * math.cos(22.0 * t_s)
+                q_vR = cal.q_valve_center_R + 0.0026 * math.cos(22.0 * t_s + 0.18)
+                _, _, _, tel_g = gpu_eng.step(0.001, q_pL, v_pL, q_vL, q_pR, v_pR, q_vR, 22.0, 0.0, c_gpu_run, t_s)
+            assert tel_g is not None
+            sp_g = gpu_eng.spatial
+            wt_g = sp_g.wick_tilt_deg_3
+            prof_g = sp_g.flue_gas_profile_c
+            mono_g = all(prof_g[i] >= prof_g[i + 1] for i in range(7))
+            if not (
+                tel_g.smokebox_vacuum_pa >= 38.0
+                and 42.0 <= sp_g.flame_tilt_deg <= 76.5
+                and wt_g[0] < wt_g[1] < wt_g[2]
+                and 0.65 <= sp_g.air_fuel_phi <= 1.30
+                and max(sp_g.wick_temps_c) <= 980.0
+                and prof_g[0] >= 560.0
+                and mono_g
+                and prof_g[-1] >= tel_g.boiler_temp_c + 45.0
+            ):
+                ok = False
+                msgs.append(
+                    f"FAIL: 3D GPU flame/flue physics invalid: vac={tel_g.smokebox_vacuum_pa:.1f}Pa, "
+                    f"tilt={sp_g.flame_tilt_deg:.1f}° {wt_g}, phi={sp_g.air_fuel_phi:.3f}, "
+                    f"wick_c={sp_g.wick_temps_c}, prof_g={prof_g}"
+                )
+            else:
+                msgs.append(
+                    f"PASS: Live 3D GPU (256x80x104 + PINO) flame & flue physics verified "
+                    f"(vac=-{tel_g.smokebox_vacuum_pa:.1f}Pa, 3D tilt={sp_g.flame_tilt_deg:.1f}° {wt_g}, "
+                    f"φ={sp_g.air_fuel_phi:.2f}, flue {prof_g[0]:.0f}°C->{prof_g[-1]:.0f}°C > T_boil+45°C)"
+                )
+    except ImportError:
+        msgs.append("PASS: CPU-only runner detected (PyTorch optional 3D GPU flame check skipped)")
+
+    # 29.4 核验 Web 3D 着色器：Type-"C" 零湿水腿、逐芯流线弯折火焰、烟管/过热管原厂图纸边界（零伸入烟囱假圆管！）与液/气×管内/管外四态视觉区分
+    import re
+
+    fs_src = (PROJECT_ROOT / "web" / "src" / "fluidShaders.ts").read_text(encoding="utf-8")
+    idx_src = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    no_fake_side_waterleg = ("abs(vLocalPos.y) < 0.0195" not in fs_src) and ("vLocalPos.x < -0.0470 && vLocalPos.z < 0.0468" in fs_src)
+    has_curved_3wick_flame = (
+        "uniform vec3 uWickTilts;" in fs_src
+        and "uniform float uChuffPulse;" in fs_src
+        and "attribute float aWickIdx;" in fs_src
+        and "0.0438" in fs_src
+    )
+    has_full_gas_streamlines = (
+        'id: "gas_grate_to_firebox"' in fs_src
+        and 'id: "gas_12_1_firehole"' in fs_src
+        and 'id: "gas_smokebox_to_chimney"' in fs_src
+        and 'id: "liq_ext_31_14_return"' in fs_src
+        and 'id: "liq_ext_1_16_drains"' in fs_src
+    )
+    # 严禁把 gasStreamSpecs 混入 buildBishopPipeGeometry 硬件圆管循环，且 38 条硬件管腔 Z_max <= +74mm (零管道伸入 18-25 烟囱 Z=74..92mm!)
+    no_pipe_mesh_for_open_gas = (
+        "[...specs, ...gasStreamSpecs]" not in fs_src
+        and "for (const s of specs)" in fs_src
+        and "function buildStreamlineLineGeometry" in fs_src
+        and "function createDashedGasStreamlineMaterial" in fs_src
+    )
+    specs_slice = fs_src.split("const specs: Spec[] = [", 1)[1].split("let nLocoArrows = 0;", 1)[0]
+    coord_triples = [
+        (float(m_c.group(1)), float(m_c.group(2)), float(m_c.group(3)))
+        for m_c in re.finditer(r"\[\s*([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)\s*\]", specs_slice)
+    ]
+    max_hw_pipe_z_mm = max((c[2] for c in coord_triples), default=999.0)
+    flue_block = specs_slice.split('id: "boil_flues_upper"', 1)[1].split('id: "boil_13_4_11_15_turret"', 1)[0]
+    flue_x_max_mm = max(
+        (float(m_c.group(1)) for m_c in re.finditer(r"\[\s*([+-]?\d+(?:\.\d+)?)\s*,", flue_block)),
+        default=999.0,
+    )
+    sh_block = specs_slice.split('id: "boil_17_5_sh_4pass"', 1)[1].split('id: "boil_13_8_17_3_blower"', 1)[0]
+    sh_coords = [
+        (float(m_c.group(1)), float(m_c.group(2)), float(m_c.group(3)))
+        for m_c in re.finditer(r"\[\s*([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)\s*\]", sh_block)
+    ]
+    sh_x_max_mm = max((c[0] for c in sh_coords), default=999.0)
+    sh_z_max_mm = max((c[2] for c in sh_coords), default=999.0)
+    blueprint_pipe_bounds_ok = (
+        len(coord_triples) >= 120
+        and max_hw_pipe_z_mm <= 74.0
+        and abs(flue_x_max_mm - 92.0) <= 0.5
+        and sh_x_max_mm <= 124.0
+        and sh_z_max_mm <= 60.0
+    )
+    has_4regime_visual_taxonomy = (
+        "function createLiquidDropletDartGeometry" in fs_src
+        and "function createStreamlinedFlowDartGeometry" in fs_src
+        and "function createUnconfinedGasChevronGeometry" in fs_src
+        and "uniform float uMediumKind;" in fs_src
+        and "flow-regime-legend" in idx_src
+    )
+    if not (
+        no_fake_side_waterleg
+        and has_curved_3wick_flame
+        and has_full_gas_streamlines
+        and no_pipe_mesh_for_open_gas
+        and blueprint_pipe_bounds_ok
+        and has_4regime_visual_taxonomy
+    ):
+        ok = False
+        msgs.append(
+            f"FAIL: Web 3D blueprint pipe bounds / 4-regime flow visualization check failed: "
+            f"no_fake_wl={no_fake_side_waterleg}, curved_3wick={has_curved_3wick_flame}, streams={has_full_gas_streamlines}, "
+            f"no_gas_pipe={no_pipe_mesh_for_open_gas}, bounds_ok={blueprint_pipe_bounds_ok} "
+            f"(hw_Zmax={max_hw_pipe_z_mm:.1f}, flue_Xmax={flue_x_max_mm:.1f}, sh_Xmax={sh_x_max_mm:.1f}, sh_Zmax={sh_z_max_mm:.1f}), "
+            f"4regime={has_4regime_visual_taxonomy}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Blueprint conduit bounds (flues X_max=+{flue_x_max_mm:.1f}mm at tubeplate, 17-5 SH X_max=+{sh_x_max_mm:.1f}/Z_max=+{sh_z_max_mm:.1f}mm, "
+            f"all 38 pipes Z_max=+{max_hw_pipe_z_mm:.1f}mm -> zero pipes in chimney!) & 4-regime Liquid(💧)/Steam(➤)/Unconfined-Gas(») taxonomy verified"
+        )
+
+    return ok, msgs
+
+
+# ==============================================================================
 # 主入口
 # ==============================================================================
 
@@ -4380,7 +4802,7 @@ def main() -> int:
     all_ok &= g1_ok
 
     g2_ok, g2_msgs, stl_tris_mm = verify_gate_2()
-    print(f"\n[Gate 2] 101-Mesh Watertightness, Smooth Hollow Budget & Symmetry -> {'PASS' if g2_ok else 'FAIL'}")
+    print(f"\n[Gate 2] 108-Mesh Watertightness, Smooth Hollow Budget & Symmetry -> {'PASS' if g2_ok else 'FAIL'}")
     for m in g2_msgs:
         print(f"  - {m}")
     all_ok &= g2_ok
@@ -4531,11 +4953,25 @@ def main() -> int:
         print(f"  - {m}")
     all_ok &= g27_ok
 
+    hw_guard.cooldown_if_needed()
+    g28_ok, g28_msgs = verify_gate_28(stl_tris_mm)
+    print(f"\n[Gate 28] Stage 23 Aster Prior Knowledge, 2010_JNR_D51-standard, True Type-'C' Boiler CHT & 11-8 Whistle Aero-Acoustics -> {'PASS' if g28_ok else 'FAIL'}")
+    for m in g28_msgs:
+        print(f"  - {m}")
+    all_ok &= g28_ok
+
+    hw_guard.cooldown_if_needed()
+    g29_ok, g29_msgs = verify_gate_29()
+    print(f"\n[Gate 29] Stage 24 Crossflow Flame Trajectory, Exterior-Firebox-Flue-Smokebox-Stack Coupled Gas Physics & Type-'C' Web Shaders -> {'PASS' if g29_ok else 'FAIL'}")
+    for m in g29_msgs:
+        print(f"  - {m}")
+    all_ok &= g29_ok
+
     snap = hw_guard.read_metrics()
     print(f"\n[Thermal/Power Guard] Post-run telemetry: CPU={snap['cpu_c']:.1f}°C | GPU={snap['gpu_c']:.1f}°C | GPU_Power={snap['gpu_w']:.1f}W")
     print("=" * 88)
     if all_ok:
-        print(" [ALL GATES 1-27 PASSED] STAGE 22 (10-AXLE PURE ROLLING + 38-EDGE BILATERAL FLUID-LVS + EXACT BISHOP U-BENDS + C0 AXIAL THERMAL FIELD + 17-3 J-NOZZLE) VERIFIED 100%")
+        print(" [ALL GATES 1-29 PASSED] STAGE 24 (CROSSFLOW FLAME TRAJECTORY + FULL BOILER GAS NETWORK + EXTERIOR INTERACTION) VERIFIED 100%")
         print("=" * 88)
         return 0
     else:

@@ -347,13 +347,13 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     ET.SubElement(mj, "compiler", angle="radian", autolimits="true", meshdir="meshes")
     ET.SubElement(
         mj, "option", timestep="0.0005", integrator="implicitfast",
-        iterations="100", tolerance="1e-11", gravity="0 0 -9.81"
+        iterations="120", tolerance="1e-12", gravity="0 0 -9.81"
     )
 
     default = ET.SubElement(mj, "default")
     ET.SubElement(default, "geom", condim="3", solref="0.0015 1.0", solimp="0.95 0.99 0.0001")
     ET.SubElement(default, "joint", solreflimit="0.002 1.0", solimplimit="0.98 0.995 0.0001")
-    ET.SubElement(default, "equality", solref="0.00030 1.0", solimp="0.9998 0.99998 0.000002")
+    ET.SubElement(default, "equality", solref="0.00028 1.0", solimp="0.99985 0.999985 0.000002")
 
     mesh_dir = Path("models/meshes")
     asset = ET.SubElement(mj, "asset")
@@ -424,6 +424,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
 
     mp_boil = parts_mp["boiler_superstructure"]
     mp_cu_core = parts_mp["boiler_firebox_flues"]
+    mp_fb_12_4 = parts_mp.get("firebox_wrapper_12_4")
     mp_insul = parts_mp["boiler_insulation"]
     mp_sh_pipe = parts_mp["superheater_piping"]
     mp_exh_pipe = parts_mp["exhaust_blast_pipe"]
@@ -480,6 +481,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         [
             (mp_boil["mass_kg"], np.array(mp_boil["com_m"]), full_to_mat3(mp_boil["fullinertia"])),
             (mp_cu_core["mass_kg"], np.array(mp_cu_core["com_m"]), full_to_mat3(mp_cu_core["fullinertia"])),
+            *(
+                [(mp_fb_12_4["mass_kg"], np.array(mp_fb_12_4["com_m"]), full_to_mat3(mp_fb_12_4["fullinertia"]))]
+                if mp_fb_12_4 is not None
+                else []
+            ),
             (mp_insul["mass_kg"], np.array(mp_insul["com_m"]), full_to_mat3(mp_insul["fullinertia"])),
             (mp_sh_pipe["mass_kg"], np.array(mp_sh_pipe["com_m"]), full_to_mat3(mp_sh_pipe["fullinertia"])),
             (mp_exh_pipe["mass_kg"], np.array(mp_exh_pipe["com_m"]), full_to_mat3(mp_exh_pipe["fullinertia"])),
@@ -556,6 +562,12 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         mesh="m_boiler_firebox_flues", material="mat_copper",
         pos="0 0 0", mass="0", contype="0", conaffinity="0"
     )
+    if mp_fb_12_4 is not None and (mesh_dir / "firebox_wrapper_12_4.stl").exists():
+        ET.SubElement(
+            frame, "geom", name="firebox_wrapper_12_4_vis", type="mesh",
+            mesh="m_firebox_wrapper_12_4", material="mat_machined_steel",
+            pos="0 0 0", mass="0", contype="0", conaffinity="0"
+        )
     ET.SubElement(
         frame, "geom", name="boiler_insulation_vis", type="mesh",
         mesh="m_boiler_insulation", material="mat_ceramic_insulation",
@@ -1258,6 +1270,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
 
         def add_coup_lat_bushing(parent_el: ET.Element, target_idx: int, local_dx: float) -> None:
             bush = ET.SubElement(parent_el, "body", name=f"coup_bush_{target_idx}_{tag}", pos=f"{local_dx:.6f} 0 0")
+            # 还原耦合连杆铜套 ±0.08mm 真实径向油膜旷量 (释放相邻动轴垂向悬挂差 ΔZ 引起的 ΔZ²/(2L)≈0.025mm 几何弦长伸长!)
+            ET.SubElement(
+                bush, "joint", name=f"j_coup_xplay_{target_idx}_{tag}", type="slide", axis="1 0 0",
+                limited="true", range="-0.00008 0.00008", stiffness="800", damping="0.30"
+            )
             ET.SubElement(
                 bush, "joint", name=f"j_coup_lat_{target_idx}_{tag}", type="slide", axis="0 1 0",
                 limited="true", range="-0.0016 0.0016", damping="0.25"
@@ -1767,7 +1784,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         if on_rails:
             ET.SubElement(
                 equality, "connect", name="loop_tender_drawbar", site1="s_drawbar_rear", site2="s_tender_front_pin",
-                solref="0.0004 1.0", solimp="0.998 0.9998 0.000001"
+                solref="0.00028 1.0", solimp="0.99985 0.999985 0.000002"
             )
             ET.SubElement(sensor, "framepos", name="loco_world_pos", objtype="body", objname="loco_frame")
             ET.SubElement(sensor, "jointpos", name="leading_yaw_rad", joint="j_leading_yaw")

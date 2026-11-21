@@ -2,7 +2,7 @@
   "xml_path": "/home/labahua/workspace/fast-disk/aster-d51-sim/models/d51_track.xml",
   "topology_path": "/home/labahua/workspace/fast-disk/aster-d51-sim/configs/d51_fluid_topology.json",
   "device": "cuda",
-  "elapsed_ms": 5540.5,
+  "elapsed_ms": 5496.7,
   "total_edges": 38,
   "open_edges": 38,
   "neck_free_edges": 38,
@@ -985,7 +985,7 @@
       "compartment_b": "Pressurized Boiler Water & Steam Barrel",
       "isolated": true,
       "short_voxels": 0,
-      "flooded_voxels_a": 533985,
+      "flooded_voxels_a": 546195,
       "leak_at_loco_mm": null
     },
     {

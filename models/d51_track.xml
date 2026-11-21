@@ -1,11 +1,11 @@
 <?xml version="1.0" ?>
 <mujoco model="aster_d51_consist">
   <compiler angle="radian" autolimits="true" meshdir="meshes"/>
-  <option timestep="0.0005" integrator="implicitfast" iterations="100" tolerance="1e-11" gravity="0 0 -9.81"/>
+  <option timestep="0.0005" integrator="implicitfast" iterations="120" tolerance="1e-12" gravity="0 0 -9.81"/>
   <default>
     <geom condim="3" solref="0.0015 1.0" solimp="0.95 0.99 0.0001"/>
     <joint solreflimit="0.002 1.0" solimplimit="0.98 0.995 0.0001"/>
-    <equality solref="0.00030 1.0" solimp="0.9998 0.99998 0.000002"/>
+    <equality solref="0.00028 1.0" solimp="0.99985 0.999985 0.000002"/>
   </default>
   <asset>
     <mesh name="m_driving_wheel_L" file="driving_wheel_L.stl" scale="0.001 0.001 0.001"/>
@@ -115,6 +115,7 @@
     <mesh name="m_bypass_valve_4_17" file="bypass_valve_4_17.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_boiler_riser_6_8" file="boiler_riser_6_8.stl" scale="0.001 0.001 0.001"/>
     <mesh name="m_bypass_return_4_16" file="bypass_return_4_16.stl" scale="0.001 0.001 0.001"/>
+    <mesh name="m_firebox_wrapper_12_4" file="firebox_wrapper_12_4.stl" scale="0.001 0.001 0.001"/>
     <material name="mat_black_iron" rgba="0.14 0.14 0.16 1" specular="0.6" shininess="0.5"/>
     <material name="mat_machined_steel" rgba="0.78 0.80 0.84 1" specular="0.9" shininess="0.8"/>
     <material name="mat_brass" rgba="0.82 0.62 0.24 1" specular="0.85" shininess="0.75"/>
@@ -633,7 +634,7 @@
     <geom name="sleeper_trk_499" type="box" pos="14.168000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
     <body name="loco_frame" pos="0.000000 0.000000 0.026100">
       <freejoint name="loco_free"/>
-      <inertial pos="0.030184 0.000067 0.037447" mass="3.484802" fullinertia="3.668883545e-03 3.452589525e-02 3.354107937e-02 1.895786445e-05 2.012883882e-03 7.892297903e-06"/>
+      <inertial pos="0.031102 0.000067 0.037607" mass="3.480101" fullinertia="3.675593297e-03 3.398074999e-02 3.299292408e-02 1.917274366e-05 2.058905523e-03 7.929697328e-06"/>
       <geom name="main_chassis_L" type="box" pos="0.056 0.013500 0.0022" size="0.122 0.00175 0.008" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="rear_chassis_L" type="box" pos="-0.088 0.013500 0.0092" size="0.028 0.00175 0.0040" material="mat_black_iron" rgba="0.12 0.12 0.14 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="motion_bracket_vis_L" type="mesh" mesh="m_motion_bracket_L" material="mat_black_iron" pos="0.046500 0.036000 0.015500" mass="0" contype="0" conaffinity="0"/>
@@ -644,6 +645,7 @@
       <geom name="loco_drawbar_pin_vis" type="cylinder" fromto="-0.146000 0.000000 -0.009200  -0.146000 0.000000 -0.001200" size="0.001800" material="mat_brass" rgba="0.82 0.62 0.24 1" mass="0" contype="0" conaffinity="0"/>
       <geom name="chassis_equalizer_brakes_vis" type="mesh" mesh="m_chassis_equalizer_brakes" material="mat_black_iron" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="boiler_copper_core_vis" type="mesh" mesh="m_boiler_firebox_flues" material="mat_copper" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
+      <geom name="firebox_wrapper_12_4_vis" type="mesh" mesh="m_firebox_wrapper_12_4" material="mat_machined_steel" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="boiler_insulation_vis" type="mesh" mesh="m_boiler_insulation" material="mat_ceramic_insulation" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="superheater_piping_vis" type="mesh" mesh="m_superheater_piping" material="mat_machined_steel" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
       <geom name="exhaust_blast_pipe_vis" type="mesh" mesh="m_exhaust_blast_pipe" material="mat_brass" pos="0 0 0" mass="0" contype="0" conaffinity="0"/>
@@ -749,6 +751,7 @@
             <joint name="j_coup3_L" type="hinge" axis="0 1 0"/>
             <geom name="coupling_rod_vis_L" type="mesh" mesh="m_coupling_rod" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
             <body name="coup_bush_2_L" pos="0.046500 0 0">
+              <joint name="j_coup_xplay_2_L" type="slide" axis="1 0 0" limited="true" range="-0.00008 0.00008" stiffness="800" damping="0.30"/>
               <joint name="j_coup_lat_2_L" type="slide" axis="0 1 0" limited="true" range="-0.0016 0.0016" damping="0.25"/>
               <geom type="cylinder" fromto="0 -0.001 0  0 0.001 0" size="0.002" density="8500" group="3" rgba="0 0 0 0" contype="0" conaffinity="0"/>
               <site name="s_coup_hole_2_L" pos="0 0 0"/>
@@ -758,6 +761,7 @@
               <joint name="j_coup_knuckle_f_L" type="hinge" axis="0 1 0" limited="true" range="-0.15 0.15" damping="0.0005"/>
               <geom name="coupling_rod_f_vis_L" type="mesh" mesh="m_coupling_rod_front" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
               <body name="coup_bush_1_L" pos="0.038000 0 0">
+                <joint name="j_coup_xplay_1_L" type="slide" axis="1 0 0" limited="true" range="-0.00008 0.00008" stiffness="800" damping="0.30"/>
                 <joint name="j_coup_lat_1_L" type="slide" axis="0 1 0" limited="true" range="-0.0016 0.0016" damping="0.25"/>
                 <geom type="cylinder" fromto="0 -0.001 0  0 0.001 0" size="0.002" density="8500" group="3" rgba="0 0 0 0" contype="0" conaffinity="0"/>
                 <site name="s_coup_hole_1_L" pos="0 0 0"/>
@@ -768,6 +772,7 @@
               <joint name="j_coup_knuckle_r_L" type="hinge" axis="0 1 0" limited="true" range="-0.15 0.15" damping="0.0005"/>
               <geom name="coupling_rod_r_vis_L" type="mesh" mesh="m_coupling_rod_rear" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
               <body name="coup_bush_4_L" pos="-0.038000 0 0">
+                <joint name="j_coup_xplay_4_L" type="slide" axis="1 0 0" limited="true" range="-0.00008 0.00008" stiffness="800" damping="0.30"/>
                 <joint name="j_coup_lat_4_L" type="slide" axis="0 1 0" limited="true" range="-0.0016 0.0016" damping="0.25"/>
                 <geom type="cylinder" fromto="0 -0.001 0  0 0.001 0" size="0.002" density="8500" group="3" rgba="0 0 0 0" contype="0" conaffinity="0"/>
                 <site name="s_coup_hole_4_L" pos="0 0 0"/>
@@ -794,6 +799,7 @@
             <joint name="j_coup3_R" type="hinge" axis="0 1 0"/>
             <geom name="coupling_rod_vis_R" type="mesh" mesh="m_coupling_rod" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
             <body name="coup_bush_2_R" pos="0.046500 0 0">
+              <joint name="j_coup_xplay_2_R" type="slide" axis="1 0 0" limited="true" range="-0.00008 0.00008" stiffness="800" damping="0.30"/>
               <joint name="j_coup_lat_2_R" type="slide" axis="0 1 0" limited="true" range="-0.0016 0.0016" damping="0.25"/>
               <geom type="cylinder" fromto="0 -0.001 0  0 0.001 0" size="0.002" density="8500" group="3" rgba="0 0 0 0" contype="0" conaffinity="0"/>
               <site name="s_coup_hole_2_R" pos="0 0 0"/>
@@ -803,6 +809,7 @@
               <joint name="j_coup_knuckle_f_R" type="hinge" axis="0 1 0" limited="true" range="-0.15 0.15" damping="0.0005"/>
               <geom name="coupling_rod_f_vis_R" type="mesh" mesh="m_coupling_rod_front" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
               <body name="coup_bush_1_R" pos="0.038000 0 0">
+                <joint name="j_coup_xplay_1_R" type="slide" axis="1 0 0" limited="true" range="-0.00008 0.00008" stiffness="800" damping="0.30"/>
                 <joint name="j_coup_lat_1_R" type="slide" axis="0 1 0" limited="true" range="-0.0016 0.0016" damping="0.25"/>
                 <geom type="cylinder" fromto="0 -0.001 0  0 0.001 0" size="0.002" density="8500" group="3" rgba="0 0 0 0" contype="0" conaffinity="0"/>
                 <site name="s_coup_hole_1_R" pos="0 0 0"/>
@@ -813,6 +820,7 @@
               <joint name="j_coup_knuckle_r_R" type="hinge" axis="0 1 0" limited="true" range="-0.15 0.15" damping="0.0005"/>
               <geom name="coupling_rod_r_vis_R" type="mesh" mesh="m_coupling_rod_rear" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
               <body name="coup_bush_4_R" pos="-0.038000 0 0">
+                <joint name="j_coup_xplay_4_R" type="slide" axis="1 0 0" limited="true" range="-0.00008 0.00008" stiffness="800" damping="0.30"/>
                 <joint name="j_coup_lat_4_R" type="slide" axis="0 1 0" limited="true" range="-0.0016 0.0016" damping="0.25"/>
                 <geom type="cylinder" fromto="0 -0.001 0  0 0.001 0" size="0.002" density="8500" group="3" rgba="0 0 0 0" contype="0" conaffinity="0"/>
                 <site name="s_coup_hole_4_R" pos="0 0 0"/>
@@ -1324,7 +1332,7 @@
     <connect name="loop_radius_R" site1="s_rad_front_R" site2="s_comb_radius_R"/>
     <connect name="loop_reverser_R" site1="s_lift_bot_R" site2="s_rad_lift_R"/>
     <connect name="loop_tender_handpump" site1="s_hp_lever_bot" site2="s_hp_ram_pin" solref="0.00045 1.0" solimp="0.997 0.9997 0.000002"/>
-    <connect name="loop_tender_drawbar" site1="s_drawbar_rear" site2="s_tender_front_pin" solref="0.0004 1.0" solimp="0.998 0.9998 0.000001"/>
+    <connect name="loop_tender_drawbar" site1="s_drawbar_rear" site2="s_tender_front_pin" solref="0.00028 1.0" solimp="0.99985 0.999985 0.000002"/>
   </equality>
   <tendon>
     <fixed name="tendon_eq_front" stiffness="1650" damping="22" springlength="-0.0019">

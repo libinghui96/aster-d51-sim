@@ -2105,26 +2105,26 @@
     },
     "boiler_firebox_flues": {
       "density_kg_m3": 8940.0,
-      "volume_cm3": 66.2313,
-      "mass_kg": 0.5921078612245059,
+      "volume_cm3": 59.4402,
+      "mass_kg": 0.5313955236208319,
       "com_m": [
-        -0.019341805079398974,
-        6.94801141472974e-09,
-        0.04333924868501826
+        -0.006594042838013996,
+        6.856453781881516e-09,
+        0.04559667846761723
       ],
       "fullinertia": [
-        0.0002635615098830467,
-        0.0028149035503231734,
-        0.0028345538017014943,
-        -6.013230261388947e-10,
-        9.196104232709193e-06,
-        -1.7510689058703132e-10
+        0.0002381749185081093,
+        0.0021821277634135844,
+        0.0022062842472598994,
+        -5.94298815209193e-10,
+        0.00010042848798068331,
+        -1.649140835879648e-10
       ],
       "step_file": "models/step/boiler_firebox_flues.step",
       "stl_file": "models/meshes/boiler_firebox_flues.stl",
       "stl_linear_tol_mm": 0.028,
       "stl_angular_tol_rad": 0.24,
-      "stl_triangles": 14494,
+      "stl_triangles": 13900,
       "compiled_from_step": true
     },
     "boiler_insulation": {
@@ -2581,6 +2581,30 @@
       "stl_linear_tol_mm": 0.022,
       "stl_angular_tol_rad": 0.185,
       "stl_triangles": 11930,
+      "compiled_from_step": true
+    },
+    "firebox_wrapper_12_4": {
+      "density_kg_m3": 7930.0,
+      "volume_cm3": 7.0632,
+      "mass_kg": 0.0560113781294335,
+      "com_m": [
+        -0.08744788290580499,
+        9.979270730501318e-19,
+        0.032332144590047705
+      ],
+      "fullinertia": [
+        1.5983252319008805e-05,
+        3.295122388042181e-05,
+        4.154809511508757e-05,
+        -1.0369265750053738e-20,
+        1.492275828222323e-06,
+        7.057763265168302e-21
+      ],
+      "step_file": "models/step/firebox_wrapper_12_4.step",
+      "stl_file": "models/meshes/firebox_wrapper_12_4.stl",
+      "stl_linear_tol_mm": 0.024,
+      "stl_angular_tol_rad": 0.24,
+      "stl_triangles": 604,
       "compiled_from_step": true
     }
   }

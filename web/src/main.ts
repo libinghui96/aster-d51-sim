@@ -738,6 +738,7 @@ async function main() {
           meshKey === "tender_body" ||
           meshKey === "tender_internals" ||
           meshKey === "cab_backhead_plate" ||
+          meshKey === "firebox_wrapper_12_4" ||
           meshKey === "boiler_aux_valves" ||
           meshKey === "alcohol_burner" ||
           meshKey === "blower_nozzle_17_3"
@@ -786,6 +787,7 @@ async function main() {
         } else if (
           meshKey === "tender_internals" ||
           meshKey === "cab_backhead_plate" ||
+          meshKey === "firebox_wrapper_12_4" ||
           meshKey === "boiler_aux_valves" ||
           meshKey === "alcohol_burner" ||
           meshKey === "blower_nozzle_17_3" ||
@@ -1277,6 +1279,9 @@ async function main() {
   const chaseCamLocal = new THREE.Vector3(0.28, -0.34, 0.14);
   const chaseTargetLocal = new THREE.Vector3(-0.04, 0.0, 0.055);
   const fireboxLocal = new THREE.Vector3(-0.085, 0.0, 0.038);
+  const whistleMouthLocal = new THREE.Vector3(-0.102, 0.0202, 0.0232);
+  const prevWhistleWorld = new THREE.Vector3();
+  let hasPrevWhistlePos = false;
 
   const btnGpuMon = document.getElementById("btn-gpu-mon");
   if (btnGpuMon) {
@@ -1488,6 +1493,36 @@ async function main() {
       maxBoilerStressMpa: t.maxBoilerStressMpa ?? sp.maxBoilerStressMpa ?? 0.0,
       copperYieldMpa: t.copperYieldMpa ?? sp.copperYieldMpa ?? 185.0,
       springDeflectMm: t.springDeflectMm ?? [],
+      boilerExpansionMm: t.boilerExpansionMm,
+      lubeSettlingMmS: t.lubeSettlingMmS,
+      qFuelW: t.qFuelW,
+      qEvapW: t.qEvapW,
+      qShW: t.qShW,
+      qSensibleW: t.qSensibleW,
+      qFlueLossW: t.qFlueLossW,
+      qCasingLossW: t.qCasingLossW,
+      qUnburnedW: t.qUnburnedW,
+      energyBalanceErrPct: t.energyBalanceErrPct,
+      boilerType: t.boilerType ?? "Type-C",
+      fireboxLinerTempC: t.fireboxLinerTempC,
+      slideValveLiftMm: t.slideValveLiftMm,
+      adhesionFactor: t.adhesionFactor,
+      whistleFreqHz: t.whistleFreqHz,
+      whistleSplDb: t.whistleSplDb,
+      whistleDrynessX: t.whistleDrynessX,
+      whistleWallTempC: t.whistleWallTempC,
+      whistleSputter: t.whistleSputter,
+      whistleJetMach: t.whistleJetMach,
+      whistleSoundSpeedMS: t.whistleSoundSpeedMS,
+      fireboxVacuumPa: t.fireboxVacuumPa ?? sp.fireboxVacuumPa ?? 0.0,
+      grateAirGS: t.grateAirGS ?? sp.grateAirGS,
+      fireholeAirGS: t.fireholeAirGS ?? sp.fireholeAirGS,
+      flueGasGS: t.flueGasGS ?? sp.flueGasGS,
+      smokeboxGasTempC: t.smokeboxGasTempC ?? sp.smokeboxGasTempC,
+      stackExitTempC: t.stackExitTempC ?? sp.stackExitTempC,
+      flameTiltDeg: t.flameTiltDeg ?? sp.flameTiltDeg,
+      wickTiltDeg3: t.wickTiltDeg3 ?? sp.wickTiltDeg3,
+      backdraftAlarm: !!(t.backdraftAlarm ?? sp.backdraftAlarm),
       derailed: !!t.derailed,
       derailReason: t.derailReason ?? "",
       pino7OpActive: !!(t.pino7OpActive ?? sp.pino7OpActive),
@@ -1662,7 +1697,35 @@ async function main() {
       const xrayActive = selCam.value === "xray";
       const sd = data.sensordata;
 
-      whistleAudio.update(ctrl.whistleValve, out.boilerPressureKgf);
+      const whiWorld = whistleMouthLocal.clone().applyMatrix4(locoMat4);
+      const toCam = camera.position.clone().sub(whiWorld);
+      const distWhM = Math.max(0.18, toCam.length());
+      let dopplerFactor = 1.0;
+      if (hasPrevWhistlePos) {
+        const vWhWorld = whiWorld.clone().sub(prevWhistleWorld).multiplyScalar(60.0);
+        const vRadial = vWhWorld.dot(toCam.normalize());
+        dopplerFactor = 343.0 / Math.max(295.0, Math.min(395.0, 343.0 - vRadial));
+      }
+      prevWhistleWorld.copy(whiWorld);
+      hasPrevWhistlePos = true;
+
+      whistleAudio.update({
+        whistleValve: ctrl.whistleValve,
+        boilerPressureKgf: out.boilerPressureKgf,
+        freqHz: out.whistleFreqHz,
+        splDb: out.whistleSplDb,
+        drynessX: out.whistleDrynessX,
+        wallTempC: out.whistleWallTempC,
+        sputter: out.whistleSputter,
+        jetMach: out.whistleJetMach,
+        soundSpeedMS: out.whistleSoundSpeedMS,
+        distanceM: distWhM,
+        dopplerFactor,
+      });
+      const fluePlume =
+        ctrl.burnerLit && (out.flueGasGS ?? sp.flueGasGS ?? 0) > 0.25
+          ? Math.min(1.0, ((out.flueGasGS ?? sp.flueGasGS ?? 0) - 0.20) * 0.85)
+          : 0.0;
       steamParticles.update(
         1 / 60,
         locoMat4,
@@ -1672,7 +1735,9 @@ async function main() {
         sp.exhaustDryness,
         out.whistlePlume,
         out.sightPurgePlume,
-        out.blowdownPlume
+        out.blowdownPlume,
+        fluePlume,
+        !!(out.backdraftAlarm ?? sp.backdraftAlarm)
       );
 
       fluidVis.update(
@@ -1757,7 +1822,10 @@ async function main() {
       crownEl.textContent = `${out.crownTempC.toFixed(0)}°C | ${(out.sealHealth * 100).toFixed(0)}%`;
       crownEl.classList.toggle("val-hot", out.crownTempC >= 240.0);
 
-      document.getElementById("txt-smokebox")!.textContent = `-${out.smokeboxVacuumPa.toFixed(0)} Pa | ${out.cylWallTempC.toFixed(0)}°C`;
+      const fbVacShow = out.fireboxVacuumPa ?? sp.fireboxVacuumPa ?? 0.30 * out.smokeboxVacuumPa;
+      const tiltShow = out.flameTiltDeg ?? sp.flameTiltDeg ?? 0.0;
+      document.getElementById("txt-smokebox")!.textContent =
+        `煙-${out.smokeboxVacuumPa.toFixed(0)}/火${fbVacShow >= 0 ? "-" : "+"}${Math.abs(fbVacShow).toFixed(0)}Pa | 炎傾${tiltShow.toFixed(0)}°`;
       document.getElementById("txt-speed")!.textContent = `${out.wheelRpm.toFixed(0)} RPM | ${out.scaleSpeedKmh.toFixed(1)} km/h`;
 
       const flowTags: string[] = [];
@@ -1810,10 +1878,20 @@ async function main() {
       if (chtEl) {
         const qEvap = out.qEvapW ?? 0.0;
         const qFlue = out.qFlueLossW ?? 0.0;
-        chtEl.textContent =
-          out.burnerLumenConnected === false || sp.burnerLumenConnected === false
-            ? `管路不通 0.00ml/s | ${lossW.toFixed(1)}W (${casC.toFixed(0)}°C)`
-            : `η=${etaPct.toFixed(1)}% (蒸${qEvap.toFixed(0)}W/排煙${qFlue.toFixed(0)}W/殻${lossW.toFixed(0)}W)`;
+        if (ctrl.whistleValve > 0.05 && (out.whistleSplDb ?? 0) > 10.0) {
+          const wf = out.whistleFreqHz ?? 0.0;
+          const wx = out.whistleDrynessX ?? 0.95;
+          const wtw = out.whistleWallTempC ?? 65.0;
+          chtEl.textContent =
+            wf > 100
+              ? `🔊 11-8汽笛 ${(wf / 1000).toFixed(2)}kHz (${(out.whistleSplDb ?? 0).toFixed(0)}dB·x=${wx.toFixed(2)}·壁${wtw.toFixed(0)}°C)`
+              : `🔊 11-8汽笛 閾値未満ヒス (${(out.whistleSplDb ?? 0).toFixed(0)}dB·壁${wtw.toFixed(0)}°C)`;
+        } else {
+          chtEl.textContent =
+            out.burnerLumenConnected === false || sp.burnerLumenConnected === false
+              ? `管路不通 0.00ml/s | ${lossW.toFixed(1)}W (${casC.toFixed(0)}°C)`
+              : `C型η=${etaPct.toFixed(1)}% (蒸${qEvap.toFixed(0)}W/排煙${qFlue.toFixed(0)}W/殻${lossW.toFixed(0)}W)`;
+        }
         chtEl.classList.toggle("val-hot", casC >= 110.0 || wickTipC >= 420.0);
       }
       const sysEl = document.getElementById("txt-sys-clearance");
@@ -1855,6 +1933,8 @@ async function main() {
         alarmMsg = "BURNER LUMEN BLOCKED! 23-1 燃料管〜バーナー芯カップの3D流路遮断 — 毛細吸液不能!";
       } else if (out.hydrolockL || out.hydrolockR) {
         alarmMsg = "HYDROLOCK! 冷気筒水撃ロック発生 — 直ちに8-7室内ドレンレバーを開放せよ!";
+      } else if (out.backdraftAlarm || sp.backdraftAlarm) {
+        alarmMsg = "BACK-DRAFT! ドラフト喪失・過濃気化による火室逆火発生! 直ちに11-13通風弁を開くか燃料を絞れ!";
       } else if (out.mariotteFloodAlarm) {
         alarmMsg = "MARIOTTE FLOOD! 36-5気密蓋開放によりサンプ燃料溢流・過濃炎発生! 蓋を締めよ!";
       } else if (out.flashSteamSpike) {

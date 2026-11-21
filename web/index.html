@@ -90,11 +90,22 @@
     .pipe-callout.flowing .pc-flow { color: #f0f6fc; font-weight: 600; }
     #thermal-scale-bar {
       position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
-      display: none; align-items: center; gap: 8px; z-index: 45; pointer-events: none;
-      background: rgba(11, 15, 22, 0.88); backdrop-filter: blur(8px);
-      border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px;
-      padding: 5px 12px; font-size: 11px; color: #e6edf3; box-shadow: 0 4px 16px rgba(0,0,0,0.55);
+      display: none; flex-direction: column; align-items: stretch; gap: 5px; z-index: 45; pointer-events: none;
+      background: rgba(11, 15, 22, 0.90); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 9px;
+      padding: 6px 13px; font-size: 11px; color: #e6edf3; box-shadow: 0 4px 16px rgba(0,0,0,0.55);
     }
+    .thermal-top-row { display: flex; align-items: center; gap: 9px; justify-content: center; }
+    .flow-regime-legend {
+      display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+      border-top: 1px solid rgba(255,255,255,0.10); padding-top: 4px; font-size: 10.2px; color: #cbd5e1;
+    }
+    .fr-chip { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .fr-swatch { display: inline-block; width: 15px; height: 7px; border-radius: 4px; }
+    .fr-liq-in { background: linear-gradient(90deg, #0284c7, #38bdf8); box-shadow: inset 0 1px 1px rgba(255,255,255,0.65); }
+    .fr-liq-out { border-bottom: 2px dotted #38bdf8; height: 0; width: 14px; }
+    .fr-gas-in { background: rgba(251,146,60,0.20); border: 1.5px solid #fb923c; }
+    .fr-gas-out { border-bottom: 2px dashed #fbbf24; height: 0; width: 14px; }
     .thermal-grad {
       width: 220px; height: 9px; border-radius: 4px;
       background: linear-gradient(90deg, #1d4ed8 0%, #06b6d4 16%, #10b981 32%, #eab308 48%, #f59e0b 64%, #f97316 78%, #ef4444 90%, #fef08a 100%);
@@ -115,10 +126,18 @@
   <div id="pipe-labels-layer"></div>
   <div id="part-tooltip"></div>
   <div id="thermal-scale-bar">
-    <span style="font-weight:600;color:#cbd5e1">統一温度色標</span>
-    <div>
-      <div class="thermal-grad"></div>
-      <div class="thermal-ticks"><span>20°C</span><span>45°</span><span>80°</span><span>105°</span><span>148°</span><span>210°</span><span>750°C</span></div>
+    <div class="thermal-top-row">
+      <span style="font-weight:600;color:#cbd5e1">統一温度色標</span>
+      <div>
+        <div class="thermal-grad"></div>
+        <div class="thermal-ticks"><span>20°C</span><span>45°</span><span>80°</span><span>105°</span><span>148°</span><span>210°</span><span>750°C</span></div>
+      </div>
+    </div>
+    <div class="flow-regime-legend">
+      <span class="fr-chip"><span class="fr-swatch fr-liq-in"></span><b>💧 管内液体</b>(実心液柱+丸水滴)</span>
+      <span class="fr-chip"><span class="fr-swatch fr-liq-out"></span><b>💧 管外自由液流</b>(無管壁珠鏈+落水滴)</span>
+      <span class="fr-chip"><span class="fr-swatch fr-gas-in"></span><b>➤ 管内蒸気</b>(中空管壁+鋭燕尾鏢)</span>
+      <span class="fr-chip"><span class="fr-swatch fr-gas-out"></span><b>» 管外/煙室自由気流</b>(無管壁虚線+双V風羽)</span>
     </div>
   </div>
 
@@ -170,7 +189,7 @@
     <div class="gauge-row"><span>蒸気室 / 過熱蒸気温度</span><span id="txt-steam" class="val-mono">0.00 kgf | 165°C</span></div>
     <div class="gauge-row"><span>銅火室頂板 / シール健全度</span><span id="txt-crown" class="val-mono">156°C | 100%</span></div>
     <div class="gauge-row"><span>煙室負圧 / シリンダ壁温</span><span id="txt-smokebox" class="val-mono">-78 Pa | 132°C</span></div>
-    <div class="gauge-row"><span>動輪回転 / 1:32 換算車速</span><span id="txt-speed" class="val-mono">0 RPM | 0.0 km/h</span></div>
+    <div class="gauge-row"><span>動輪回転 / 1:30 換算車速</span><span id="txt-speed" class="val-mono">0 RPM | 0.0 km/h</span></div>
     <div class="gauge-row"><span>燃料 / 炭水車水 (戻水・水温)</span><span id="txt-tanks" class="val-mono">130ml | 272ml (25°C)</span></div>
     <div class="gauge-row"><span>左右ピストン推力 / 締切率</span><span id="txt-forces" class="val-mono">L: 0.0N | R: 0.0N | 61%</span></div>
     <div class="gauge-row"><span>6-5 軸動ポンプ負圧 / 煙管撓み</span><span id="txt-pump-elastic" class="val-mono">-0.0kPa (0.0W) | 撓0.00mm</span></div>

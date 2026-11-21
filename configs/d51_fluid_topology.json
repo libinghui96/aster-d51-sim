@@ -699,7 +699,7 @@
       "frame": "loco",
       "roi_mm": [[-114.0, 96.0], [-28.5, 28.5], [15.5, 73.5]],
       "voxel_pitch_mm": 0.50,
-      "only_geoms": ["boiler_copper_core_vis", "superheater_piping_vis", "blower_nozzle_17_3_vis"],
+      "only_geoms": ["boiler_copper_core_vis", "firebox_wrapper_12_4_vis", "superheater_piping_vis", "blower_nozzle_17_3_vis"],
       "port_caps": [
         {"frame": "loco", "center_mm": [-79.5, 0.0, 20.2], "size_mm": [66.0, 40.0, 3.8]},
         {"frame": "loco", "center_mm": [-112.2, 0.0, 28.8], "size_mm": [6.5, 14.0, 14.0]},

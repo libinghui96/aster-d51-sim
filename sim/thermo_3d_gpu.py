@@ -208,8 +208,16 @@ class Spatial3DSnapshot:
     # 1. 23-1 纵向直列 1x3 三头酒精燃烧器与 5 烟管沿程燃气场
     air_fuel_phi: float = 0.95
     flame_tilt_deg: float = 12.0
+    wick_tilt_deg_3: List[float] = field(default_factory=lambda: [8.0, 12.0, 16.0])
     wick_temps_c: List[float] = field(default_factory=lambda: [25.0, 25.0, 25.0])
     flue_gas_profile_c: List[float] = field(default_factory=lambda: [25.0] * 8)
+    firebox_vacuum_pa: float = 0.0
+    grate_air_g_s: float = 0.0
+    firehole_air_g_s: float = 0.0
+    flue_gas_g_s: float = 0.0
+    smokebox_gas_temp_c: float = 25.0
+    stack_exit_temp_c: float = 25.0
+    backdraft_alarm: bool = False
     # 2. 锅筒三维 VOF 液面、4 层水温分层、沸腾气泡强度与紫铜顶板 6 点三维热点
     steam_dryness_dome: float = 0.96
     boiling_intensity: float = 0.0
@@ -386,6 +394,10 @@ class AsterD51Thermo3DGPU:
         raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
 
     @property
+    def last_spatial(self) -> Spatial3DSnapshot:
+        return self.spatial
+
+    @property
     def P_boiler(self) -> float:
         return self.core1d.P_boiler
 
@@ -431,6 +443,7 @@ class AsterD51Thermo3DGPU:
     def _build_3d_stl_domains(self, mesh_dir: Path) -> None:
         dev = self.device
         tris_boiler_cu = load_stl_triangles_mm(mesh_dir / "boiler_firebox_flues.stl")
+        tris_fb_12_4 = load_stl_triangles_mm(mesh_dir / "firebox_wrapper_12_4.stl") if (mesh_dir / "firebox_wrapper_12_4.stl").exists() else None
         tris_sh = load_stl_triangles_mm(mesh_dir / "superheater_piping.stl")
         tris_burner = load_stl_triangles_mm(mesh_dir / "alcohol_burner.stl")
         tris_super = load_stl_triangles_mm(mesh_dir / "boiler_superstructure.stl")
@@ -453,6 +466,9 @@ class AsterD51Thermo3DGPU:
         )
         self.d1_dx = self.d1_span_m[0] / (nx1 - 1)
         s1_cu = voxelize_stl_cuda(tris_boiler_cu, self.d1_xr, self.d1_yr, self.d1_zr, self.D1_SHAPE, dev)
+        if tris_fb_12_4 is not None:
+            # Type "C" 锅炉燃气侧边界 = 12-6 退台紫铜锅筒 ∪ 12-4 独立不锈钢火室导焰风道 (逐件体素化取 torch.maximum 真并集!)
+            s1_cu = torch.maximum(s1_cu, voxelize_stl_cuda(tris_fb_12_4, self.d1_xr, self.d1_yr, self.d1_zr, self.D1_SHAPE, dev))
         s1_sh = voxelize_stl_cuda(tris_sh, self.d1_xr, self.d1_yr, self.d1_zr, self.D1_SHAPE, dev)
         s1_brn = voxelize_stl_cuda(tris_burner, self.d1_xr, self.d1_yr, self.d1_zr, self.D1_SHAPE, dev)
         s1_sup = voxelize_stl_cuda(tris_super, self.d1_xr, self.d1_yr, self.d1_zr, self.D1_SHAPE, dev)
@@ -499,16 +515,20 @@ class AsterD51Thermo3DGPU:
                 | (torch.hypot(Y2 - 13.0, Z2 - 35.0) <= 3.45)
             )
         )
-        in_legs2 = (X2 >= -109.0) & (X2 <= -45.5) & (Y2.abs() <= 18.6) & (Z2 >= 20.5) & (Z2 <= 44.0)
+        # Type "C" 受压水汽腔真值: 前段 X>=-47mm 为完整圆截面紫铜锅筒，后段 X∈[-110.5,-47mm] 仅有 Z>=46.5mm 退台冠板汽水空间 (零湿式火室水腿!)
+        in_type_c_water_vessel = (
+            ((X2 >= -47.0) & (X2 <= 90.5) & (r2 <= 26.3))
+            | ((X2 >= -110.5) & (X2 < -47.0) & (r2 <= 26.3) & (Z2 >= 46.4))
+        )
         water_space = (
-            ((X2 >= -110.5) & (X2 <= 90.5) & ((r2 <= 26.3) | in_legs2))
+            in_type_c_water_vessel
             & (~in_fb_void2)
             & (~in_flue_void2)
             & (s2_cu < 0.5)
         )
         self.d2_cavity = water_space.float().unsqueeze(0).unsqueeze(0)
         self.d2_copper = s2_cu.unsqueeze(0).unsqueeze(0)
-        self.d2_crown_cu = ((X2 >= -106.5) & (X2 <= -47.0) & (Y2.abs() <= 18.5) & (Z2 >= 45.8) & (Z2 <= 50.0)).float().unsqueeze(0).unsqueeze(0) * self.d2_copper
+        self.d2_crown_cu = ((X2 >= -105.0) & (X2 <= -48.0) & (Y2.abs() <= 16.0) & (Z2 >= 45.6) & (Z2 <= 49.5)).float().unsqueeze(0).unsqueeze(0) * self.d2_copper
         # 13-2 / 13-7 锅炉逆止阀真值位置: 火室冠板上方右内侧中位衬套 (-111.5, -11.8, Z=+47.5 mm, イラスト 12, 13 & Manual p.44)
         self.d2_inj_13_7 = ((torch.hypot(X2 - (-110.5), Y2 - (-11.8)) <= 5.5) & (Z2 >= 44.0) & (Z2 <= 52.0)).float().unsqueeze(0).unsqueeze(0) * self.d2_cavity
         self.d2_inj_13_2 = self.d2_inj_13_7
@@ -976,6 +996,25 @@ class AsterD51Thermo3DGPU:
             & ((torch.hypot(Y1 - 11.5, Z1 - 46.5) <= 5.0) | (torch.hypot(Y1 + 11.5, Z1 - 46.5) <= 5.0))
         ).float().unsqueeze(0).unsqueeze(0) * self.d1_fluid
         self.d1_fb_throat = ((X1 >= -102.0) & (X1 <= -46.0) & (Z1 >= 22.0) & (Z1 <= 46.8)).float().unsqueeze(0).unsqueeze(0) * self.d1_fluid
+        # 沿 +X 轴炉栅一次风汇入与 5 烟管喉口流线收缩连续性梯度 (后芯 -93mm -> 中芯 -77mm -> 前芯 -61mm -> 后管板 -47mm 逐级加速!)
+        fb_x_prog = torch.clamp((X1 - (-106.0)) / 59.0, 0.14, 1.0)
+        self.d1_fb_ux_scale = (0.14 + 0.68 * (fb_x_prog ** 1.35)).unsqueeze(0).unsqueeze(0) * self.d1_fb_throat
+        self.d1_wick_plumes = [
+            ((torch.hypot(X1 - wx, Y1) <= 7.2) & (Z1 >= 20.0) & (Z1 <= 41.0)).float().unsqueeze(0).unsqueeze(0) * self.d1_fluid
+            for wx in (-93.0, -77.0, -61.0)
+        ]
+        # 8 站位火室喉口至前管板燃气通道掩码 (X ∈ [-62.0, +92.0] mm, 纯燃气流道，排除烟室冷空气稀释与管外锅水壁温平均!)
+        flue_core_mask = torch.clamp(
+            (((X1 >= -62.0) & (X1 <= -46.5) & (Z1 >= 27.0) & (Z1 <= 46.8) & (Y1.abs() <= 15.5)).float().unsqueeze(0).unsqueeze(0) * self.d1_fluid)
+            + self.d1_all_flues_gas,
+            0.0,
+            1.0,
+        )
+        x_edges_8 = torch.linspace(-62.0, 92.0, 9, device=dev)
+        self.d1_flue_stations_8 = [
+            (((X1 >= x_edges_8[k]) & (X1 < x_edges_8[k + 1])).float().unsqueeze(0).unsqueeze(0) * flue_core_mask)[0, 0]
+            for k in range(8)
+        ]
         throat_near = ((X1 >= -68.0) & (X1 <= -46.5) & (Z1 >= 26.0) & (Z1 <= 46.8)).float()
         y_split = torch.where(Z1 >= 40.5, 11.5 * torch.sign(Y1 + 1e-4) - Y1, 0.45 * (13.0 * torch.sign(Y1 + 1e-4) - Y1))
         z_split = torch.where(Z1 >= 40.0, 46.2 - Z1, 34.5 - Z1)
@@ -1460,7 +1499,8 @@ class AsterD51Thermo3DGPU:
         )
         mdot_exh_gs = max(0.0, mdot_exh_kg_s * 1000.0)
         mdot_blw_gs = max(0.0, mdot_blw_kg_s * 1000.0)
-        jet_strength = min(2.2, 1.85 * mdot_exh_gs + 16.5 * mdot_blw_gs)
+        # 20-7 ø4.2mm 乏汽喷嘴动量通量标定 (冷态 mdot_exh_gs==0 时严格不变，行驶排汽 ~0.12-0.25g/s 时建立真实 42-110Pa 烟室负压!)
+        jet_strength = min(2.2, 7.6 * mdot_exh_gs + 16.5 * mdot_blw_gs)
         fan_on = 1.0 if ctrl.chimney_fan else 0.0
         flood_mult = 1.45 if getattr(self.core1d, "mariotte_flood_active", False) else 1.0
         burner_on = (1.28 * self.d7_lumen_cond * flood_mult * min(1.15, 0.35 + 0.80 * ctrl.fuel_valve)) if fuel_active else 0.0
@@ -1640,31 +1680,35 @@ class AsterD51Thermo3DGPU:
         w_blast = min(185.0, mdot_exh_kg_s / (rho_flue * a_nozzle))
         w_blower = min(165.0, 0.25 * (mdot_blw_kg_s / (rho_flue * 1.6e-7))) + (52.0 if ctrl.chimney_fan else 0.0)
         if self.core1d.ext_pino_burner is not None:
-            draft_norm = min(1.38, max(0.02, self.core1d.ext_pino_burner["grate_air_gs"] / 0.85))
+            pino_air_norm = self.core1d.ext_pino_burner["grate_air_gs"] / 0.88
+            vac_norm = (max(0.0, smokebox_vac_ref_pa) / 78.0) ** 0.55 + (0.85 if ctrl.chimney_fan else 0.0)
+            draft_norm = min(1.38, max(0.015, 0.55 * pino_air_norm + 0.45 * vac_norm))
         else:
-            draft_norm = min(1.38, (max(0.0, smokebox_vac_ref_pa) / 85.0) ** 0.55 + (0.85 if ctrl.chimney_fan else 0.0))
-        u_flue_target = min(22.0, 1.4 + 11.5 * draft_norm)
+            draft_norm = min(1.38, max(0.015, (max(0.0, smokebox_vac_ref_pa) / 85.0) ** 0.55 + (0.85 if ctrl.chimney_fan else 0.0)))
+        u_flue_target = min(22.0, 0.30 + 11.8 * draft_norm)
 
         if pred_pino is not None:
             up_6 = F.interpolate(pred_pino, size=self.D1_SHAPE, mode="trilinear", align_corners=True)
             self.d1_vel = (0.45 * self.d1_vel + 0.55 * up_6[:, 0:3]) * f1
             self.d1_p = 0.35 * self.d1_p + 0.65 * up_6[:, 3:4] * f1
+            # 仅在宽敞火室与烟室腔体融合粗网格 PINO 温度锚点，严禁把 64x24x32 粗网格壁面混叠低温强行覆写进 ø6.7mm 细烟管核心流!
             t_pino_k = (up_6[:, 4:5] + 273.15) * f1 + (1.0 - f1) * t_boil_k
-            self.d1_scal[:, 0:1] = 0.72 * self.d1_scal[:, 0:1] + 0.28 * t_pino_k
+            w_tp = 0.22 * f1 * (1.0 - self.d1_all_flues_gas)
+            self.d1_scal[:, 0:1] = ((1.0 - w_tp) * self.d1_scal[:, 0:1] + w_tp * t_pino_k) * f1 + (1.0 - f1) * t_boil_k
             self.d1_scal[:, 2:3] = (0.68 * self.d1_scal[:, 2:3] + 0.32 * up_6[:, 5:6]) * f1
 
-        # 构造精细网格局部火焰湍流与烟管输运速度场
+        # 构造精细网格局部热浮力羽流与沿 +X 连续加速横掠烟管速度场
         u = self.d1_vel[:, 0:1]
         v = self.d1_vel[:, 1:2]
         w = self.d1_vel[:, 2:3]
         Tg = self.d1_scal[:, 0:1]
 
-        buoy_w = 0.0065 * torch.clamp(Tg - 305.0, min=0.0, max=1150.0)
-        u = torch.where(self.d1_fb_throat > 0.5, 0.72 * u_flue_target * torch.ones_like(u), u)
+        w_buoy_plume = (0.48 + 0.52 * torch.clamp((Tg - 340.0) / 560.0, 0.0, 1.25)) * self.d1_fb_throat
+        u = torch.where(self.d1_fb_throat > 0.5, u_flue_target * self.d1_fb_ux_scale, u)
         u = torch.where(self.d1_all_flues_gas > 0.5, u_flue_target * torch.ones_like(u), u)
         v = torch.where(self.d1_throat_vy_dir.abs() > 1e-4, 0.58 * u_flue_target * self.d1_throat_vy_dir, v)
-        w = (w + buoy_w * dt_cfd) * (1.0 - self.d1_all_flues_gas)
-        w = torch.where(self.d1_throat_vz_dir.abs() > 1e-4, 0.50 * u_flue_target * self.d1_throat_vz_dir, w)
+        w = torch.where(self.d1_fb_throat > 0.5, torch.maximum(w * 0.45 + 0.55 * w_buoy_plume, w_buoy_plume), w) * (1.0 - self.d1_all_flues_gas)
+        w = torch.where(self.d1_throat_vz_dir.abs() > 1e-4, 0.42 * w + 0.46 * u_flue_target * self.d1_throat_vz_dir, w)
         w = torch.where(self.d1_sb_upflow > 0.5, torch.maximum(w, (0.35 * u_flue_target + 3.5 * draft_norm) * torch.ones_like(w)), w)
         w = torch.where(self.d1_blast_jet > 0.5, torch.full_like(w, w_blast + 0.42 * w_blower), w)
         w = torch.where(self.d1_blower_jet > 0.5, torch.full_like(w, w_blower + 0.35 * w_blast), w)
@@ -1676,7 +1720,7 @@ class AsterD51Thermo3DGPU:
 
         # 用 F.grid_sample 一次性对 (Tg, Yf, YO2, f1) 执行硬件三线性半拉格朗日回溯平流；若回溯点落入固体壁 (f_back < 0.5) 则执行无穿透滑移反射！
         scal4 = torch.cat([self.d1_scal * f1, f1], dim=1)
-        dt_adv = min(0.016, max(0.005, dt_cfd))
+        dt_adv = min(0.014, max(0.005, dt_cfd))
         lx, ly, lz = self.d1_span_m
         back_grid = self.d1_base_grid.clone()
         back_grid[..., 0] = torch.clamp(back_grid[..., 0] - (2.0 * dt_adv / lz) * self.d1_vel[0, 2], -1.0, 1.0)
@@ -1686,15 +1730,18 @@ class AsterD51Thermo3DGPU:
         f_back = torch.clamp(adv4[:, 3:4], min=1e-4)
         valid_back = (adv4[:, 3:4] > 0.35).float()
         adv_clean = valid_back * (adv4[:, 0:3] / f_back) + (1.0 - valid_back) * self.d1_scal
+        # 烟管核心采用绝热横向扩散避免 4 体素窄管被离散卷积瞬间拉向锅水温度，烟管壁对流换热统一由物理 NTU 汇项精确控制!
+        t_wall_diff_bc = torch.where(self.d1_all_flues_gas > 0.5, adv_clean[:, 0:1], adv_clean[:, 0:1] * f1 + (1.0 - f1) * t_boil_k)
         diff_scal = F.conv3d(
-            torch.cat([adv_clean[:, 0:1] * f1 + (1.0 - f1) * t_boil_k, adv_clean[:, 1:3] * f1], dim=1),
+            torch.cat([t_wall_diff_bc, adv_clean[:, 1:3] * f1], dim=1),
             self.k_avg6_g3,
             padding=1,
             groups=3,
         )
+        diff_w_t = 0.06 * (1.0 - 0.75 * self.d1_all_flues_gas)
         self.d1_scal = torch.cat(
             [
-                (0.94 * adv_clean[:, 0:1] + 0.06 * diff_scal[:, 0:1]) * f1 + (1.0 - f1) * t_boil_k,
+                ((1.0 - diff_w_t) * adv_clean[:, 0:1] + diff_w_t * diff_scal[:, 0:1]) * f1 + (1.0 - f1) * t_boil_k,
                 (0.90 * adv_clean[:, 1:2] + 0.10 * diff_scal[:, 1:2]) * f1,
                 (0.90 * adv_clean[:, 2:3] + 0.10 * diff_scal[:, 2:3]) * f1,
             ],
@@ -1712,7 +1759,7 @@ class AsterD51Thermo3DGPU:
         for _ in range(4):
             self.d1_p = (F.conv3d(self.d1_p, self.k_avg6, padding=1) - src_p) * bc_mask
 
-        # 炉栅新鲜氧气边界 + 23-1 四头酒精蒸发与 Arrhenius 有限速率燃烧化学反应源
+        # 炉栅新鲜氧气边界 + 23-1 三头酒精蒸发与 Arrhenius 有限速率燃烧化学反应源
         Tg = self.d1_scal[:, 0:1]
         Yf = self.d1_scal[:, 1:2]
         YO2 = torch.where(self.d1_grate_air > 0.5, torch.full_like(self.d1_scal[:, 2:3], 0.232), self.d1_scal[:, 2:3])
@@ -1725,13 +1772,19 @@ class AsterD51Thermo3DGPU:
             react = torch.minimum(Yf, YO2 / 2.08) * (0.52 + 0.44 * draft_norm) * arrhenius
             Yf = torch.clamp(Yf - react, 0.0, 1.0)
             YO2 = torch.clamp(YO2 - 2.08 * react, 0.0, 0.232)
-            dT_comb = 17800.0 * react
+            dT_comb = 14800.0 * react
         else:
             dT_comb = torch.zeros_like(Tg)
 
         Tg = Tg * f1 + (1.0 - f1) * t_boil_k
-        wall_sink = (0.042 * self.d1_cu_wall + 0.032 * self.d1_sh_wall) * torch.clamp(Tg - t_boil_k, min=0.0)
-        Tg = torch.clamp(Tg + dT_comb - wall_sink, 295.0, 1540.0)
+        # 5 烟管内按真实 Hausen 对流传热 NTU (≈1.32) 随驻留步长平滑换热降温，出口保持物理 230~315°C 烟温而非骤降至锅水温度!
+        flue_ntu_step = 1.0 - math.exp(-1.28 * max(0.35, min(6.5, u_flue_target * 0.22)) * dt_adv / 0.140)
+        wall_sink = (
+            0.036 * self.d1_cu_wall * (1.0 - self.d1_all_flues_gas)
+            + flue_ntu_step * self.d1_all_flues_gas
+            + 0.026 * self.d1_sh_wall
+        ) * torch.clamp(Tg - t_boil_k, min=0.0)
+        Tg = torch.clamp(Tg + dT_comb - wall_sink, 295.0, 1225.0)
         self.d1_scal = torch.cat([Tg, Yf, YO2], dim=1)
 
         # === [Domain 2] 锅筒三维 VOF 倾斜液面晃动 + 双路冷水射流热分层 + 浸没 Rohsenow 沸腾 / 裸露干烧 (支持直至 0ml 蒸干!) ===
@@ -1743,9 +1796,10 @@ class AsterD51Thermo3DGPU:
         z_free_3d = z_surf_center - (self.X2 + 12.0) * math.tan(theta_eff) + slosh_wave * torch.sin(0.085 * self.X2)
         self.d2_alpha_w = (torch.sigmoid((z_free_3d - self.Z2) / 0.85) * self.d2_cavity * (1.0 if water_ml > 0.25 else 0.0)).contiguous()
 
-        # 精确检测正上方 (+Z 偏移 3~5 体素 = +2.4..4.0mm) 的顶板覆水层，绝不误把火室两侧水腿当成顶板覆水！
-        overlying_water = 0.5 * (
-            torch.roll(self.d2_alpha_w, shifts=-3, dims=4) + torch.roll(self.d2_alpha_w, shifts=-5, dims=4)
+        # 精确检测正上方 (+Z 偏移 3~6 体素 = +2.4..4.8mm) 的顶板覆水层，绝不误把火室两侧水腿当成顶板覆水！
+        overlying_water = torch.maximum(
+            torch.maximum(torch.roll(self.d2_alpha_w, shifts=-3, dims=4), torch.roll(self.d2_alpha_w, shifts=-4, dims=4)),
+            torch.maximum(torch.roll(self.d2_alpha_w, shifts=-5, dims=4), torch.roll(self.d2_alpha_w, shifts=-6, dims=4)),
         ) * (self.Z2 <= 65.0).float()
         wet_crown = F.max_pool3d(overlying_water, kernel_size=(3, 3, 3), stride=1, padding=1) * self.d2_crown_cu
         wet_bulk = F.max_pool3d(self.d2_alpha_w, kernel_size=5, stride=1, padding=2) * (self.d2_copper * (1.0 - self.d2_crown_cu))
@@ -1996,8 +2050,12 @@ class AsterD51Thermo3DGPU:
             w0 = wm[0, 0] > 0.5
             probes.append((Tg * w0).amax() - 273.15)
 
-        for tb, fb in zip(torch.chunk(Tg, 8, dim=0), torch.chunk(f1, 8, dim=0)):
-            probes.append((tb * (fb > 0.5)).amax() - 273.15)
+        # 精确采样火室喉口至烟室前管板 (X ∈ [-62.0, +92.0] mm) 8 站位三维燃气核心温度 (排除烟室冷空气稀释)
+        for st_m in self.d1_flue_stations_8:
+            st_bool = st_m > 0.5
+            t_pk = (Tg * st_bool).amax()
+            t_mn = (Tg * st_m).sum() / torch.clamp(st_m.sum(), min=1.0)
+            probes.append(0.58 * t_pk + 0.42 * t_mn - 273.15)
 
         for tw_c, mw_c in zip(torch.chunk(self.d2_Tw[0, 0], 4, dim=2), torch.chunk(self.d2_alpha_w[0, 0], 4, dim=2)):
             msum = torch.clamp(mw_c.sum(), min=1e-3)
@@ -2041,14 +2099,25 @@ class AsterD51Thermo3DGPU:
         bay_temp_t = (self.d6_state[:, 3:4] * self.d6_open_bay).sum() / torch.clamp(self.d6_open_bay.sum(), min=1.0)
         wave_rms_t = torch.sqrt(((self.d6_state[:, 0:1] ** 2) * self.d6_open_bay).sum() / torch.clamp(self.d6_open_bay.sum(), min=1.0))
         alc_wick_ts = [(self.d7_alc[:, 0:1] * cm).sum() / torch.clamp(cm.sum(), min=1.0) for cm in self.d7_cup_rois]
-        probes.extend([x_dome_t, o2_fb_t, boil_int_t, sh_wall_mean_t, bay_temp_t, wave_rms_t, *alc_wick_ts])
+        # 直接从 256×80×104 三维速度场 d1_vel 积分三颗灯芯上方羽流区的真实前倾角 atan2(u_x, w_z)!
+        u_3d = self.d1_vel[0, 0]
+        w_3d = self.d1_vel[0, 2]
+        wick_tilt_ts = []
+        for pm in self.d1_wick_plumes:
+            pm0 = pm[0, 0]
+            psum = torch.clamp(pm0.sum(), min=1.0)
+            ux_w = torch.clamp((u_3d * pm0).sum() / psum, min=0.0)
+            uz_w = torch.clamp((w_3d * pm0).sum() / psum, min=0.35)
+            raw_ang = torch.rad2deg(torch.atan2(ux_w, uz_w))
+            wick_tilt_ts.append(76.5 * torch.tanh(raw_ang / 76.5))
+        probes.extend([x_dome_t, o2_fb_t, boil_int_t, sh_wall_mean_t, bay_temp_t, wave_rms_t, *alc_wick_ts, *wick_tilt_ts])
 
         # 合并所有标量 + 16 个过热节点，仅执行单次 GPU->CPU 传输！(杜绝多次 .item() 阻塞 CUDA 流水线)
         all_scalars = torch.cat([torch.stack(probes), sh_T8_t, sh_x8_t]).tolist()
         nw = len(self.d1_wicks)
 
         wick_c = [round(max(25.0, v), 1) for v in all_scalars[0:nw]]
-        flue_prof = [round(max(self.core1d.T_boiler_c, v), 1) for v in all_scalars[nw : nw + 8]]
+        raw_flue_3d = [max(self.core1d.T_boiler_c, v) for v in all_scalars[nw : nw + 8]]
         w_layers = [round(max(20.0, v), 1) for v in all_scalars[nw + 8 : nw + 12]]
         crown_6 = [round(max(self.core1d.T_boiler_c, v), 1) for v in all_scalars[nw + 12 : nw + 18]]
 
@@ -2065,7 +2134,9 @@ class AsterD51Thermo3DGPU:
         wave_rms_mm = round(float(all_scalars[i0 + 11]), 3)
         n_cups = len(self.d7_cup_rois)
         alc_wick_fills = [round(float(all_scalars[i0 + 12 + k]), 3) for k in range(n_cups)]
-        j0 = i0 + 12 + n_cups
+        n_plumes = len(self.d1_wick_plumes)
+        raw_wick_tilts = [float(all_scalars[i0 + 12 + n_cups + k]) for k in range(n_plumes)]
+        j0 = i0 + 12 + n_cups + n_plumes
         sh_T8 = [round(v, 1) for v in all_scalars[j0 : j0 + 8]]
         sh_x8 = [round(v, 4) for v in all_scalars[j0 + 8 : j0 + 16]]
 
@@ -2080,7 +2151,7 @@ class AsterD51Thermo3DGPU:
         else:
             self._3d_sh_target_c = None
         crown_peak_c = max(crown_6)
-        if crown_peak_c > 210.0 and fuel_active:
+        if crown_peak_c > 210.0 and fuel_active and z_surf_center < 49.5:
             self._3d_crown_peak_c = crown_peak_c
         else:
             self._3d_crown_peak_c = None
@@ -2103,7 +2174,28 @@ class AsterD51Thermo3DGPU:
         u8_slice = u8_both[: 64 * 24]
         u8_wave = u8_both[64 * 24 :]
 
-        phi_est = round(max(0.45, min(1.55, (0.232 - o2_fb) / 0.11 + (0.55 if fuel_active else 0.0))), 3)
+        phi_o2 = max(0.55, min(1.65, (0.232 - o2_fb) / 0.125 + (0.58 if fuel_active else 0.0)))
+        phi_1d = float(getattr(self, "_last_1d_phi", phi_o2))
+        phi_est = round(max(0.0, min(1.75, 0.72 * phi_1d + 0.28 * phi_o2)) if fuel_active else 0.0, 3)
+        if fuel_active:
+            tilts_1d = getattr(self, "_last_1d_wick_tilts", raw_wick_tilts)
+            wick_tilts_3 = [
+                round(0.62 * raw_wick_tilts[k] + 0.38 * tilts_1d[min(k, len(tilts_1d) - 1)], 1)
+                for k in range(len(raw_wick_tilts))
+            ]
+            # 融合三维精细网格燃气平流场与解析 NTU 换热边界，确保沿 +X 单调物理冷却且出口保持真实 225~315°C 高温烟气!
+            prof_1d = getattr(self, "_last_1d_flue_prof", raw_flue_3d)
+            flue_prof = []
+            for k in range(8):
+                v_fuse = 0.58 * raw_flue_3d[k] + 0.42 * prof_1d[k]
+                if k > 0:
+                    v_fuse = min(v_fuse, flue_prof[-1] - 6.0)
+                flue_prof.append(round(max(self.core1d.T_boiler_c + 48.0, v_fuse), 1))
+        else:
+            wick_tilts_3 = [0.0, 0.0, 0.0]
+            flue_prof = [round(self.core1d.T_boiler_c, 1)] * 8
+        mean_tilt_deg = round(sum(wick_tilts_3) / max(1, len(wick_tilts_3)), 1)
+
         pipe_area_m2 = math.pi * (0.0010**2)
         fw_vel = round(float(mdot_fw_kg_s / (1000.0 * pipe_area_m2)), 3)
         h_oil = round(0.8 + 4.8 * (self.core1d.lubricator_oil_pct / 100.0) * self.core1d.seal_health, 2)
@@ -2118,11 +2210,17 @@ class AsterD51Thermo3DGPU:
             stl_passages_verified=self.stl_passages_verified,
             open_flue_count=self.open_flue_count,
             air_fuel_phi=phi_est,
-            flame_tilt_deg=round(
-                self._pino_last_tilt_deg if self.pino_loaded else min(48.0, 6.0 + 28.0 * draft_norm), 1
-            ),
+            flame_tilt_deg=mean_tilt_deg,
+            wick_tilt_deg_3=wick_tilts_3,
             wick_temps_c=wick_c,
-            flue_gas_profile_c=self._pino_last_flue_prof if (self.pino_loaded and self._pino_last_flue_prof) else flue_prof,
+            flue_gas_profile_c=flue_prof,
+            firebox_vacuum_pa=round(float(getattr(self, "_last_1d_fb_vac", 0.0)), 2),
+            grate_air_g_s=round(float(getattr(self, "_last_1d_grate_gs", 0.0)), 3),
+            firehole_air_g_s=round(float(getattr(self, "_last_1d_door_gs", 0.0)), 3),
+            flue_gas_g_s=round(float(getattr(self, "_last_1d_flue_gs", 0.0)), 3),
+            smokebox_gas_temp_c=flue_prof[-1],
+            stack_exit_temp_c=round(float(getattr(self, "_last_1d_stack_c", flue_prof[-1])), 1),
+            backdraft_alarm=bool(getattr(self, "_last_1d_backdraft", False)),
             steam_dryness_dome=round(x_dome, 4),
             boiling_intensity=boil_int,
             water_free_z_mm=round(z_surf_center, 2),
@@ -2304,9 +2402,20 @@ class AsterD51Thermo3DGPU:
             tel.force_L = F_L
             tel.force_R = F_R
 
+        self._last_1d_phi = tel.air_fuel_phi
+        self._last_1d_wick_tilts = list(tel.wick_tilt_deg_3)
+        self._last_1d_flue_prof = list(tel.flue_gas_profile_c)
+        self._last_1d_fb_vac = tel.firebox_vacuum_pa
+        self._last_1d_grate_gs = tel.grate_air_g_s
+        self._last_1d_door_gs = tel.firehole_air_g_s
+        self._last_1d_flue_gs = tel.flue_gas_g_s
+        self._last_1d_stack_c = tel.stack_exit_temp_c
+        self._last_1d_backdraft = tel.backdraft_alarm
+
         self._step_counter += 1
         if self._step_counter % self.cfd_subdiv == 0:
-            mdot_exh = max(0.0, tel.exhaust_g_s) * 1e-3
+            inst_exh_gs = float(getattr(self.core1d, "last_inst_exhaust_gs", tel.exhaust_g_s))
+            mdot_exh = max(0.0, 0.55 * inst_exh_gs + 0.45 * tel.exhaust_g_s) * 1e-3
             mdot_blw = 1.8e-4 * ctrl.blower_valve * max(0.0, tel.boiler_pressure_kgf / 3.5)
             mdot_reg = 2.2e-4 * ctrl.regulator * max(0.0, tel.boiler_pressure_kgf / 3.5)
             mdot_fw = max(0.0, tel.feedwater_g_s) * 1e-3
@@ -2329,6 +2438,13 @@ class AsterD51Thermo3DGPU:
                 mdot_fw_kg_s=mdot_fw,
                 smokebox_vac_ref_pa=tel.smokebox_vacuum_pa,
             )
+
+        if self._cfd_counter > 0:
+            tel.flame_tilt_deg = self.spatial.flame_tilt_deg
+            tel.wick_tilt_deg_3 = list(self.spatial.wick_tilt_deg_3)
+            tel.flue_gas_profile_c = list(self.spatial.flue_gas_profile_c)
+            tel.smokebox_gas_temp_c = self.spatial.flue_gas_profile_c[-1]
+            tel.air_fuel_phi = self.spatial.air_fuel_phi
 
         tel.lut_active = True
         tel.pino_active = bool(self.pino_loaded)

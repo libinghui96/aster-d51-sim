@@ -189,6 +189,30 @@ class ThermoTelemetry:
     q_casing_loss_w: float = 0.0               # Templates 1-6 + 静止空气夹层外皮对流与辐射散热功率 (W)
     q_unburned_w: float = 0.0                  # 不完全燃烧热损失功率 (W)
     energy_balance_err_pct: float = 0.0        # 第一定律热平衡闭合残差 (%)
+    # Stage 23: Aster Type-"C" 干式耐火导焰风道、平面滑阀 0.5mm 浮起泄压、1:30 黏着包络与 11-8 车底共鸣汽笛两相气动声学
+    boiler_type: str = "Type-C"                # van Riemsdijk Type-"C" 退台紫铜锅筒 + 12-4 陶瓷不锈钢火室风道
+    firebox_liner_temp_c: float = 25.0         # 12-4 独立不锈钢火室陶瓷耐火内衬辐射面温度 (°C)
+    slide_valve_lift_mm: float = 0.0           # 1-6 平面滑阀在 1-5 框 0.5mm 垂向游隙内的超压浮起泄压升程 (mm)
+    adhesion_factor: float = 0.256             # 动轮黏着牵引因子 TE / W_drivers (aster-manual.pdf p.5: [0.20, 0.33])
+    whistle_freq_hz: float = 0.0               # 11-8 闭端圆柱黄铜汽笛实时四分之一波长基频 f_1(T, x, M_jet) (Hz)
+    whistle_spl_db: float = 0.0                # 11-8 汽笛 1m 处气动偶极子声压级 SPL (dB)
+    whistle_dryness_x: float = 0.96            # 11-8 共鸣笛腔内两相湿蒸汽干度 x_wh ∈ [0.50, 1.0]
+    whistle_wall_temp_c: float = 25.0          # 11-8 左火室颊下黄铜笛管壁温 (°C, 初吹冷壁凝结上滑音物理根源!)
+    whistle_sputter: float = 0.0               # 11-8 笛腔凝结水滴两相吐沫调制强度 (0..1, 随 -Z 下哨口排液归零)
+    whistle_jet_mach: float = 0.0              # 11-8 哨口狭缝蒸汽射流马赫数 M_jet
+    whistle_sound_speed_m_s: float = 346.0     # 11-8 笛腔内两相水蒸气/空气混合声速 c_eff (m/s)
+    # Stage 24: 外界大气 -> 炉栅/12-1炉门 -> 火室负压与三芯横流弯折火焰 -> 5烟管 NTU 沿程温降 -> 烟室射流混合 -> 18-25 烟囱排烟全链路耦合场
+    firebox_vacuum_pa: float = 0.0             # 火室表压负压 P_atm - P_firebox (Pa, <0 表示火室微正压倒火!)
+    grate_air_g_s: float = 0.0                 # 23-1 炉床底部由外界吸入火室的一次空气流量 (g/s)
+    firehole_air_g_s: float = 0.0              # 12-1/12-2 蝴蝶火室门(4×ø1.6孔+开度)吸入的二次空气流量 (g/s)
+    flue_gas_g_s: float = 0.0                  # 5根烟管总燃气质量流量 m_grate + m_door + m_fuel (g/s)
+    smokebox_gas_temp_c: float = 25.0          # X=+92mm 烟室前管板 5 烟管出口纯烟气温度 (°C)
+    stack_exit_temp_c: float = 25.0            # 18-25 烟囱顶口烟气与乏汽/通风蒸汽绝热混合排气温度 (°C)
+    air_fuel_phi: float = 0.0                  # 火室实时燃空当量比 φ = 8.98 * m_fuel / m_air
+    flame_tilt_deg: float = 0.0                # 23-1 三芯酒精火焰向 +X 烟管喉口平均倾伏角 (deg, 0°竖直 -> 75°平吸)
+    wick_tilt_deg_3: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])  # 后/中/前三芯各自前倾角 (deg)
+    flue_gas_profile_c: List[float] = field(default_factory=lambda: [25.0] * 8)    # 火室喉部至前管板 8 站沿程燃气温度 (°C)
+    backdraft_alarm: bool = False              # 零引风漫油/骤关加减阀未开通风阀时的火室正压倒火(逆火)告警
     gpu_monitor: Dict[str, Any] = field(default_factory=dict)
     force_L: float = 0.0
     force_R: float = 0.0
@@ -430,6 +454,17 @@ class AsterD51Thermo1D:
         self.wick_saturation: float = 0.90
         self.wick_tip_temp_c: float = 25.0
         self.casing_temp_c: float = 25.0
+        self.T_firebox_liner_c: float = 25.0
+        self.slide_valve_lift_mm: float = 0.0
+        self.T_whistle_wall_c: float = 25.0
+        self.M_whistle_cond_kg: float = 0.0
+        self.whistle_steam_fill: float = 0.0
+        self.whistle_freq_hz: float = 0.0
+        self.whistle_spl_db: float = 0.0
+        self.whistle_dryness_x: float = 0.96
+        self.whistle_sputter: float = 0.0
+        self.whistle_jet_mach: float = 0.0
+        self.whistle_sound_speed_m_s: float = 346.1
         self.boiler_efficiency_pct: float = 0.0
         self.edge_conds: Dict[str, float] = {}
         self.fluid_lvs_verified: bool = True
@@ -491,6 +526,11 @@ class AsterD51Thermo1D:
         self.wick_saturation = 0.72
         self.wick_tip_temp_c = 82.8
         self.casing_temp_c = 71.2
+        self.T_firebox_liner_c = 545.0
+        # 11-8 真汽笛隐藏在左火室颊下温暖区 (aster-manual.pdf p.17): 待机壁温 ~64.5°C (< 149.6°C 饱和蒸汽温，首吹产生真实冷壁凝结上滑音!)
+        self.T_whistle_wall_c = 64.5
+        self.M_whistle_cond_kg = 1.2e-5
+        self.whistle_steam_fill = 0.0
         self.steam_dryness_dome = 0.965
         self.steam_dryness_chest = 1.00
         self.M_cond_L[:] = 1.5e-5
@@ -705,9 +745,40 @@ class AsterD51Thermo1D:
             - q_wall_c
         ) / (m_gas_c * cv_steam)
 
-        p_relief = max(self.P_steam_chest + 32000.0, P_ATM + 48000.0)
-        p_pair[0] = min(p_relief, max(0.82 * P_ATM, p_pair[0] + dp_h * dt_sub))
-        p_pair[1] = min(p_relief, max(0.82 * P_ATM, p_pair[1] + dp_c * dt_sub))
+        p_Next_h = max(0.82 * P_ATM, p_pair[0] + dp_h * dt_sub)
+        p_Next_c = max(0.82 * P_ATM, p_pair[1] + dp_c * dt_sub)
+        # aster-manual.pdf pp.19 & 40: 1-5 滑阀驱动框保留 0.50mm 垂向自由游隙 (Buckle Vertical Free Play)!
+        # 当蒸汽室带压工作且气缸压缩或冷缸积水超压 (P_cyl > P_steam_chest + 14kPa) 时，1-6 平面滑阀向上浮起 <=0.50mm 将超压余汽与积水守恒泄回蒸汽室!
+        m_relief_back = 0.0
+        if self.P_steam_chest > P_ATM + 8000.0:
+            dp_lift_thresh = self.P_steam_chest + 14000.0
+            over_lift_h = max(0.0, p_Next_h - dp_lift_thresh)
+            over_lift_c = max(0.0, p_Next_c - dp_lift_thresh)
+            lift_h_mm = min(0.50, 1.1e-5 * over_lift_h)
+            lift_c_mm = min(0.50, 1.1e-5 * over_lift_c)
+            self._sub_valve_lift_mm = max(lift_h_mm, lift_c_mm)
+            if lift_h_mm > 1e-4:
+                a_lift_h = 0.018 * (lift_h_mm * 1e-3)
+                max_rel_h = over_lift_h * v_h_gas / (GAMMA_STEAM * R_STEAM * t_h_k * max(1e-9, dt_sub))
+                m_rel_h = min(max_rel_h, orifice_mass_flow(p_Next_h, self.P_steam_chest, t_h_k, a_lift_h, cd=0.62))
+                p_Next_h = max(dp_lift_thresh, p_Next_h - (GAMMA_STEAM * R_STEAM * t_h_k / v_h_gas) * m_rel_h * dt_sub)
+                if m_cond_pair[0] > 0.0:
+                    m_cond_pair[0] = max(0.0, m_cond_pair[0] - min(m_cond_pair[0], 0.008 * lift_h_mm * dt_sub))
+                m_relief_back += m_rel_h
+            if lift_c_mm > 1e-4:
+                a_lift_c = 0.018 * (lift_c_mm * 1e-3)
+                max_rel_c = over_lift_c * v_c_gas / (GAMMA_STEAM * R_STEAM * t_c_k * max(1e-9, dt_sub))
+                m_rel_c = min(max_rel_c, orifice_mass_flow(p_Next_c, self.P_steam_chest, t_c_k, a_lift_c, cd=0.62))
+                p_Next_c = max(dp_lift_thresh, p_Next_c - (GAMMA_STEAM * R_STEAM * t_c_k / v_c_gas) * m_rel_c * dt_sub)
+                if m_cond_pair[1] > 0.0:
+                    m_cond_pair[1] = max(0.0, m_cond_pair[1] - min(m_cond_pair[1], 0.008 * lift_c_mm * dt_sub))
+                m_relief_back += m_rel_c
+        else:
+            self._sub_valve_lift_mm = 0.0
+        self._sub_m_relief_back = m_relief_back
+        p_relief = max(self.P_steam_chest + 36000.0, P_ATM + 52000.0)
+        p_pair[0] = min(p_relief, p_Next_h)
+        p_pair[1] = min(p_relief, p_Next_c)
         t_gas_pair[0] = float(np.clip(t_h_k + dT_h * dt_sub, 280.0, max(360.0, t_sh_k + 25.0)))
         t_gas_pair[1] = float(np.clip(t_c_k + dT_c * dt_sub, 280.0, max(360.0, t_sh_k + 25.0)))
 
@@ -887,20 +958,28 @@ class AsterD51Thermo1D:
 
         drn_open_L = bool(ctrl.drain_cock and self._edge_g("cyl_1_16_drains_L") > 0.02)
         drn_open_R = bool(ctrl.drain_cock and self._edge_g("cyl_1_16_drains") > 0.02)
+        max_vlift_step = 0.0
         for _ in range(n_sub):
+            self._sub_valve_lift_mm = 0.0
+            self._sub_m_relief_back = 0.0
             in_L, exh_L, drn_L, cgen_L, pind_L, fh_L, hl_L = self._step_cylinder_side(
                 dt_sub, self.P_cyl_L, self.T_gas_L, self.M_cond_L, q_pL, v_pL, self.calib.q_fdc_L, areas_L, drn_open_L, self.ext_pino_cyl_L
             )
+            vl_L, mrel_L = self._sub_valve_lift_mm, self._sub_m_relief_back
+            self._sub_valve_lift_mm = 0.0
+            self._sub_m_relief_back = 0.0
             in_R, exh_R, drn_R, cgen_R, pind_R, fh_R, hl_R = self._step_cylinder_side(
                 dt_sub, self.P_cyl_R, self.T_gas_R, self.M_cond_R, q_pR, v_pR, self.calib.q_fdc_R, areas_R, drn_open_R, self.ext_pino_cyl_R
             )
+            max_vlift_step = max(max_vlift_step, vl_L, self._sub_valve_lift_mm)
+            m_rel_tot = mrel_L + self._sub_m_relief_back
             in_tot = in_L + in_R
-            # 填料函老化外漏损失
+            # 填料函老化外漏损失 + 滑阀 0.5mm 浮起向蒸汽室回泄质量守恒
             mdot_gland_leak = orifice_mass_flow(
                 self.P_steam_chest, P_ATM, self.T_superheat_c + 273.15, 1.5e-7 * (1.0 - self.seal_health)
             )
-            dp_sc = (R_STEAM * (self.T_superheat_c + 273.15) / v_sc_vol) * (mdot_reg - in_tot - mdot_gland_leak)
-            self.P_steam_chest = min(self.P_boiler, max(P_ATM, self.P_steam_chest + dp_sc * dt_sub))
+            dp_sc = (R_STEAM * (self.T_superheat_c + 273.15) / v_sc_vol) * (mdot_reg + m_rel_tot - in_tot - mdot_gland_leak)
+            self.P_steam_chest = min(max(self.P_boiler, P_ATM + 35000.0), max(P_ATM, self.P_steam_chest + dp_sc * dt_sub))
             mdot_cyl_in += in_tot / n_sub
             mdot_cyl_exh += (exh_L + exh_R) / n_sub
             mdot_drain_blow += (drn_L + drn_R) / n_sub
@@ -910,6 +989,7 @@ class AsterD51Thermo1D:
             f_hydro_R_acc += fh_R / n_sub
             hydrolock_L = hydrolock_L or hl_L
             hydrolock_R = hydrolock_R or hl_R
+        self.slide_valve_lift_mm = max(max_vlift_step, self.slide_valve_lift_mm * math.exp(-dt / 0.025))
 
         self.condensate_kg = float(np.sum(self.M_cond_L) + np.sum(self.M_cond_R))
 
@@ -1110,6 +1190,62 @@ class AsterD51Thermo1D:
         mdot_sv = orifice_mass_flow(self.P_boiler, P_ATM, t_boil_k, a_safety) if has_steam else 0.0
         mdot_braze = orifice_mass_flow(self.P_boiler, P_ATM, t_boil_k, a_braze_damage_leak) if has_steam else 0.0
 
+        # --- 4b. 11-8 左火室颊下隐藏式闭端圆柱黄铜真汽笛第一性原理两相蒸汽气动声学 (aster-manual.pdf p.17 Fig.16 & イラスト 11) ---
+        # 真实 CAD 尺寸: 外径 ø6.20mm / 内径 D_bore=4.30mm, 全长 44.4mm, 闭端共鸣腔 L_cav=29.2mm, -Z 朝下排凝切窗 h_mouth=3.20mm,
+        # 含哨口亥姆霍兹收缩辐射电感修正 ΔL_mouth=9.8mm -> 有效四分之一波长声学长度 L_eff = 39.0mm, 黄铜热容 C_wh = 2.96 J/K!
+        wh_u = max(0.0, min(1.0, float(getattr(ctrl, "whistle_valve", 0.0)))) * g_whi_lvs
+        t_cheek_eq_c = 25.0 + 0.24 * max(0.0, self.T_boiler_c - 25.0) + (12.0 if ctrl.burner_lit else 0.0)
+        l_eff_wh_m = 0.0390
+        if has_steam and wh_u > 0.01 and mdot_whistle > 1.0e-7:
+            p_wh_pa = P_ATM + max(0.0, self.turret_pressure_kgf * PA_PER_KGF_CM2) * ((wh_u ** 1.15) / (wh_u ** 1.15 + 0.16))
+            t_sat_wh_c = sat_temp_c(p_wh_pa)
+            # 薄壁中空黄铜共鸣笛管 (4.26g C3604, C_wh = 1.62 J/K) 对饱和活汽的高速对流膜状凝结换热 -> 初吹产生液膜喘振并在 ~0.5-0.8s 迅速暖管升频!
+            q_wh_cond_w = 2.85 * max(0.0, t_sat_wh_c - self.T_whistle_wall_c)
+            h_fg_wh = latent_heat_j_kg(t_sat_wh_c)
+            mdot_wh_cond = min(0.42 * mdot_whistle, q_wh_cond_w / max(1e5, h_fg_wh))
+            dT_wh = (q_wh_cond_w + 0.85 * (t_sat_wh_c - self.T_whistle_wall_c) - 0.035 * (self.T_whistle_wall_c - t_cheek_eq_c)) / 1.62
+            self.T_whistle_wall_c = float(np.clip(self.T_whistle_wall_c + dT_wh * dt, 20.0, 175.0))
+            # 腔内气相驱替空气 (V_cav ≈ 0.424 cm³)
+            self.whistle_steam_fill = min(1.0, self.whistle_steam_fill + min(1.0, (mdot_whistle / 1.8e-6) * dt))
+            x_in_wh = max(0.52, self.steam_dryness_dome - mdot_wh_cond / max(1e-6, mdot_whistle))
+            cond_load_frac = min(0.36, self.M_whistle_cond_kg / 1.1e-4)
+            x_wh = float(np.clip(x_in_wh - 0.55 * cond_load_frac, 0.52, 0.992))
+            self.whistle_dryness_x = x_wh
+            # Wood-Kieffer 两相湿蒸汽声速 c_tp = sqrt(x_wh * gamma_tp * R_steam * T_cav_K) 与残余温空气声速平滑混合
+            gamma_tp = 1.13 + 0.195 * x_wh
+            t_cav_k = 273.15 + 0.55 * t_sat_wh_c + 0.45 * self.T_whistle_wall_c
+            c_steam_tp = math.sqrt(x_wh * gamma_tp * R_STEAM * max(300.0, t_cav_k))
+            c_air_wh = math.sqrt(1.40 * 287.05 * (self.T_whistle_wall_c + 273.15))
+            c_eff = (1.0 - self.whistle_steam_fill) * c_air_wh + self.whistle_steam_fill * c_steam_tp
+            self.whistle_sound_speed_m_s = c_eff
+            pr_wh = max(1.0, p_wh_pa / P_ATM)
+            m_jet = min(1.0, math.sqrt(max(0.0, (2.0 / (gamma_tp - 1.0)) * (pr_wh ** ((gamma_tp - 1.0) / gamma_tp) - 1.0))))
+            u_jet = c_eff * m_jet
+            # -Z 朝下哨口重力 + 高速蒸汽剪切排空凝结水 (aster-manual.pdf p.17: opening facing downward so condensation always drains!)
+            dm_wh_liq = mdot_wh_cond + (1.0 - self.steam_dryness_dome) * mdot_whistle - (6.2 + 0.075 * u_jet) * self.M_whistle_cond_kg
+            self.M_whistle_cond_kg = float(np.clip(self.M_whistle_cond_kg + dm_wh_liq * dt, 0.0, 2.2e-4))
+            self.whistle_jet_mach = m_jet
+            self.whistle_sputter = float(np.clip(1.65 * (1.0 - x_wh) + 2800.0 * self.M_whistle_cond_kg, 0.0, 1.0))
+            if m_jet >= 0.085:
+                # 闭端圆柱共鸣管四分之一波长驻波基频 + Coltman 射流相位牵引微升
+                self.whistle_freq_hz = (c_eff / (4.0 * l_eff_wh_m)) * (0.965 + 0.065 * m_jet)
+                spl_raw = 50.0 + 38.5 * math.log10(max(1.0, 1.0 + 9.5 * (m_jet ** 2.4))) - 3.5 * self.whistle_sputter
+                self.whistle_spl_db = float(np.clip(spl_raw, 42.0, 92.0))
+            else:
+                # 低于 Rayleigh/Coltman 声学锁频阈值时仅产生微弱哨口蒸汽嘶声，无谐振基音!
+                self.whistle_freq_hz = 0.0
+                self.whistle_spl_db = float(np.clip(28.0 + 160.0 * m_jet, 0.0, 44.0))
+        else:
+            # 11-1 弹簧不锈钢球阀瞬时回座切断蒸汽，笛管向火室颊部环境缓慢回温且残水从 -Z 哨口滴净
+            self.T_whistle_wall_c += min(1.0, 0.08 * dt_th) * (t_cheek_eq_c - self.T_whistle_wall_c)
+            self.M_whistle_cond_kg = max(0.0, self.M_whistle_cond_kg - 2.5e-5 * dt_th)
+            self.whistle_steam_fill = max(0.0, self.whistle_steam_fill - 8.0 * dt)
+            self.whistle_sound_speed_m_s = math.sqrt(1.40 * 287.05 * (self.T_whistle_wall_c + 273.15))
+            self.whistle_freq_hz = 0.0
+            self.whistle_spl_db = 0.0
+            self.whistle_jet_mach = 0.0
+            self.whistle_sputter = 0.0
+
         # --- 5. 烟室负压引风与酒精火管传热 (优先采用 L2 3D PINO 实时三维表面积分通量，次选 3D CFD 查找表) ---
         pino_on = self.ext_pino_burner is not None
         if pino_on and self.ext_pino_burner is not None:
@@ -1132,9 +1268,13 @@ class AsterD51Thermo1D:
                 sh_delta_c = max(lut_sh_dt, 24.0)
                 smokebox_vac_pa = max(smokebox_vac_pa, 95.0)
             else:
-                draft_eff = lut_draft
+                jet_tot_gs = exh_gs + 10.0 * blw_gs
+                # 校准零蒸汽射流 (exh=0, blw=0, fan=False) 时 70mm 模型短烟囱的真实热浮力微抽力 (~0.7 Pa，与 3D PINO 严格一致!)
+                zero_jet_taper = math.exp(-jet_tot_gs / 0.035)
+                draft_eff = max(0.06, lut_draft - 0.16 * zero_jet_taper)
                 eta_boil_eff = lut_eta
-                sh_delta_c = lut_sh_dt
+                sh_delta_c = lut_sh_dt * (1.0 - 0.65 * zero_jet_taper)
+                smokebox_vac_pa = max(0.68 if ctrl.burner_lit else 0.0, smokebox_vac_pa - 5.82 * zero_jet_taper)
         else:
             draft_index = (
                 (1.00 if ctrl.chimney_fan else 0.0)
@@ -1146,11 +1286,12 @@ class AsterD51Thermo1D:
             sh_delta_c = 28.0 * draft_eff
             smokebox_vac_pa = 140.0 * (draft_eff - 0.12)
 
-        # 耦合 5 根紫铜烟管热弹塑性弓曲/椭圆扁化流固耦合阻尼因子 flue_fsi_mult 与 12-1 炉门 4 孔二次风旁通效应
+        # 耦合 5 根紫铜烟管热弹塑性弓曲/椭圆扁化流固耦合阻尼因子 flue_fsi_mult、12-1 炉门二次风旁通及 0ml 干锅无蒸汽引风自节流保护 (aster-manual.pdf pp.9, 36, 40)
+        dry_no_draft = (self.M_water_kg <= 1.0e-5 and (mdot_cyl_exh + mdot_blw) < 2.0e-5 and not ctrl.chimney_fan)
         fsi_m = float(np.clip(self.flue_fsi_mult, 0.25, 1.05))
         door_open = max(0.0, min(1.0, float(getattr(ctrl, "firebox_door", 0.0))))
-        draft_eff = draft_eff * fsi_m * (1.0 - 0.14 * door_open)
-        smokebox_vac_pa = max(0.0, smokebox_vac_pa * (0.65 + 0.35 * fsi_m))
+        draft_eff = draft_eff * fsi_m * (1.0 - 0.14 * door_open) * (0.22 if dry_no_draft else 1.0)
+        smokebox_vac_pa = max(0.0, smokebox_vac_pa * (0.65 + 0.35 * fsi_m) * (0.18 if dry_no_draft else 1.0))
 
         wick_head_factor = max(0.72, min(1.25, 1.0 - 0.34 * math.tan(theta_grade_only)))
         door_chill = 1.0 - (0.06 if pino_on else 0.26) * door_open
@@ -1164,12 +1305,13 @@ class AsterD51Thermo1D:
         vap_lock_atten = 1.0 - 0.35 * max(0.0, (self.T_alcohol_c - 66.0) / 10.0)
         cap_visc_gain = max(0.55, min(1.42, (0.72 + 0.28 * visc_fluidity_eth) * vap_lock_atten))
         if self.ext_pino_wick_cht is not None:
-            wick_cap_raw = max(0.0, 0.57 * float(self.ext_pino_wick_cht[0]) * cap_visc_gain)
+            wick_cap_raw = max(0.0, 0.57 * float(self.ext_pino_wick_cht[0]) * cap_visc_gain) * (0.42 if dry_no_draft else 1.0)
             self.wick_saturation = max(0.0, min(1.0, float(self.ext_pino_wick_cht[1])))
             self.wick_tip_temp_c = max(20.0, float(self.ext_pino_wick_cht[2]))
         else:
             flood_mult_1d = 1.0 + 0.55 * max(0.0, sump_h_norm - 1.05)
-            evap_drv_1d = (0.52 + 0.48 * draft_eff) if ctrl.burner_lit else (0.008 * max(0.0, self.T_boiler_c - 60.0) / 100.0)
+            base_nat_draft = 0.20 if dry_no_draft else 0.52
+            evap_drv_1d = (base_nat_draft + (1.0 - base_nat_draft) * draft_eff) if ctrl.burner_lit else (0.008 * max(0.0, self.T_boiler_c - 60.0) / 100.0)
             wick_cap_raw = supply_gate_1d * evap_drv_1d * 0.076 * flood_mult_1d * cap_visc_gain
             sat_tgt = supply_gate_1d * max(0.0, min(0.96, 0.92 - (0.24 * (0.4 + 0.6 * draft_eff) if ctrl.burner_lit else 0.0)))
             self.wick_saturation += min(1.0, 4.0 * dt_th) * (sat_tgt - self.wick_saturation)
@@ -1199,10 +1341,11 @@ class AsterD51Thermo1D:
                 # 5根细火管发展段 Nusselt 近壁热边界层解析修正 + 火室高温燃气/陶瓷芯 Stefan-Boltzmann 热辐射并联换热
                 q_comb_w = min(q_chem_max, 0.86 * q_conv_3d + 0.78 * q_rad_3d) * door_chill
             else:
-                # 漫油富燃时大量酒精在缺氧下不完全燃烧，热效率下降但耗醇激增
+                # 漫油富燃时大量酒精在缺氧下不完全燃烧，热效率下降但耗醇激增；Type-"C" 12-4 高温陶瓷内衬 (>320°C) 提供二次辐射再聚焦增益
                 flood_eff_pen = 0.72 if self.mariotte_flood_active else 1.0
-                eta_with_rad = max(0.24, 1.42 * eta_boil_eff)
-                q_comb_w = min(0.60 * q_chem_total_w, eta_with_rad * flood_eff_pen * door_chill * q_chem_total_w)
+                liner_rerad_boost = 1.0 + 0.16 * max(0.0, min(1.0, (self.T_firebox_liner_c - 320.0) / 280.0))
+                eta_with_rad = max(0.24, 1.42 * eta_boil_eff * liner_rerad_boost)
+                q_comb_w = min(0.64 * q_chem_total_w, eta_with_rad * flood_eff_pen * door_chill * q_chem_total_w)
         else:
             q_comb_w = 0.0
 
@@ -1212,6 +1355,97 @@ class AsterD51Thermo1D:
         self.steam_dryness_dome = max(
             0.88, min(0.99, 0.985 - 0.055 * max(0.0, (fill_ratio - 0.45) / 0.35) ** 1.5 - 0.025 * boil_int)
         )
+
+        # --- 5c. 外界大气 <-> 炉栅/12-1火室门 <-> 火室负压/三芯横流弯折火焰 <-> 5烟管 NTU 沿程温降 <-> 烟室引射混合排烟全耦合网络 ---
+        mdot_alc_gs = (wick_capillary_ml_s * rho_ethanol * 1e-3) if (ctrl.burner_lit and wick_capillary_ml_s > 1e-7) else 0.0
+        v_loco_ms = abs(omega_3) * (0.5 * 0.0438)
+        dp_ram_pa = 0.5 * 1.184 * (v_loco_ms ** 2)
+        dp_buoy_stack_pa = (0.52 if (ctrl.burner_lit and mdot_alc_gs > 1e-4) else 0.04 * max(0.0, self.T_boiler_c - 25.0) / 125.0)
+        g_flues_lvs = 0.5 * (self._edge_g("boil_flues_upper") + self._edge_g("boil_flues_lower")) * fsi_m
+
+        # 串联—并联气体水力流导 (kg / (s * sqrt(Pa))):
+        #   1) 底部炉栅环隙一次风 G_grate ≈ 2.10e-4, 2) 12-1 蝴蝶炉门 (4×ø1.6mm 常通气孔 + ø9.2mm 开启门洞) 二次风 G_door,
+        #   3) 5 根细铜烟管 (含 17-5 四程过热器占空比与局部进出损失 K_flue≈3.4) 高温低密燃气流导 G_flue
+        g_grate_cond = 2.10e-4
+        a_door_m2 = 8.04e-6 + 58.44e-6 * (door_open ** 1.15)
+        g_door_cond = 0.65 * a_door_m2 * math.sqrt(2.0 * 1.184)
+        g_in_tot = g_grate_cond + g_door_cond
+        rho_flue_est = 0.52 if (ctrl.burner_lit and mdot_alc_gs > 1e-4) else 0.92
+        g_flue_cond = 2.095e-4 * g_flues_lvs * math.sqrt(2.0 * rho_flue_est / 3.40)
+
+        dp_tot_draft_pa = max(0.0, smokebox_vac_pa) + dp_ram_pa + dp_buoy_stack_pa
+        fb_vac_share = (g_flue_cond ** 2) / max(1e-14, (g_in_tot ** 2) + (g_flue_cond ** 2))
+        # 当烟室引风骤失 (<3.5 Pa) 且发生马氏瓶漫油富燃或大开炉门时，剧烈乙醇汽化膨胀产生微正压向外倒火 (Back-draft / 逆火)!
+        dp_vap_back_pa = (
+            max(0.0, 28.0 * mdot_alc_gs * (1.95 if self.mariotte_flood_active else 0.70) - 0.80 * dp_tot_draft_pa)
+            if (ctrl.burner_lit and smokebox_vac_pa < 3.5 and (self.mariotte_flood_active or door_open > 0.35))
+            else 0.0
+        )
+        firebox_vac_pa = fb_vac_share * dp_tot_draft_pa - dp_vap_back_pa
+        backdraft_alarm = bool(ctrl.burner_lit and firebox_vac_pa < -0.05)
+
+        if firebox_vac_pa >= 0.0:
+            grate_air_g_s = g_grate_cond * math.sqrt(firebox_vac_pa) * 1000.0
+            firehole_air_g_s = g_door_cond * math.sqrt(firebox_vac_pa) * 1000.0
+        else:
+            # 火室微正压时热燃气向炉底与 12-1 火门轻微倒窜，净吸入新风骤降至自然扩散底值
+            grate_air_g_s = 0.06
+            firehole_air_g_s = 0.02
+        total_air_g_s = max(0.05, grate_air_g_s + firehole_air_g_s)
+        flue_gas_g_s = (grate_air_g_s + firehole_air_g_s + mdot_alc_gs) * (1.0 if g_flues_lvs > 0.02 else 0.0)
+
+        # 乙醇完全燃烧化学计量空燃比 (A/F)_stoich = 8.98 g_air / g_EtOH (中央 ø10mm 灯芯反应区参与一次风占比 ~62%，两侧壁面风为稀释风)
+        flame_zone_air_g_s = max(0.04, 0.62 * grate_air_g_s + 0.35 * firehole_air_g_s)
+        air_fuel_phi = (8.98 * mdot_alc_gs / flame_zone_air_g_s) if (ctrl.burner_lit and mdot_alc_gs > 1e-5) else 0.0
+        air_fuel_phi = float(np.clip(air_fuel_phi, 0.0, 1.85))
+
+        # 23-1 纵向直列 1x3 三头陶瓷芯 (X = [-93, -77, -61] mm) 横流羽流弯折角物理计算:
+        #   - 灯芯口乙醇汽化与热浮力反应羽流上升速度 w_plume ≈ 0.98 m/s;
+        #   - 炉底冷/温一次新风沿 +X 逐级汇入并在 X=-48.2mm 5烟管喉口强烈流线收缩，使后/中/前三芯局部横流比呈 (0.76, 1.24, 1.92) 严格递增!
+        if ctrl.burner_lit and mdot_alc_gs > 1e-5:
+            t_flame_core_c = (
+                690.0
+                + 215.0 * min(1.12, 1.0 / max(0.72, air_fuel_phi)) * min(1.15, 0.55 + 0.55 * draft_eff)
+                - 65.0 * door_open
+            )
+            t_flame_core_c = float(np.clip(t_flame_core_c, 520.0, 945.0))
+            u_cross_ref = (total_air_g_s * 1e-3) / (0.72 * 9.20e-4)
+            w_plume = 0.98 * math.sqrt(max(0.55, (t_flame_core_c - 35.0) / (t_flame_core_c + 273.15) / 0.72))
+            wick_x_factors = (0.76, 1.24, 1.92)
+            wick_tilt_deg_3 = [
+                round(float(76.5 * math.tanh(math.degrees(math.atan2(max(0.04, u_cross_ref * wf), w_plume)) / 76.5)), 1)
+                for wf in wick_x_factors
+            ]
+            flame_tilt_deg = round(sum(wick_tilt_deg_3) / 3.0, 1)
+
+            # 5 根紫铜烟管 (L=140mm, A_tot=238.4 cm² 含过热管外壁, Hausen 入口发展段 h≈52 W/m²K) 解析 NTU 沿程对流温降:
+            #   T_gas(s) = T_wall + (T_throat - T_wall) * exp(-NTU * s), 杜绝烟管中段被虚假钉死在锅水饱和温度 T_boiler_c!
+            ua_flues_w_k = (1.18 + 0.34 * min(1.4, flue_gas_g_s / 0.95)) * max(0.25, g_flues_lvs)
+            mcp_gas_w_k = max(0.16, (flue_gas_g_s * 1e-3) * 1145.0)
+            ntu_flues = float(np.clip(ua_flues_w_k / mcp_gas_w_k, 0.72, 2.05))
+            t_throat_in_c = max(self.T_boiler_c + 85.0, t_flame_core_c - 35.0 * (1.0 - fb_vac_share))
+            flue_gas_profile_c = [
+                round(self.T_boiler_c + (t_throat_in_c - self.T_boiler_c) * math.exp(-ntu_flues * (k / 7.0)), 1)
+                for k in range(8)
+            ]
+            smokebox_gas_temp_c = flue_gas_profile_c[-1]
+        else:
+            wick_tilt_deg_3 = [0.0, 0.0, 0.0]
+            flame_tilt_deg = 0.0
+            flue_gas_profile_c = [round(self.T_boiler_c, 1)] * 8
+            smokebox_gas_temp_c = round(self.T_boiler_c, 1)
+
+        # 烟室前腔绝热焓混合: 5 烟管出口烟气 (cp≈1.10 kJ/kgK) + 20-7 乏汽 & 17-3 通风蒸汽 (cp≈1.98 kJ/kgK, T≈106°C) -> 18-25 烟囱出口温度
+        mcp_flue_out = flue_gas_g_s * 1.10
+        mcp_steam_jet = (mdot_cyl_exh + mdot_blw) * 1000.0 * 1.98
+        t_jet_steam_c = max(99.5, min(126.0, 0.78 * self.T_cyl_wall_c + 22.0)) if has_steam else 25.0
+        if mcp_flue_out + mcp_steam_jet > 0.02:
+            stack_exit_temp_c = round(
+                (mcp_flue_out * smokebox_gas_temp_c + mcp_steam_jet * t_jet_steam_c) / (mcp_flue_out + mcp_steam_jet),
+                1,
+            )
+        else:
+            stack_exit_temp_c = round(max(25.0, 0.35 * smokebox_gas_temp_c + 0.65 * 25.0), 1)
 
         # 17-5 双 U 四程过热器: 采用 IAPWS 统一比焓—压力 (p, h) 方程解算「湿蒸汽液滴蒸干 (x->1.0) -> 单相过热升温」
         if pino_on and self.ext_pino_burner is not None and ctrl.burner_lit:
@@ -1441,13 +1675,24 @@ class AsterD51Thermo1D:
         f_wet = max(0.0, min(1.0, crown_submerged_mm / 4.0))
         f_wet_tubes = max(0.0, min(1.0, (z_free_static_mm - 18.2) / 26.5))
 
-        q_fire_crown = 0.58 * q_comb_w
-        q_fire_tubes = 0.42 * q_comb_w
+        # Type "C" 锅炉真实两级换热机制 (van Riemsdijk 12-6 退台紫铜锅筒 + 12-4 陶瓷不锈钢耐火导焰风道, 零虚构紫铜湿水腿!):
+        #   1) 12-4 内衬 Templates 2/3 硅酸铝陶瓷纤维面迅速升温至 ~520-680°C 耐火重辐射态，向上方 12-6 紫铜退台冠板集中辐射；
+        #   2) 高温燃气自后部导焰腔向上折转冲刷 X=-47mm 紫铜后管板并进入 5 根烟管，入口发展段 Nusselt 增强 (1 + (d_h/L)^(2/3) ≈ 1.16)!
+        t_liner_target = (
+            self.T_boiler_c + (375.0 + 145.0 * min(1.2, draft_eff)) * (1.0 - 0.25 * door_open)
+            if (ctrl.burner_lit and q_chem_total_w > 5.0)
+            else max(25.0, 0.55 * self.T_crown_c + 0.45 * 25.0)
+        )
+        self.T_firebox_liner_c += min(1.0, 0.22 * dt_th) * (t_liner_target - self.T_firebox_liner_c)
+        nu_entry_mult = 1.0 + (0.0082 / 0.139) ** (2.0 / 3.0)  # Hausen 烟管入口热边界层发展增强因子 ≈ 1.152
+        q_fire_crown = 0.54 * q_comb_w
+        q_fire_tubes = 0.46 * q_comb_w * min(1.08, 0.94 * nu_entry_mult)
         g_dry_cu_cond = 0.68 * (min(1.0, max(0.0, water_ml) / 18.0) ** 0.67)
         g_crown_to_water = 22.0 * f_wet + g_dry_cu_cond * (1.0 - f_wet)
         q_crown_to_water = g_crown_to_water * (self.T_crown_c - self.T_boiler_c)
-        q_waterleg_boil = 0.28 * q_fire_crown * (1.0 - f_wet) * f_wet_tubes
-        q_crown_rad_loss = 0.08 * max(0.0, self.T_crown_c - 25.0)
+        # 后管板喉部与烟管前端在冠板失水初露时仍由下部锅筒水浸没吸热 (替代旧模型不存在的湿火室侧水腿!)
+        q_throat_tubeplate_boil = 0.26 * q_fire_crown * (1.0 - f_wet) * f_wet_tubes
+        q_crown_rad_loss = 0.045 * max(0.0, self.T_firebox_liner_c - 25.0) * (0.35 + 0.65 * door_open)
 
         # 高温干烧状态下突然打入冷水 -> 灼热顶板表面急剧膜态闪蒸直接产生气相超压尖峰 (Flash Steam Spike)
         flash_spike = False
@@ -1467,7 +1712,7 @@ class AsterD51Thermo1D:
             self._flash_overpressure_pa *= math.exp(-1.2 * dt_th)
 
         c_crown = self.M_copper_crown * CP_COPPER
-        dT_crown = (q_fire_crown - q_waterleg_boil - q_crown_to_water - q_crown_rad_loss - q_flash_w) / c_crown
+        dT_crown = (q_fire_crown - q_throat_tubeplate_boil - q_crown_to_water - q_crown_rad_loss - q_flash_w) / c_crown
         self.T_crown_c = max(25.0, min(780.0, self.T_crown_c + dT_crown * dt_th))
 
         if self.T_crown_c > 340.0:
@@ -1511,7 +1756,7 @@ class AsterD51Thermo1D:
             q_rad_shell_w = a_ext_m2 * (ins_cov * qrd_i + (1.0 - ins_cov) * qrd_b)
             q_loss_w = a_ext_m2 * (ins_cov * qcv_i + (1.0 - ins_cov) * qcv_b) + q_rad_shell_w
 
-        q_net_water_w = (q_fire_tubes * (0.16 + 0.84 * f_wet_tubes)) + q_waterleg_boil + q_crown_to_water + q_flash_w - q_loss_w
+        q_net_water_w = (q_fire_tubes * (0.16 + 0.84 * f_wet_tubes)) + q_throat_tubeplate_boil + q_crown_to_water + q_flash_w - q_loss_w
         if q_chem_total_w > 5.0 and ctrl.burner_lit:
             q_useful_tot = max(
                 0.0,
@@ -1667,7 +1912,12 @@ class AsterD51Thermo1D:
             self._ema_evap_gs = raw_evap_gs
         else:
             self._ema_evap_gs += alpha_inst * (raw_evap_gs - self._ema_evap_gs)
-        self._ema_exhaust_gs += alpha_inst * (mdot_cyl_exh * 1000.0 - self._ema_exhaust_gs)
+        raw_exh_gs = mdot_cyl_exh * 1000.0
+        if self._ema_exhaust_gs < 1e-4 and raw_exh_gs > 1e-3:
+            self._ema_exhaust_gs = raw_exh_gs
+        else:
+            self._ema_exhaust_gs += alpha_inst * (raw_exh_gs - self._ema_exhaust_gs)
+        self.last_inst_exhaust_gs = raw_exh_gs
         q_net_pos = max(0.0, q_net_water_w)
         if self._ema_heat_w < 1e-3 and q_net_pos > 1.0:
             self._ema_heat_w = q_net_pos
@@ -1689,7 +1939,11 @@ class AsterD51Thermo1D:
             self._ema_spec_steam *= math.exp(-2.0 * dt)
 
         rpm = (omega_3 / (2.0 * math.pi)) * 60.0
-        v_real_ms = abs(omega_3) * (0.5 * 0.0438) * 32.0
+        # 2010_JNR_D51-standard.pdf & aster-manual.pdf p.6: JNR 1067mm 窄轨机车在 Gauge-1 (45mm) 下严格采用 1:30 缩尺!
+        v_real_ms = abs(omega_3) * (0.5 * 0.0438) * 30.0
+        # aster-manual.pdf p.5: Gauge-1 实测气缸平均有效压力 MEP ≈ 0.30*P_boiler (含小气道与过热管节流)，四动轴黏着轮重 ~40.5 N -> ~0.27 ∈ [0.20, 0.33]
+        te_ideal_n = (0.30 * max(0.0, self.P_boiler - P_ATM) * (0.015 ** 2) * 0.020) / 0.0438
+        adhesion_factor = te_ideal_n / 40.5 if te_ideal_n > 0.05 else 0.256
         dry_alarm = (crown_submerged_mm <= 0.5 and ctrl.burner_lit) or (self.T_crown_c >= 240.0)
         boil_prog = min(100.0, max(0.0, (self.T_boiler_c - 25.0) / 75.0 * 100.0))
 
@@ -1845,6 +2099,28 @@ class AsterD51Thermo1D:
             q_casing_loss_w=round(q_casing_tot_w, 2),
             q_unburned_w=round(q_unburned_w, 2),
             energy_balance_err_pct=round(eb_err_pct, 4),
+            boiler_type="Type-C",
+            firebox_liner_temp_c=round(self.T_firebox_liner_c, 1),
+            slide_valve_lift_mm=round(self.slide_valve_lift_mm, 3),
+            adhesion_factor=round(adhesion_factor, 3),
+            whistle_freq_hz=round(self.whistle_freq_hz, 1),
+            whistle_spl_db=round(self.whistle_spl_db, 1),
+            whistle_dryness_x=round(self.whistle_dryness_x, 4),
+            whistle_wall_temp_c=round(self.T_whistle_wall_c, 1),
+            whistle_sputter=round(self.whistle_sputter, 3),
+            whistle_jet_mach=round(self.whistle_jet_mach, 3),
+            whistle_sound_speed_m_s=round(self.whistle_sound_speed_m_s, 1),
+            firebox_vacuum_pa=round(firebox_vac_pa, 2),
+            grate_air_g_s=round(grate_air_g_s, 3),
+            firehole_air_g_s=round(firehole_air_g_s, 3),
+            flue_gas_g_s=round(flue_gas_g_s, 3),
+            smokebox_gas_temp_c=smokebox_gas_temp_c,
+            stack_exit_temp_c=stack_exit_temp_c,
+            air_fuel_phi=round(air_fuel_phi, 3),
+            flame_tilt_deg=flame_tilt_deg,
+            wick_tilt_deg_3=wick_tilt_deg_3,
+            flue_gas_profile_c=flue_gas_profile_c,
+            backdraft_alarm=backdraft_alarm,
             force_L=F_L,
             force_R=F_R,
             wheel_rpm=rpm,
