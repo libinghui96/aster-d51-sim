@@ -549,16 +549,21 @@ class AsterD51Thermo1D:
             self._hand_pump_pending_kg += avail_ml * 1e-3
 
     def _valve_port_areas(self, q_valve: float, q_center: float) -> Tuple[float, float, float, float]:
+        """
+        Aster D51 外进气平面 D 型滑阀 (1-6) + 交叉气道板 (1-9, aster-manual.pdf p.25 Fig.33):
+          - 滑阀前移 (+xv > e_s): 滑阀后外缘敞开后阀口 -> 经 1-9 交叉气道向【前气缸腔 Head-End】进汽; 同时 D 拱连通前阀口排气 -> 【后气缸腔 Crank-End】排汽;
+          - 滑阀后移 (-xv > e_s): 滑阀前外缘敞开前阀口 -> 经 1-9 交叉气道向【后气缸腔 Crank-End】进汽; 同时 D 拱连通后阀口排气 -> 【前气缸腔 Head-End】排汽。
+        """
         xv = q_valve - q_center
         es = self.calib.steam_lap
         ee = self.calib.exhaust_lap
         wp = self.calib.port_width
         b = self.port_breadth
 
-        a_adm_head = b * min(wp, max(0.0, -xv - es))
-        a_exh_head = b * min(wp, max(0.0, +xv - ee))
-        a_adm_crank = b * min(wp, max(0.0, +xv - es))
-        a_exh_crank = b * min(wp, max(0.0, -xv - ee))
+        a_adm_head = b * min(wp, max(0.0, +xv - es))
+        a_exh_head = b * min(wp, max(0.0, -xv - ee))
+        a_adm_crank = b * min(wp, max(0.0, -xv - es))
+        a_exh_crank = b * min(wp, max(0.0, +xv - ee))
         return a_adm_head, a_exh_head, a_adm_crank, a_exh_crank
 
     def _compute_slide_valve_friction(self, p_pair: np.ndarray, v_valve: float) -> float:
@@ -572,13 +577,17 @@ class AsterD51Thermo1D:
 
     def _compute_walschaerts_cutoff_pct(self, reverser: float) -> float:
         """
-        根据原厂华氏配气机构几何参数 (外余面 e_s=1.36mm, 恒定先导量 lead=0.28mm, 满档半行程 R_max=2.65mm)
-        解析计算给定螺旋逆转机档位 reverser ∈ [-1, +1] 下的理论进汽截止率 (% 行程)。
+        根据标定后的 Aster D51 华氏配气机构几何参数 (合并杆先导半振幅 a_lead ≈ 1.181mm,
+        外余面 e_s = 0.995 * a_lead, 满档满行程半幅 R_max ≈ 2.185 * a_lead ≈ 2.58mm)
+        解析计算螺旋逆转机档位 reverser ∈ [-1, +1] 下的理论进汽截止率 (% 行程)。
         """
         u = min(1.0, abs(float(reverser)))
+        if u < 0.015:
+            return 0.0
         es = self.calib.steam_lap * 1000.0
-        a_lead = es + 0.28
-        b_quad = u * math.sqrt(max(0.0, 2.65 ** 2 - a_lead ** 2))
+        a_lead = es / 0.995
+        r_max = 1.88 * a_lead
+        b_quad = u * math.sqrt(max(0.0, r_max ** 2 - a_lead ** 2))
         r_amp = math.hypot(a_lead, b_quad)
         if r_amp <= es + 1e-6:
             return 0.0

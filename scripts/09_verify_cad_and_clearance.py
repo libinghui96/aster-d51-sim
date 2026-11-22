@@ -503,7 +503,7 @@ def verify_gate_3(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
 
     for rev_cmd in (-1.0, 0.0, +1.0):
         mujoco.mj_resetData(model, data)
-        data.ctrl[ctrl_rev] = rev_cmd * 0.45
+        data.ctrl[ctrl_rev] = rev_cmd * 0.34
         for _ in range(400):
             mujoco.mj_step(model, data)
 
@@ -797,7 +797,7 @@ def verify_gate_6(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]:
     t0 = time.perf_counter()
     for rev_norm in (-1.0, 0.0, +1.0):
         mujoco.mj_resetData(model, data)
-        data.ctrl[ctrl_rev] = rev_norm * 0.55
+        data.ctrl[ctrl_rev] = rev_norm * 0.34
         # 先稳定逆转器到位
         for _ in range(300):
             mujoco.mj_step(model, data)
@@ -2485,9 +2485,9 @@ def verify_gate_18(stl_tris_mm: Dict[str, np.ndarray]) -> Tuple[bool, List[str]]
     }
     sweep_poses = [
         {"j_cab_regulator": 0.0, "j_cab_whistle": 0.0, "j_cab_fire_door": 0.0, "j_cab_bypass": 0.0, "j_cab_drain": -0.0038, "j_reverser": 0.0},
-        {"j_cab_regulator": 1.12, "j_cab_whistle": +0.36, "j_cab_fire_door": 1.40, "j_cab_bypass": +1.30, "j_cab_drain": +0.0038, "j_reverser": 0.45},
-        {"j_cab_regulator": 0.56, "j_cab_whistle": +0.36, "j_cab_fire_door": 0.75, "j_cab_bypass": +0.65, "j_cab_drain": -0.0038, "j_reverser": -0.45},
-        {"j_cab_regulator": 1.12, "j_cab_whistle": 0.0, "j_cab_fire_door": 1.40, "j_cab_bypass": 0.0, "j_cab_drain": +0.0038, "j_reverser": -0.45},
+        {"j_cab_regulator": 1.12, "j_cab_whistle": +0.36, "j_cab_fire_door": 1.40, "j_cab_bypass": +1.30, "j_cab_drain": +0.0038, "j_reverser": 0.34},
+        {"j_cab_regulator": 0.56, "j_cab_whistle": +0.36, "j_cab_fire_door": 0.75, "j_cab_bypass": +0.65, "j_cab_drain": -0.0038, "j_reverser": -0.34},
+        {"j_cab_regulator": 1.12, "j_cab_whistle": 0.0, "j_cab_fire_door": 1.40, "j_cab_bypass": 0.0, "j_cab_drain": +0.0038, "j_reverser": -0.34},
     ]
     min_cab_clear_mm = 999.0
     worst_cab_pair = ("", "")
@@ -4664,10 +4664,10 @@ def verify_gate_29() -> Tuple[bool, List[str]]:
                 t_s = k * 0.001
                 q_pL = cal.q_fdc_L - 0.010 * (1.0 - math.cos(22.0 * t_s))
                 v_pL = -0.010 * 22.0 * math.sin(22.0 * t_s)
-                q_vL = cal.q_valve_center_L - 0.0026 * math.sin(22.0 * t_s + 0.18)
+                q_vL = cal.q_valve_center_L + 0.0026 * math.sin(22.0 * t_s + 0.18)
                 q_pR = cal.q_fdc_R - 0.010 * (1.0 - math.sin(22.0 * t_s))
                 v_pR = 0.010 * 22.0 * math.cos(22.0 * t_s)
-                q_vR = cal.q_valve_center_R + 0.0026 * math.cos(22.0 * t_s + 0.18)
+                q_vR = cal.q_valve_center_R - 0.0026 * math.cos(22.0 * t_s + 0.18)
                 _, _, _, tel_g = gpu_eng.step(0.001, q_pL, v_pL, q_vL, q_pR, v_pR, q_vR, 22.0, 0.0, c_gpu_run, t_s)
             assert tel_g is not None
             sp_g = gpu_eng.spatial
@@ -4777,6 +4777,209 @@ def verify_gate_29() -> Tuple[bool, List[str]]:
         msgs.append(
             f"PASS: Blueprint conduit bounds (flues X_max=+{flue_x_max_mm:.1f}mm at tubeplate, 17-5 SH X_max=+{sh_x_max_mm:.1f}/Z_max=+{sh_z_max_mm:.1f}mm, "
             f"all 38 pipes Z_max=+{max_hw_pipe_z_mm:.1f}mm -> zero pipes in chimney!) & 4-regime Liquid(💧)/Steam(➤)/Unconfined-Gas(») taxonomy verified"
+        )
+
+    return ok, msgs
+
+
+# ==============================================================================
+# Gate 30: Stage 26 全车连杆与华氏配气机构图纸 1:1 真实还原、1-9 交叉气道板、
+#          恒定正先导量、零中立蠕动与零月牙槽顶死门禁
+# ==============================================================================
+
+def verify_gate_30() -> Tuple[bool, List[str]]:
+    """
+    Gate 30 (Stage 26 Blueprint Linkage, Walschaerts Inclined-Layout & 1-9 Cross-Port Plate Truth):
+      30.1 核验 configs/d51_kinematics.json 与 models/d51_full.xml:
+           - 滞后倾斜回动曲柄相位 return_crank_phase_deg ∈ [+92°, +98°] (aster-manual.pdf Fig.31(3));
+           - 合并杆顶部销孔 s_comb_radius_L 严格高于阀杆销孔 s_comb_valve_L (+2.70 mm, イラスト 9 & Fig.33);
+           - 启用 1-9 交叉气道板 (has_cross_port_plate_1_9=True)、耦合杆 7.7mm 铰接偏移 (イラスト 7) 与 p43 纵向比例真值;
+      30.2 全 360°×3 (前进/中立/倒车 ±0.38 rad) 运动学扫掠核验:
+           - 前进/中立/倒车在 FDC 处均具备恒定正先导量 (+1.05..+1.35mm), 漂移 <= 0.05 mm (杜绝倒车负先导!);
+           - 左右月牙滑块 j_die_shift_L/R 全行程严禁触碰硬限位 (杜绝反向撬起第 3 动轮!);
+           - 前进与倒车满档滑阀总行程均 >= 4.20 mm (充分开启全进汽口);
+      30.3 耦合 1D-3D 热机配气核验:
+           - 3.8 kgf/cm² 中立位死锁 |RPM| < 1.0 (消除 21.5 RPM 中立蠕动);
+           - 1.0 kgf/cm² 冷态气密正反转强劲自启动 (|ω| > 10 rad/s);
+           - 3.5 kgf/cm² 满档进汽截止率理论遥测与实测运动学截止率误差 <= 5.0%, 且 Python/TS 双端 1-9 交叉气道符号一致。
+    """
+    import mujoco
+    from sim.run_cosim import calibrate_model_and_valves
+    from sim.thermo_1d import AsterD51Thermo1D, CabControls, P_ATM, PA_PER_KGF_CM2
+
+    ok = True
+    msgs: List[str] = []
+
+    cfg = json.loads((PROJECT_ROOT / "configs" / "d51_kinematics.json").read_text(encoding="utf-8"))
+    wa = cfg["wheels_and_axles"]
+    rc = cfg["cylinder_and_rods"]
+    vg = cfg["walschaerts_valve_gear"]
+
+    model = mujoco.MjModel.from_xml_path(str(PROJECT_ROOT / "models" / "d51_full.xml"))
+    sid_rad = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "s_comb_radius_L")
+    sid_val = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "s_comb_valve_L")
+    dz_comb_mm = (float(model.site_pos[sid_rad][2]) - float(model.site_pos[sid_val][2])) * 1000.0
+
+    geom_ok = (
+        92.0 <= float(vg["return_crank_phase_deg"]) <= 98.0
+        and vg.get("comb_lever_top_pin") == "radius_rod_2_1"
+        and abs(dz_comb_mm - float(vg["comb_lever_lap_lead_offset"])) <= 0.05
+        and bool(rc.get("has_cross_port_plate_1_9", False))
+        and abs(float(wa["coupling_knuckle_offset"]) - 7.7) <= 0.1
+        and abs(float(rc["cylinder_center_x"]) - 129.0) <= 0.2
+        and abs(float(rc["valve_axis_z"]) - 13.5) <= 0.2
+        and abs(float(rc["main_rod_length"]) - 98.5) <= 0.2
+        and abs(float(vg["trunnion_x"]) - 58.8) <= 0.2
+        and abs(float(vg["reverser_shaft_x"]) - 39.3) <= 0.2
+        and abs(float(vg["crosshead_drop"]) - 6.7) <= 0.2
+        and abs(float(vg["comb_lever_total_length"]) - 22.8) <= 0.2
+    )
+    if not geom_ok:
+        ok = False
+        msgs.append(
+            f"FAIL: Blueprint Walschaerts/linkage contract mismatch: rc_phase={vg['return_crank_phase_deg']}°, "
+            f"comb_top={vg.get('comb_lever_top_pin')} (Δz={dz_comb_mm:.2f}mm), xport={rc.get('has_cross_port_plate_1_9')}, "
+            f"knuckle={wa['coupling_knuckle_offset']}mm, cyl_x={rc['cylinder_center_x']}mm, z_val={rc['valve_axis_z']}mm"
+        )
+    else:
+        msgs.append(
+            f"PASS: Blueprint Walschaerts & driving-rod geometry locked (lagging inclined return crank "
+            f"+{vg['return_crank_phase_deg']:.2f}°, Top=2-1 RadiusRod Δz=+{dz_comb_mm:.2f}mm over 1-22 ValveStem, "
+            f"1-9 Cross-Port Plate, 7.7mm knuckle, L_main=98.5mm, X_cyl=129.0mm, Z_val=13.5mm)"
+        )
+
+    # 30.2 360°×3 恒定正先导量 & 零月牙槽顶死扫掠
+    calib = calibrate_model_and_valves(model)
+    act_rev = model.actuator("reverser_ctrl").id
+    qvel_w3 = model.joint("j_wheel_3").dofadr[0]
+    qpos_w3 = model.joint("j_wheel_3").qposadr[0]
+    s_vL = model.sensor("valve_pos_L").adr[0]
+    jid_dL = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "j_die_shift_L")
+    jid_dR = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "j_die_shift_R")
+    die_lim = float(model.jnt_range[jid_dL][1])
+
+    fdc_leads: Dict[str, float] = {}
+    strokes: Dict[str, float] = {}
+    max_die_frac = 0.0
+    saved_flags = model.opt.disableflags
+    model.opt.disableflags = saved_flags | mujoco.mjtDisableBit.mjDSBL_CONTACT | mujoco.mjtDisableBit.mjDSBL_GRAVITY
+    try:
+        for tag, rcmd in (("FWD", +0.34), ("N", 0.0), ("REV", -0.34)):
+            dd = mujoco.MjData(model)
+            dd.ctrl[act_rev] = rcmd
+            for _ in range(350):
+                dd.qfrc_applied[qvel_w3] = 0.04 * (0.0 - dd.qvel[qvel_w3])
+                mujoco.mj_step(model, dd)
+            xvs = []
+            xv_fdc = None
+            for k in range(3200):
+                dd.qfrc_applied[qvel_w3] = 0.05 * (2.0 * math.pi - dd.qvel[qvel_w3])
+                mujoco.mj_step(model, dd)
+                if k >= 900:
+                    th = float(dd.qpos[qpos_w3]) % (2.0 * math.pi)
+                    xv = (float(dd.sensordata[s_vL]) - calib.q_valve_center_L) * 1000.0
+                    xvs.append(xv)
+                    if xv_fdc is None and abs(th) < 0.03:
+                        xv_fdc = xv
+                    max_die_frac = max(
+                        max_die_frac,
+                        abs(float(dd.qpos[model.jnt_qposadr[jid_dL]])) / max(1e-6, die_lim),
+                        abs(float(dd.qpos[model.jnt_qposadr[jid_dR]])) / max(1e-6, die_lim),
+                    )
+            fdc_leads[tag] = float(xv_fdc) if xv_fdc is not None else 0.0
+            strokes[tag] = float(max(xvs) - min(xvs))
+    finally:
+        model.opt.disableflags = saved_flags
+
+    lead_drift = max(fdc_leads.values()) - min(fdc_leads.values())
+    kin_ok = (
+        all(1.05 <= v <= 1.35 for v in fdc_leads.values())
+        and lead_drift <= 0.05
+        and max_die_frac < 0.99
+        and strokes["FWD"] >= 4.20
+        and strokes["REV"] >= 4.20
+    )
+    if not kin_ok:
+        ok = False
+        msgs.append(
+            f"FAIL: Constant-lead / die-slot kinematic sweep failed: xv@FDC={fdc_leads} (drift={lead_drift:.3f}mm), "
+            f"strokes={strokes}, max_die_frac={max_die_frac:.3f}"
+        )
+    else:
+        msgs.append(
+            f"PASS: 360°×3 constant positive lead verified (xv@FDC: FWD={fdc_leads['FWD']:+.3f}, N={fdc_leads['N']:+.3f}, "
+            f"REV={fdc_leads['REV']:+.3f}mm, drift={lead_drift:.3f}mm <= 0.05mm; strokes FWD={strokes['FWD']:.2f}/REV={strokes['REV']:.2f}mm; "
+            f"max die_slot usage={max_die_frac*100:.1f}% < 99%)"
+        )
+
+    # 30.3 耦合热机中立锁死 (<1 RPM)、冷态气密正反转、截止率遥测一致及 Python/TS 交叉气道符号同步
+    def _run_coupled(p_kgf: float, rev_u: float, n_steps: int = 3200):
+        dd = mujoco.MjData(model)
+        th = AsterD51Thermo1D(calib)
+        th.reset_hot_ready()
+        th.P_boiler = P_ATM + p_kgf * PA_PER_KGF_CM2
+        th.P_steam_chest = P_ATM + p_kgf * PA_PER_KGF_CM2
+        th.T_cyl_wall_c = 135.0
+        th.M_cond_L[:] = 0.0
+        th.M_cond_R[:] = 0.0
+        ctrl = CabControls(regulator=1.0, reverser=rev_u, burner_lit=False, drain_cock=False)
+        a_fL = model.actuator("steam_force_L").id
+        a_fR = model.actuator("steam_force_R").id
+        spL, svL, svalL = model.sensor("piston_pos_L").adr[0], model.sensor("piston_vel_L").adr[0], model.sensor("valve_pos_L").adr[0]
+        spR, svR, svalR = model.sensor("piston_pos_R").adr[0], model.sensor("piston_vel_R").adr[0], model.sensor("valve_pos_R").adr[0]
+        sw3, spr = model.sensor("wheel3_omega").adr[0], model.sensor("pump_ram_vel").adr[0]
+        oms = []
+        tel_last = None
+        for k in range(n_steps):
+            th.P_boiler = P_ATM + p_kgf * PA_PER_KGF_CM2
+            dd.ctrl[act_rev] = rev_u * 0.34
+            res = th.step(
+                model.opt.timestep,
+                float(dd.sensordata[spL]), float(dd.sensordata[svL]), float(dd.sensordata[svalL]),
+                float(dd.sensordata[spR]), float(dd.sensordata[svR]), float(dd.sensordata[svalR]),
+                float(dd.sensordata[sw3]), float(dd.sensordata[spr]),
+                ctrl,
+            )
+            dd.ctrl[a_fL] = res[0]
+            dd.ctrl[a_fR] = res[1]
+            tel_last = res[-1]
+            mujoco.mj_step(model, dd)
+            if k >= n_steps - 600:
+                oms.append(float(dd.sensordata[sw3]))
+        om_m = float(np.mean(oms))
+        return om_m, om_m * 60.0 / (2.0 * math.pi), float(tel_last.cutoff_pct), float(th._measured_cutoff_pct)
+
+    om_n, rpm_n, cut_n, _ = _run_coupled(3.8, 0.0)
+    om_1f, rpm_1f, _, _ = _run_coupled(1.0, +1.0)
+    om_1r, rpm_1r, _, _ = _run_coupled(1.0, -1.0)
+    om_3f, rpm_3f, cut_3f, mcut_3f = _run_coupled(3.5, +1.0)
+
+    py_src = (PROJECT_ROOT / "sim" / "thermo_1d.py").read_text(encoding="utf-8")
+    ts_src = (PROJECT_ROOT / "web" / "src" / "thermo1d.ts").read_text(encoding="utf-8")
+    xport_code_ok = (
+        "a_adm_head = b * min(wp, max(0.0, +xv - es))" in py_src
+        and "a_adm_crank = b * min(wp, max(0.0, -xv - es))" in py_src
+        and "b * Math.min(wp, Math.max(0.0, +xv - es))" in ts_src
+        and "b * Math.min(wp, Math.max(0.0, -xv - es))" in ts_src
+    )
+    coupled_ok = (
+        abs(rpm_n) < 1.0
+        and cut_n <= 0.5
+        and om_1f > 10.0
+        and om_1r < -10.0
+        and abs(cut_3f - mcut_3f) <= 5.0
+        and xport_code_ok
+    )
+    if not coupled_ok:
+        ok = False
+        msgs.append(
+            f"FAIL: Coupled 1-9 cross-port thermo check failed: N_rpm={rpm_n:+.2f} (cut={cut_n:.1f}%), "
+            f"1kgf_F={om_1f:+.2f}/R={om_1r:+.2f} rad/s, 3.5kgf_F cut={cut_3f:.1f}% vs meas={mcut_3f:.1f}%, xport_code={xport_code_ok}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Coupled 1-9 Cross-Port thermo-kinematics verified (3.8kgf Neutral={rpm_n:+.2f} RPM locked; "
+            f"1.0kgf Air-Test FWD={om_1f:+.1f}/REV={om_1r:+.1f} rad/s; 3.5kgf cutoff={cut_3f:.1f}% vs meas={mcut_3f:.1f}%; Python+TS parity OK)"
         )
 
     return ok, msgs
@@ -4967,11 +5170,18 @@ def main() -> int:
         print(f"  - {m}")
     all_ok &= g29_ok
 
+    hw_guard.cooldown_if_needed()
+    g30_ok, g30_msgs = verify_gate_30()
+    print(f"\n[Gate 30] Stage 26 Blueprint Walschaerts Linkage, 1-9 Cross-Port Plate, Constant Lead & Neutral Lock -> {'PASS' if g30_ok else 'FAIL'}")
+    for m in g30_msgs:
+        print(f"  - {m}")
+    all_ok &= g30_ok
+
     snap = hw_guard.read_metrics()
     print(f"\n[Thermal/Power Guard] Post-run telemetry: CPU={snap['cpu_c']:.1f}°C | GPU={snap['gpu_c']:.1f}°C | GPU_Power={snap['gpu_w']:.1f}W")
     print("=" * 88)
     if all_ok:
-        print(" [ALL GATES 1-29 PASSED] STAGE 24 (CROSSFLOW FLAME TRAJECTORY + FULL BOILER GAS NETWORK + EXTERIOR INTERACTION) VERIFIED 100%")
+        print(" [ALL GATES 1-30 PASSED] STAGE 26 (1:1 BLUEPRINT WALSCHAERTS LINKAGE + 1-9 CROSS-PORT PLATE + CONSTANT LEAD) VERIFIED 100%")
         print("=" * 88)
         return 0
     else:

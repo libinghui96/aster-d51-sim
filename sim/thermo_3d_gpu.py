@@ -558,20 +558,20 @@ class AsterD51Thermo3DGPU:
 
         # === Domain 4: 左右双缸 + 1-6 移动滑阀 + 1-31 移动活塞 [-16, +18] × [-9, +9] × [-10, +25] mm (2×160×64×80) ===
         _, nx4, ny4, nz4 = self.D4_SHAPE
-        self.d4_xr, self.d4_yr, self.d4_zr = (-16.0, 18.0), (-9.0, 9.0), (-10.0, 25.0)
+        self.d4_xr, self.d4_yr, self.d4_zr = (-16.0, 18.0), (-9.0, 10.5), (-10.0, 25.0)
         self.d4_dx_mm = (self.d4_xr[1] - self.d4_xr[0]) / (nx4 - 1)
         tris_cyl_d4 = tris_cyl_L.copy()
         tris_cyl_d4[:, :, 0] -= 4.2
         s4_cyl = voxelize_stl_cuda(tris_cyl_d4, self.d4_xr, self.d4_yr, self.d4_zr, (nx4, ny4, nz4), dev)
 
         tris_val_in_cyl = tris_val_L.copy()
-        tris_val_in_cyl[:, :, 0] += (109.574 - 130.2)
-        tris_val_in_cyl[:, :, 1] += 0.0
-        tris_val_in_cyl[:, :, 2] += 18.5
+        tris_val_in_cyl[:, :, 0] -= 23.4
+        tris_val_in_cyl[:, :, 1] += 3.5
+        tris_val_in_cyl[:, :, 2] += 13.5
         self.s4_valve_tpl = voxelize_stl_cuda(tris_val_in_cyl, self.d4_xr, self.d4_yr, self.d4_zr, (nx4, ny4, nz4), dev)
 
         tris_pis_in_cyl = tris_pis_L.copy()
-        tris_pis_in_cyl[:, :, 0] -= 38.2
+        tris_pis_in_cyl[:, :, 0] -= 34.7
         self.s4_piston_tpl = voxelize_stl_cuda(tris_pis_in_cyl, self.d4_xr, self.d4_yr, self.d4_zr, (nx4, ny4, nz4), dev)
 
         xs4 = torch.linspace(self.d4_xr[0], self.d4_xr[1], nx4, device=dev)
@@ -580,18 +580,27 @@ class AsterD51Thermo3DGPU:
         X4, Y4, Z4 = torch.meshgrid(xs4, ys4, zs4, indexing="ij")
         self.X4, self.Y4, self.Z4 = X4, Y4, Z4
         r4_bore = torch.hypot(Y4, Z4)
-        in_bore = (X4 >= -11.5) & (X4 <= 12.2) & (r4_bore <= 7.50)
-        in_chest = (X4 >= -10.2) & (X4 <= 11.2) & (Y4 >= -2.2) & (Y4 <= 6.8) & (Z4 >= 14.8) & (Z4 <= 22.0)
-        port_head = ((X4 - (3.8 + 0.85 * (15.4 - Z4))).abs() <= 0.95) & (Y4.abs() <= 3.3) & (Z4 >= 7.0) & (Z4 <= 15.8)
-        port_crank = ((X4 - (-3.8 - 0.85 * (15.4 - Z4))).abs() <= 0.95) & (Y4.abs() <= 3.3) & (Z4 >= 7.0) & (Z4 <= 15.8)
-        port_exh = (X4.abs() <= 1.25) & (Y4.abs() <= 3.3) & (Z4 >= 12.5) & (Z4 <= 15.8)
-        self.d4_mirror_head = ((X4 - 3.8).abs() <= 0.80) & (Y4.abs() <= 3.1) & (Z4 >= 15.45) & (Z4 <= 16.35)
-        self.d4_mirror_crank = ((X4 + 3.8).abs() <= 0.80) & (Y4.abs() <= 3.1) & (Z4 >= 15.45) & (Z4 <= 16.35)
+        in_bore = (X4 >= -10.5) & (X4 <= 12.2) & (r4_bore <= 7.50)
+        in_chest = (X4 >= -9.1) & (X4 <= 10.7) & (Y4 >= -0.3) & (Y4 <= 7.3) & (Z4 >= 10.8) & (Z4 <= 20.6)
+        # 1-9 真三维交叉气道 (Cross-Porting, 双管 Z 错层墙厚 >=2.0mm): 后阀口(X4=-4.0)->前缸腔(Head); 前阀口(X4=+4.0)->后缸腔(Crank)
+        port_head = (
+            (((X4 + 4.0).abs() <= 0.90) & (Y4 >= 1.5) & (Y4 <= 8.5) & (Z4 >= 4.6) & (Z4 <= 11.4))
+            | ((X4 >= -4.8) & (X4 <= 10.6) & ((Y4 - 7.8).abs() <= 0.90) & ((Z4 - 5.4).abs() <= 0.90))
+            | (((X4 - 10.0).abs() <= 0.90) & (Y4 >= -0.8) & (Y4 <= 8.5) & (Z4 >= 4.5) & (Z4 <= 6.2))
+        )
+        port_crank = (
+            (((X4 - 4.0).abs() <= 0.90) & (Y4 >= 1.5) & (Y4 <= 9.1) & (Z4 >= 8.6) & (Z4 <= 11.4))
+            | ((X4 >= -8.8) & (X4 <= 4.8) & ((Y4 - 8.4).abs() <= 0.90) & ((Z4 - 9.4).abs() <= 0.90))
+            | (((X4 + 8.2).abs() <= 0.90) & (Y4 >= -0.8) & (Y4 <= 9.1) & (Z4 >= 4.5) & (Z4 <= 10.0))
+        )
+        port_exh = (X4.abs() <= 1.25) & (Y4 >= 1.5) & (Y4 <= 5.5) & (Z4 >= 8.2) & (Z4 <= 11.4)
+        self.d4_mirror_head = ((X4 + 4.0).abs() <= 0.80) & (Y4 >= 1.5) & (Y4 <= 5.5) & (Z4 >= 10.85) & (Z4 <= 11.85)
+        self.d4_mirror_crank = ((X4 - 4.0).abs() <= 0.80) & (Y4 >= 1.5) & (Y4 <= 5.5) & (Z4 >= 10.85) & (Z4 <= 11.85)
         self.d4_housing_cavity = ((in_bore | in_chest | port_head | port_crank | port_exh) & ((s4_cyl < 0.5) | port_head | port_crank | port_exh)).float()
         self.d4_bore_mask = in_bore.float()
         self.d4_rod_mask = (r4_bore <= 1.50).float()
         self.d4_bot_weight = torch.sigmoid((-Z4 - 2.5) / 1.8).contiguous()
-        self.d4_chest_inlet = ((X4 >= -3.0) & (X4 <= 3.0) & (Y4.abs() <= 3.2) & (Z4 >= 21.0)).float() * self.d4_housing_cavity
+        self.d4_chest_inlet = ((X4 >= -5.5) & (X4 <= 3.0) & (Y4 >= -1.0) & (Y4 <= 5.5) & (Z4 >= 17.5)).float() * self.d4_housing_cavity
         self.d4_dy_dz_m2 = ((self.d4_yr[1] - self.d4_yr[0]) / (ny4 - 1) * 1e-3) * ((self.d4_zr[1] - self.d4_zr[0]) / (nz4 - 1) * 1e-3)
 
         self._build_pino_d4_masks(s4_cyl)
@@ -1561,10 +1570,10 @@ class AsterD51Thermo3DGPU:
             c_fill = min(0.85, float(cond_pair_list[s_i][0] + cond_pair_list[s_i][1]) / (2.0 * self.core1d.V_clear * RHO_LIQ_WATER + 1e-9))
             cond_list.append(c_fill * f_m)
 
-            oh_adm = min(1.0, max(0.0, (-xv_mm - es_mm) / wp_mm))
-            oh_exh = min(1.0, max(0.0, (+xv_mm - ee_mm) / wp_mm))
-            oc_adm = min(1.0, max(0.0, (+xv_mm - es_mm) / wp_mm))
-            oc_exh = min(1.0, max(0.0, (-xv_mm - ee_mm) / wp_mm))
+            oh_adm = min(1.0, max(0.0, (+xv_mm - es_mm) / wp_mm))
+            oh_exh = min(1.0, max(0.0, (-xv_mm - ee_mm) / wp_mm))
+            oc_adm = min(1.0, max(0.0, (-xv_mm - es_mm) / wp_mm))
+            oc_exh = min(1.0, max(0.0, (+xv_mm - ee_mm) / wp_mm))
             scal_rows.append([oh_adm, oh_exh, oc_adm, oc_exh, min(1.2, dp_chest_bar / 4.0), subcool_norm])
 
         fluid_4c = torch.cat(fluid_list, dim=0)
@@ -2079,9 +2088,9 @@ class AsterD51Thermo3DGPU:
         for s_i in (0, 1):
             open_h_mag = ((val_pair[s_i] < 0.5) & self.d4_mirror_head).float().sum() / mh_sum
             open_c_mag = ((val_pair[s_i] < 0.5) & self.d4_mirror_crank).float().sum() / mc_sum
-            # 外进气 D 型滑阀符号判定: 阀芯向后移 (xv < -0.5mm) 时前腔(+3.8mm)外缘进汽(+)、后腔(-3.8mm)内拱排汽(-)；反之亦然！
-            sgn_h = 1.0 if xv_pair[s_i] < -0.4 else (-1.0 if xv_pair[s_i] > +0.4 else 0.0)
-            sgn_c = 1.0 if xv_pair[s_i] > +0.4 else (-1.0 if xv_pair[s_i] < -0.4 else 0.0)
+            # 外进气 D 型滑阀 + 1-9 交叉气道板符号判定: 阀芯前移 (xv > +0.4mm) 时后阀口(X4=-4mm)外缘进汽->交叉通向前缸腔 Head(+), 前阀口(X4=+4mm)内拱排汽->后缸腔 Crank(-)；反之亦然！
+            sgn_h = 1.0 if xv_pair[s_i] > +0.4 else (-1.0 if xv_pair[s_i] < -0.4 else 0.0)
+            sgn_c = 1.0 if xv_pair[s_i] < -0.4 else (-1.0 if xv_pair[s_i] > +0.4 else 0.0)
             probes.append(open_h_mag * sgn_h)
             probes.append(open_c_mag * sgn_c)
 

@@ -460,14 +460,16 @@ export class AsterD51Thermo1D {
   }
 
   private valveAreas(qVal: number, qCenter: number): [number, number, number, number] {
+    // Aster D51 外进气平面 D 型滑阀 (1-6) + 1-9 交叉气道板 (aster-manual.pdf p.25 Fig.33):
+    // +xv 敞开后阀口 -> 交叉通前气缸腔(Head)进汽; -xv 敞开前阀口 -> 交叉通后气缸腔(Crank)进汽
     const xv = qVal - qCenter;
     const { steamLap: es, exhaustLap: ee, portWidth: wp } = this.calib;
     const b = this.portBreadth;
     return [
-      b * Math.min(wp, Math.max(0.0, -xv - es)),
-      b * Math.min(wp, Math.max(0.0, +xv - ee)),
       b * Math.min(wp, Math.max(0.0, +xv - es)),
       b * Math.min(wp, Math.max(0.0, -xv - ee)),
+      b * Math.min(wp, Math.max(0.0, -xv - es)),
+      b * Math.min(wp, Math.max(0.0, +xv - ee)),
     ];
   }
 
@@ -1221,11 +1223,15 @@ export class AsterD51Thermo1D {
 
     const uRev = Math.min(1.0, Math.abs(ctrl.reverser));
     const esMm = this.calib.steamLap * 1000.0;
-    const aLead = esMm + 0.28;
-    const bQuad = uRev * Math.sqrt(Math.max(0.0, 2.65 * 2.65 - aLead * aLead));
+    const aLead = esMm / 0.995;
+    const rMax = 1.88 * aLead;
+    const bQuad = uRev * Math.sqrt(Math.max(0.0, rMax * rMax - aLead * aLead));
     const rAmp = Math.hypot(aLead, bQuad);
     const phiW = Math.atan2(aLead, Math.max(1e-9, bQuad));
-    const thCut = rAmp > esMm ? Math.max(0.0, Math.min(Math.PI, Math.PI - phiW - Math.asin(Math.min(1.0, esMm / rAmp)))) : 0.0;
+    const thCut =
+      uRev >= 0.015 && rAmp > esMm
+        ? Math.max(0.0, Math.min(Math.PI, Math.PI - phiW - Math.asin(Math.min(1.0, esMm / rAmp))))
+        : 0.0;
     const cutoffPct = 50.0 * (1.0 - Math.cos(thCut));
     const pumpVacKpa = pumpSuctActive ? 18.0 * Math.min(1.0, Math.abs(vPumpRam) / 0.04) : 0.0;
     const trueEvapGS = this.M_waterKg <= 1e-6 ? 0.0 : evapRateKgS * 1000.0;

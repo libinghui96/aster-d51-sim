@@ -61,8 +61,8 @@ def calibrate_model_and_valves(model: mujoco.MjModel) -> CylinderCalibration:
     """
     j_rev = model.joint("j_reverser").id
     act_rev = model.actuator("reverser_ctrl").id
-    model.jnt_range[j_rev] = [-0.48, 0.48]
-    model.actuator_ctrlrange[act_rev] = [-0.46, 0.46]
+    model.jnt_range[j_rev] = [-0.36, 0.36]
+    model.actuator_ctrlrange[act_rev] = [-0.34, 0.34]
     model.actuator_gainprm[act_rev, 0] = 60.0
     model.actuator_biasprm[act_rev, 1] = -60.0
 
@@ -117,7 +117,7 @@ def calibrate_model_and_valves(model: mujoco.MjModel) -> CylinderCalibration:
         stroke=stroke,
         q_valve_center_L=center_L,
         q_valve_center_R=center_R,
-        steam_lap=0.99 * lead_amp,  # 精确匹配中立先导振幅 (保留 1% 微先导)，确保 3.8kgf 中立档严密锁止且 1.0kgf 冷态正反转强劲自启动
+        steam_lap=0.995 * lead_amp,  # 精确匹配中立先导振幅 (0.5% 微先导), 确保 3.8kgf 中立档严密锁止 (<1 RPM) 且 1.0kgf 冷态正反转强劲自启动
         exhaust_lap=0.02 * lead_amp,
         port_width=0.95 * lead_amp,
     )
@@ -602,7 +602,7 @@ class CoSimRunner:
 
         self.data.ctrl[self.act_fL] = F_L
         self.data.ctrl[self.act_fR] = F_R
-        self.data.ctrl[self.act_rev] = self.ctrl.reverser * 0.45
+        self.data.ctrl[self.act_rev] = self.ctrl.reverser * 0.34
 
         # 施加平面滑阀背压摩擦反力 (O3-2)、给水泵双向抽吸/压送液压负载与运行阻力
         self.data.qfrc_applied[self.qvel_valL] = tel.valve_friction_L

@@ -15,10 +15,10 @@
 修改任何物理或几何参数时，必须严格遵守原厂图纸与标准件锁死的真值：
 - **轨距与曲线半径**：轨距 `45.0 mm`，最小通过曲线半径 `R2m (2000 mm)`；先导台车支点 (`20-6`) 含 `10.0 mm` 前后双孔调节。
 - **主气缸与活塞 (`イラスト 1`)**：活塞环为 `PR-15`，锁死主气缸内径 **Bore = 15.0 mm**（无杆前腔面积 $176.71\text{ mm}^2$）；活塞杆密封为 `PF3-1.9`，锁死杆径 **3.0 mm**（有杆后腔面积 $169.65\text{ mm}^2$）；阀芯杆密封为 `PF2-1.5`，杆径 **2.0 mm**。
-- **左右曲柄正交相位 (`Quartering`, 图 9.5)**：第 3 动轮 (`5-7`) 为主动轮，右侧动轮曲柄相对左侧严格滞后 **90°**（`theta_L = 0°`, `theta_R = -90°`），确保每转 4 次交替排气且无启动死点。
-- **华氏配气机构 (`Walschaerts Valve Gear`, 图 9.2 & イラスト 2/9)**：
-  - 回动曲柄 (`7-10`) 偏心销孔距动轮中心严格为 **7.0 mm**，与主曲柄呈 **90°** 相位角。
-  - 采用外进气平面 D 型滑阀 (`1-6`)，中立位 `N` 时滑块 (`2-3`) 位于月牙加减链 (`2-4`) 定轴旋转中心。
+- **左右曲柄正交相位 (`Quartering`, 图 9.5 & `aster-manual.pdf` p. 22)**：第 3 动轮 (`5-7`) 为主动轮，右侧动轮曲柄相对左侧严格**超前 90°（`Right-Hand Lead`）**（`theta_L = 0°` 前死点时 `theta_R = -90°` 位于下死点，顺时针前进转动时右缸先达死点），确保每转 4 次交替排气且无启动死点。
+- **华氏配气机构 (`Walschaerts Valve Gear` + `1-9` 交叉气道板, 图 9.2, イラスト 1/2/9 & `aster-manual.pdf` pp. 22–25 `Fig. 30–33`)**：
+  - 回动曲柄 (`7-10`) 偏心销孔距动轮中心严格为 **7.0 mm**，按倾斜偏心杆补偿角滞后主曲柄 **`+94.64°`**，配合月牙尾偏角 `+3.15°` 实现前/中/倒全档位恒定正先导（漂移 `<= 0.05 mm`）。
+  - 合并杆 (`1-23`) **顶销接心向棒 (`2-1`)、次上销接阀杆 (`1-22`, `Z = +13.5 mm`, 间距 `2.7 mm`)**，气缸内部采用 **Aster 专用 `1-9` 交叉气道板（Cross-Port Plate）**（后阀口交叉通前缸腔、前阀口交叉通后缸腔），匹配外进气平面 D 型滑阀 (`1-6`) 与中立死锁（`3.8 kgf/cm²` 下 `|RPM| < 1.0`）。
 - **动轮横动游隙 (图 5.1)**：第 1 动轮 (`5-5`) 轴箱内距 `8.5 mm`，第 4 动轮 (`5-8`) 轴箱内距 `6.5 mm`（首轴具备额外横动量以适应弯道）。
 - **锅炉、燃烧与安全阀 (`試運転` 章节)**：
   - 锅筒前管板内衬直径 `ø53.0 mm` (`Template 6`)，烟室外径约 `64.9 mm`、长 `70.0 mm` (`Template 5`)，火室 `65 × 49 × 47 mm` (`Template 2`)。
@@ -53,7 +53,7 @@
 - 重新构建全车 CAD 网格与材料惯量库：`python scripts/02_build_cad_meshes.py`
 - 重新编译全车 MJCF（滚轮台 / 直线轨道 / R2m 弯道）：`python scripts/03_generate_mjcf.py --mode roller` （或 `--mode track --out models/d51_track.xml` / `--mode curve_r2m --out models/d51_r2m.xml`）
 - 运行全车 38 路流体网表与 8 腔室隔离 GPU 三维体素 Fluid-LVS 验证：`python -m sim.fluid_topology_lvs --xml models/d51_track.xml --topology configs/d51_fluid_topology.json --out configs/d51_fluid_lvs_report.json`
-- 运行五层系统架构、CAD 拓扑完整性、Fluid-LVS、10轴等线速滚动、Type-"C" 锅炉、汽笛声学与全锅炉气体/火焰动力学门禁（Gates 1–29）：`python scripts/09_verify_cad_and_clearance.py`
+- 运行五层系统架构、CAD 拓扑完整性、Fluid-LVS、10轴等线速滚动、Type-"C" 锅炉、汽笛声学、全锅炉气体/火焰动力学与 1:1 华氏交叉气道配气门禁（Gates 1–30）：`python scripts/09_verify_cad_and_clearance.py`
 - R2m vs R3m 先导支点过弯脱线分析：`python scripts/04_analyze_r2m_derailment.py`
 - RTX 5080 烟室 3D CFD 标定查找表生成：`python scripts/06_gpu_smokebox_cfd.py`
 - RTX 5080 并行参数辨识与自动司炉寻优：`python scripts/07_gpu_fireman_opt.py`

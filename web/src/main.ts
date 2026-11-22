@@ -447,10 +447,10 @@ async function main() {
 
     const jRev = objId(mujoco.mjtObj.mjOBJ_JOINT, "j_reverser");
     const actRev = objId(mujoco.mjtObj.mjOBJ_ACTUATOR, "reverser_ctrl");
-    model.jnt_range[2 * jRev] = -0.48;
-    model.jnt_range[2 * jRev + 1] = 0.48;
-    model.actuator_ctrlrange[2 * actRev] = -0.46;
-    model.actuator_ctrlrange[2 * actRev + 1] = 0.46;
+    model.jnt_range[2 * jRev] = -0.36;
+    model.jnt_range[2 * jRev + 1] = 0.36;
+    model.actuator_ctrlrange[2 * actRev] = -0.34;
+    model.actuator_ctrlrange[2 * actRev + 1] = 0.34;
     model.actuator_gainprm[10 * actRev] = 60.0;
     model.actuator_biasprm[10 * actRev + 1] = -60.0;
 
@@ -541,7 +541,7 @@ async function main() {
       stroke: model.jnt_range[2 * jPL + 1] - model.jnt_range[2 * jPL] - 0.004,
       qValveCenterL: 0.5 * (vMaxL + vMinL),
       qValveCenterR: 0.5 * (vMaxR + vMinR),
-      steamLap: 0.99 * leadAmp,
+      steamLap: 0.995 * leadAmp,
       exhaustLap: 0.02 * leadAmp,
       portWidth: 0.95 * leadAmp,
     };
@@ -1601,7 +1601,7 @@ async function main() {
         );
         data.ctrl[idxMap.actFL] = out.forceL;
         data.ctrl[idxMap.actFR] = out.forceR;
-        data.ctrl[idxMap.actRev] = ctrl.reverser * 0.45;
+        data.ctrl[idxMap.actRev] = ctrl.reverser * 0.34;
         data.qfrc_applied[idxMap.qvelValL] = out.valveFrictionL;
         data.qfrc_applied[idxMap.qvelValR] = out.valveFrictionR;
         data.qfrc_applied[idxMap.qvelPump] = out.forcePump;

@@ -109,7 +109,13 @@ def exp_link_slot_tilt(theta_rad: float, cfg: Dict) -> float:
 def _solve_comb_for_die_pin(
     u0: Tuple[float, float], s_die: Tuple[float, float], cfg: Dict
 ) -> Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float], Tuple[float, float]]:
-    """给定十字头下耳轴 u0 与滑块销 s_die，精确求根合并杆摆角 phi，返回 (v_pin, m_pin, u1_pin, rad_lift)。"""
+    """
+    给定十字头下耳轴 u0 与滑块销 s_die，精确求根 1-23 合并杆摆角 phi，返回 (v_pin, m_pin, u1_pin, rad_lift)。
+    严格遵循原厂 Aster D51 图纸 (イラスト 1/9, p43 & aster-manual.pdf Fig. 33 交叉气道板 1-9):
+      - 顶销 1-24 (m_pin) = 心向棒 2-1 (位于阀杆上方 +L_mv);
+      - 次销 1-21 (v_pin) = 阀芯杆 1-22/1-25 (位于 Z = valve_axis_z);
+      - 底销 1-26 (u1_pin) = 先导短连杆 1-27 (位于阀杆下方 -(L_comb - L_mv))。
+    """
     s = 1e-3
     rc_cfg, vg_cfg = cfg["cylinder_and_rods"], cfg["walschaerts_valve_gear"]
     z_valve = rc_cfg["valve_axis_z"] * s
@@ -120,10 +126,10 @@ def _solve_comb_for_die_pin(
     L_back = vg_cfg["radius_rod_back_ext"] * s
 
     def residual(phi: float):
-        mz = z_valve - L_mv * math.cos(phi)
+        mz = z_valve + L_mv * math.cos(phi)
         mx = s_die[0] + math.sqrt(max(0.0, L_rad**2 - (mz - s_die[1]) ** 2))
-        vx = mx + L_mv * math.sin(phi)
-        u1 = (vx - L_comb * math.sin(phi), z_valve - L_comb * math.cos(phi))
+        vx = mx - L_mv * math.sin(phi)
+        u1 = (mx - L_comb * math.sin(phi), z_valve - (L_comb - L_mv) * math.cos(phi))
         return math.hypot(u1[0] - u0[0], u1[1] - u0[1]) - L_union, (vx, z_valve), (mx, mz), u1
 
     grid = [-0.75 + i * 1.5 / 200.0 for i in range(201)]
@@ -353,7 +359,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     default = ET.SubElement(mj, "default")
     ET.SubElement(default, "geom", condim="3", solref="0.0015 1.0", solimp="0.95 0.99 0.0001")
     ET.SubElement(default, "joint", solreflimit="0.002 1.0", solimplimit="0.98 0.995 0.0001")
-    ET.SubElement(default, "equality", solref="0.00028 1.0", solimp="0.99985 0.999985 0.000002")
+    ET.SubElement(default, "equality", solref="0.00023 1.0", solimp="0.99988 0.999988 0.000002")
 
     mesh_dir = Path("models/meshes")
     asset = ET.SubElement(mj, "asset")
@@ -986,7 +992,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     attach_part_inertial(rev_shaft, parts_mp["reverser_shaft"])
     ET.SubElement(
         rev_shaft, "joint", name="j_reverser", type="hinge", axis="0 1 0",
-        limited="true", range="-0.48 0.48", armature="0.0015", damping="0.6"
+        limited="true", range="-0.36 0.36", armature="0.0015", damping="0.6"
     )
     ET.SubElement(
         rev_shaft, "geom", name="reverser_shaft_vis", type="mesh",
@@ -1009,8 +1015,9 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         joint1="j_reach_rod", joint2="j_reverser", polycoef="0 0.007 0 -0.001167 0"
     )
 
-    # Tier 3: 8-6 -> 8-5 -> 7-1~3 -> 7-5 -> 1-19 -> 1-18 -> 1-16 八级气缸排液阀完整联动机构 (イラスト 1, 7, 8 & 図 1.3/8.1: 100% 全直拉杆 8-5 + 向上摇臂 7-1)
-    dc_body = ET.SubElement(frame, "body", name="drain_cock_linkage", pos="0.124200 0.000000 -0.003800")
+    # Tier 3: 8-6 -> 8-5 -> 7-1~3 -> 7-5 -> 1-19 -> 1-18 -> 1-16 八级气缸排液阀完整联动机构 (跟随 cylinder_center_x 精确对齐!)
+    dc_x_m = (float(rc_cfg["cylinder_center_x"]) - 1.8) * s
+    dc_body = ET.SubElement(frame, "body", name="drain_cock_linkage", pos=f"{dc_x_m:.6f} 0.000000 -0.003800")
     attach_part_inertial(dc_body, parts_mp["drain_cock_linkage"])
     ET.SubElement(
         dc_body, "joint", name="j_drain_cock", type="hinge", axis="0 -1 0",
@@ -1376,7 +1383,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             mesh=f"m_union_link_{tag}", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
         )
 
-        pitch_comb = math.atan2(vx - u1x, vz - u1z)
+        pitch_comb = math.atan2(mx - u1x, mz - u1z)
         comb_body = ET.SubElement(
             union_body, "body", name=f"comb_lever_{tag}",
             pos=f"{L_union_m:.6f} 0 0", euler=f"0 {pitch_comb - pitch_union:.6f} 0"
@@ -1387,8 +1394,9 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             comb_body, "geom", name=f"comb_lever_vis_{tag}", type="mesh",
             mesh="m_combination_lever", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
         )
-        ET.SubElement(comb_body, "site", name=f"s_comb_radius_{tag}", pos=f"0 0 {L_comb_m - L_mv_m:.6f}")
-        ET.SubElement(comb_body, "site", name=f"s_comb_valve_{tag}", pos=f"0 0 {L_comb_m:.6f}")
+        # 原厂 Aster D51 (イラスト 1/9 & aster-manual.pdf Fig.33): 顶销 1-24 = 心向棒 2-1, 次销 1-21 = 阀芯杆 1-22/1-25!
+        ET.SubElement(comb_body, "site", name=f"s_comb_valve_{tag}", pos=f"0 0 {L_comb_m - L_mv_m:.6f}")
+        ET.SubElement(comb_body, "site", name=f"s_comb_radius_{tag}", pos=f"0 0 {L_comb_m:.6f}")
 
         # 1-6 平面滑阀 + 1-22 阀芯棒总成
         valve_body = ET.SubElement(frame, "body", name=f"slide_valve_{tag}", pos=f"{vx:.6f} {y_vg:.6f} {vz:.6f}")
@@ -1505,7 +1513,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
         ET.SubElement(sensor, "jointvel", name=f"piston_vel_{tag}", joint=f"j_piston_{tag}")
         ET.SubElement(sensor, "jointpos", name=f"valve_pos_{tag}", joint=f"j_valve_{tag}")
 
-    ET.SubElement(actuator, "position", name="reverser_ctrl", joint="j_reverser", kp="60", ctrlrange="-0.46 0.46")
+    ET.SubElement(actuator, "position", name="reverser_ctrl", joint="j_reverser", kp="60", ctrlrange="-0.34 0.34")
     ET.SubElement(sensor, "jointvel", name="wheel3_omega", joint="j_wheel_3")
     ET.SubElement(sensor, "jointvel", name="pump_ram_vel", joint="j_pump_ram")
 

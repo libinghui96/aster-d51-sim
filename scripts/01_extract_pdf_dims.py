@@ -70,41 +70,43 @@ def default_d51_kinematics() -> Dict[str, Any]:
             },
             "leading_pivot_arm_mm": 56.0,         # イラスト 19/20 (19-6/4-10): 先导台车单固定支点距先导轮轴 X 臂长 56.0mm (X=+112.0mm)
             "quartering_deg_R_minus_L": -90.0,    # 图 9.5 (JNR D51 右先行): 极角 atan2(z,x) 下 theta_L=0°, theta_R=-90° (绕 +Y 前进正转时右曲柄超前左曲柄 90°)
-            "coupling_knuckle_offset": 8.5,       # イラスト 7 (7-12/7-15): 耦合连杆分节铰接销距第2/3动轮曲柄销偏置 (mm)
+            "coupling_knuckle_offset": 7.7,       # イラスト 7 & p43 (7-12/7-15): 耦合连杆分节铰接销距第2/3动轮曲柄销偏置 (mm)
         },
         "cylinder_and_rods": {
             "bore": 15.0,                         # PR-15 活塞环锁死内径 15.0mm
             "piston_rod_dia": 3.0,                # PF3-1.9 密封圈锁死杆径 3.0mm
             "valve_rod_dia": 2.0,                 # PF2-1.5 密封圈锁死阀芯杆径 2.0mm
             "crank_radius": 10.0,                 # 主曲柄销偏心半径 10.0mm (活塞行程 Stroke = 20.0mm)
-            "cylinder_center_x": 126.0,           # 气缸腔体中心 X 坐标
+            "cylinder_center_x": 129.0,           # 气缸体安装基准 X (主缸筒中心 X=+134.1mm, 匹配 p43 实测 134.3mm)
             "cylinder_center_y": 32.5,            # 左右气缸中心距车架中心线横向偏移 ±32.5mm
             "front_tail_rod_20_6_r2m_outboard_mm": 3.85,  # イラスト 20 図 20.1 (20-6 尻棒2): R2m 最小回转半径时在 1-36/1-13 前缸盖外侧孔位外移 +3.85mm (|Y|=36.35mm vs R3m 同轴 |Y|=32.50mm)
             "cylinder_center_z": 0.0,             # 主活塞轴线与动轮轴等高
-            "valve_axis_z": 18.5,                 # 上部平面滑阀 (1-6) 滑动轴线高度 Z
-            "main_rod_length": 92.0,              # 主連棒 (7-11/7-16) 大小头孔距
+            "valve_axis_z": 13.5,                 # 上部平面滑阀 (1-6) 与阀杆 (1-22) 滑动轴线高度 Z (イラスト 9=13.6mm, p43=12.7mm)
+            "main_rod_length": 98.5,              # 主連棒 (7-11/7-16) 大小头孔距 (p43 实测 98.6~99.1mm)
             "crosshead_pin_dia": 3.0,             # 7-13 比例框: ø3.0 x 7.0mm
             "crank_pin_axial_play_mm": 0.35,      # 曲柄销轴向微浮动游隙 ±0.35mm (防跨轮对横向锁死)
+            "has_cross_port_plate_1_9": True,     # aster-manual.pdf p.25 Fig.33: 1-9 交叉气道板 (外进气滑阀配合内进气外连杆!)
         },
         "walschaerts_valve_gear": {
             "return_crank_radius": 7.0,           # 图 9.2 硬指标: 回动曲柄孔距轮心精确 7.0mm
-            "return_crank_phase_deg": -90.0,      # 图 9.2 硬指标: 与主曲柄呈 90° 夹角
-            "trunnion_x": 46.5,                   # 月牙加减链 (2-4) 旋转定轴 X 坐标
-            "trunnion_z": 15.5,                   # 月牙加减链 (2-4) 旋转定轴 Z 坐标
-            "exp_link_tail_radius": 13.5,         # 月牙板定轴中心至底部偏心杆耳孔距离
-            "exp_link_tail_cant_deg": 4.352738,   # 月牙板中立位圆弧槽法线与下尾耳矢量的精确固有夹角 (deg)
-            "die_slot_half_travel": 6.5,          # 滑块 (2-3) 在月牙槽内自中立位 N 上下最大行程
-            "eccentric_rod_length": 48.0,         # 偏心棒 (2-12/2-19) 两端孔距
-            "radius_rod_length": 64.0,            # 心向棒 (2-1) 前端至滑块孔距 (圆弧月牙槽曲率半径 R)
-            "radius_rod_back_ext": 10.0,          # 心向棒向后延伸连接吊杆 (2-10) 的尾端长度
-            "crosshead_drop": 9.5,                # 十字头中心至下方短连杆铰接孔垂向距离
-            "union_link_length": 15.0,            # 短连杆 (1-27 リンク) 孔距
-            "comb_lever_total_length": 28.0,      # 合併てこ (1-23) 下端孔至最上端阀叉孔总长
-            "comb_lever_lap_lead_offset": 3.5,    # 合併てこ最上孔(接阀杆)与次上孔(接心向棒)间距
-            "reverser_shaft_x": 25.5,             # 逆転器アームシャフト (4-12) X 坐标 (= 46.5 - 10.0 - 11.0, 严格保证 11.0mm 摇臂水平力臂)
-            "reverser_shaft_z": 26.5,             # 逆転器アームシャフト (4-12) Z 坐标 (= 15.5 + 11.0, 严格匹配 11.0mm 吊杆铅垂孔距)
-            "reverser_arm_length": 11.0,          # 逆転アーム (2-11/2-18) 摇臂孔距
-            "lift_link_length": 11.0,             # 吊杆 (2-10 リンク) 孔距
+            "return_crank_phase_deg": 94.635459,  # 图 9.2 & Fig.31(3) 倾斜布置真值: 滞后主曲柄 +90° + 4.64° 偏心棒倾角补偿 (消除反转负先导!)
+            "trunnion_x": 58.8,                   # 月牙加减链 (2-4) 旋转定轴 X 坐标 (p43=58.6mm, 位于第2动轮前方!)
+            "trunnion_z": 16.0,                   # 月牙加减链 (2-4) 旋转定轴 Z 坐标 (p43=15.9mm)
+            "exp_link_tail_radius": 11.2,         # 月牙板定轴中心至底部偏心杆耳孔距离 (ILL 9=11.2mm)
+            "exp_link_tail_cant_deg": 3.148314,   # 月牙板中立位圆弧槽法线与下尾耳矢量的精确固有夹角 (deg)
+            "die_slot_half_travel": 5.5,          # 滑块 (2-3) 在月牙槽内自中立位 N 上下最大行程
+            "eccentric_rod_length": 60.0,         # 偏心棒 (2-12/2-19) 两端孔距 (p43=60.0mm)
+            "radius_rod_length": 51.0,            # 心向棒 (2-1) 前端至滑块孔距 (圆弧月牙槽曲率半径 R, p43=51.0mm)
+            "radius_rod_back_ext": 9.0,           # 心向棒向后延伸连接吊杆 (2-10) 的尾端长度
+            "crosshead_drop": 6.7,                # 十字头中心至下方短连杆铰接孔垂向距离 (p43=6.73mm)
+            "union_link_length": 11.8,            # 短连杆 (1-27 リンク) 孔距 (p43/ILL 9=11.8mm)
+            "comb_lever_total_length": 22.8,      # 合併てこ (1-23) 下端孔至最上端心向棒孔(1-24)总长
+            "comb_lever_lap_lead_offset": 2.7,    # 合併てこ最上孔(1-24 接心向棒 2-1)与次上孔(1-21 接阀杆 1-25)间距
+            "comb_lever_top_pin": "radius_rod_2_1",
+            "reverser_shaft_x": 39.3,             # 逆転器アームシャフト (4-12) X 坐标 (= 58.8 - 9.0 - 10.5, 匹配 p43=39.0mm!)
+            "reverser_shaft_z": 23.5,             # 逆転器アームシャフト (4-12) Z 坐标 (= 16.0 + 7.5, 匹配 p43/ILL 9=22.5~23.3mm!)
+            "reverser_arm_length": 10.5,          # 逆転アーム (2-11/2-18) 摇臂孔距
+            "lift_link_length": 7.5,              # 吊杆 (2-10 リンク) 孔距
             "crank_pin_axial_play_mm": 0.35,      # 偏心销轴向微游隙 ±0.35mm
             "y_layer_offsets": {
                 "chassis_inside_max_abs_y": 11.0,
@@ -371,10 +373,10 @@ def headless_auto_calibrate(exported: Dict[str, Path], spec: Dict[str, Any]) -> 
         best_err, best_vx = 1e9, 0.0
         for i in range(401):
             phi = -0.6 + 1.2 * i / 400.0
-            mz = rc["valve_axis_z"] - L_mv * math.cos(phi)
+            mz = rc["valve_axis_z"] + L_mv * math.cos(phi)
             mx = trun[0] + math.sqrt(max(0.0, L_rad**2 - (mz - trun[1]) ** 2))
-            vx = mx + L_mv * math.sin(phi)
-            u1 = (vx - L_cb * math.sin(phi), rc["valve_axis_z"] - L_cb * math.cos(phi))
+            vx = mx - L_mv * math.sin(phi)
+            u1 = (mx - L_cb * math.sin(phi), rc["valve_axis_z"] - (L_cb - L_mv) * math.cos(phi))
             err = abs(math.hypot(u1[0] - u0[0], u1[1] - u0[1]) - L_un)
             if err < best_err:
                 best_err, best_vx = err, vx

@@ -1341,7 +1341,7 @@ export class FluidPartVisualizer {
         `,
       });
       const mesh = new THREE.Mesh(g, m);
-      mesh.position.set(0.126, yCenter, 0.0);
+      mesh.position.set(0.1332, yCenter, 0.0);
       mesh.renderOrder = 4;
       mesh.visible = false;
       this.root.add(mesh);
@@ -1361,7 +1361,7 @@ export class FluidPartVisualizer {
         depthWrite: false,
       });
       const mesh = new THREE.Mesh(g, m);
-      mesh.position.set(0.126, yCenter, -0.0056);
+      mesh.position.set(0.1332, yCenter, -0.0056);
       mesh.renderOrder = 4;
       mesh.visible = false;
       this.root.add(mesh);
@@ -1370,7 +1370,7 @@ export class FluidPartVisualizer {
     this.cylCondMeshes = [makeCondensateMesh(+0.0325), makeCondensateMesh(-0.0325)];
 
     const makePortGlow = (xPos: number, yPos: number): THREE.Mesh => {
-      const g = new THREE.BoxGeometry(0.0024, 0.0062, 0.0075);
+      const g = new THREE.BoxGeometry(0.0022, 0.0056, 0.0036);
       const m = new THREE.MeshBasicMaterial({
         color: 0xffaa44,
         transparent: true,
@@ -1379,17 +1379,17 @@ export class FluidPartVisualizer {
         blending: THREE.AdditiveBlending,
       });
       const mesh = new THREE.Mesh(g, m);
-      mesh.position.set(xPos, yPos, 0.0122);
+      mesh.position.set(xPos, yPos, 0.0108);
       mesh.renderOrder = 4;
       mesh.visible = false;
       this.root.add(mesh);
       return mesh;
     };
     this.portGlowMeshes = [
-      makePortGlow(0.1342, +0.0346), // L Head port
-      makePortGlow(0.1262, +0.0346), // L Crank port
-      makePortGlow(0.1342, -0.0346), // R Head port
-      makePortGlow(0.1262, -0.0346), // R Crank port
+      makePortGlow(0.1292, +0.0360), // L Head port (1-9 Cross-Port Rear mirror slot -> Head chamber)
+      makePortGlow(0.1372, +0.0360), // L Crank port (1-9 Cross-Port Front mirror slot -> Crank chamber)
+      makePortGlow(0.1292, -0.0360), // R Head port
+      makePortGlow(0.1372, -0.0360), // R Crank port
     ];
 
     // 4-2 前车架卧式置换注油器油水分层内芯 + 内部银焊竖直溢流立管 (Roscoe Standpipe: X=+0.1462, Y=0, Z∈[-0.0006,+0.0109])
@@ -2221,14 +2221,14 @@ export class FluidPartVisualizer {
         }),
       },
 
-      // === E. 左右对称双气缸给汽室、四条可逆进排汽斜道、左右双排汽支管与左右全 4 口排液阀 ===
+      // === E. 左右对称双气缸给汽室、1-9 真三维交叉四气道(可逆)、左右双排汽支管与左右全 4 口排液阀 ===
       {
         id: "cyl_7_9_inlet_L",
         partNo: "7-9→1-20(L)",
         title: "左シリンダ蒸気室(+Y)・含油過熱給気横管&蒸気室ヘッダ",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[123.5, 0.0, 18.5], [123.5, 20.5, 18.5], [123.5, 34.7, 18.5], [123.5, 34.7, 16.2], [134.2, 34.7, 16.2]],
+        ptsMm: [[123.5, 0.0, 18.5], [123.5, 29.0, 18.5], [127.2, 36.0, 18.5], [134.2, 36.0, 16.6]],
         bendRadiusMm: 1.8,
         radiusMm: 1.15,
         arrows: 5,
@@ -2248,7 +2248,7 @@ export class FluidPartVisualizer {
         title: "右シリンダ蒸気室(-Y)・含油過熱給気横管&蒸気室ヘッダ",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[123.5, 0.0, 18.5], [123.5, -20.5, 18.5], [123.5, -34.7, 18.5], [123.5, -34.7, 16.2], [134.2, -34.7, 16.2]],
+        ptsMm: [[123.5, 0.0, 18.5], [123.5, -29.0, 18.5], [127.2, -36.0, 18.5], [134.2, -36.0, 16.6]],
         bendRadiusMm: 1.8,
         radiusMm: 1.15,
         arrows: 5,
@@ -2264,13 +2264,13 @@ export class FluidPartVisualizer {
       },
       {
         id: "cyl_port_L_head",
-        partNo: "1-9(左前気道)",
-        title: "左前ポート (滑弁→ピストン給気 / ピストン→滑弁排気 可逆)",
+        partNo: "1-9(左交叉・後口→前室)",
+        title: "左1-9交叉ポート(後弁口→前気室Head・給排気可逆)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[130.2, 34.7, 15.6], [134.2, 34.7, 15.6], [138.8, 33.0, 9.6], [139.2, 32.5, 2.2]],
-        bendRadiusMm: 1.6,
-        radiusMm: 0.74,
+        ptsMm: [[129.2, 36.0, 10.6], [129.2, 38.1, 7.8], [129.2, 40.3, 5.4], [143.2, 40.3, 5.4], [143.2, 32.5, 5.2]],
+        bendRadiusMm: 1.4,
+        radiusMm: 0.66,
         arrows: 4,
         labelT: 0.55,
         colHexA: 0xf97316,
@@ -2293,13 +2293,13 @@ export class FluidPartVisualizer {
       },
       {
         id: "cyl_port_L_crank",
-        partNo: "1-9(左後気道)",
-        title: "左後ポート (滑弁→ピストン給気 / ピストン→滑弁排気 可逆)",
+        partNo: "1-9(左交叉・前口→後室)",
+        title: "左1-9交叉ポート(前弁口→後気室Crank・給排気可逆)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[129.8, 34.7, 15.6], [126.2, 34.7, 15.6], [120.5, 33.0, 9.6], [114.2, 32.5, 2.2]],
-        bendRadiusMm: 1.6,
-        radiusMm: 0.74,
+        ptsMm: [[137.2, 36.0, 10.6], [137.2, 40.9, 9.4], [125.2, 40.9, 9.4], [125.2, 38.7, 7.8], [125.0, 32.5, 5.2]],
+        bendRadiusMm: 1.4,
+        radiusMm: 0.66,
         arrows: 4,
         labelT: 0.55,
         colHexA: 0xf97316,
@@ -2322,13 +2322,13 @@ export class FluidPartVisualizer {
       },
       {
         id: "cyl_port_R_head",
-        partNo: "1-9(右前気道)",
-        title: "右前ポート (滑弁→ピストン給気 / ピストン→滑弁排気 可逆)",
+        partNo: "1-9(右交叉・後口→前室)",
+        title: "右1-9交叉ポート(後弁口→前気室Head・給排気可逆)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[130.2, -34.7, 15.6], [134.2, -34.7, 15.6], [138.8, -33.0, 9.6], [139.2, -32.5, 2.2]],
-        bendRadiusMm: 1.6,
-        radiusMm: 0.74,
+        ptsMm: [[129.2, -36.0, 10.6], [129.2, -38.1, 7.8], [129.2, -40.3, 5.4], [143.2, -40.3, 5.4], [143.2, -32.5, 5.2]],
+        bendRadiusMm: 1.4,
+        radiusMm: 0.66,
         arrows: 4,
         labelT: 0.55,
         colHexA: 0xf97316,
@@ -2351,13 +2351,13 @@ export class FluidPartVisualizer {
       },
       {
         id: "cyl_port_R_crank",
-        partNo: "1-9(右後気道)",
-        title: "右後ポート (滑弁→ピストン給気 / ピストン→滑弁排気 可逆)",
+        partNo: "1-9(右交叉・前口→後室)",
+        title: "右1-9交叉ポート(前弁口→後気室Crank・給排気可逆)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[129.8, -34.7, 15.6], [126.2, -34.7, 15.6], [120.5, -33.0, 9.6], [114.2, -32.5, 2.2]],
-        bendRadiusMm: 1.6,
-        radiusMm: 0.74,
+        ptsMm: [[137.2, -36.0, 10.6], [137.2, -40.9, 9.4], [125.2, -40.9, 9.4], [125.2, -38.7, 7.8], [125.0, -32.5, 5.2]],
+        bendRadiusMm: 1.4,
+        radiusMm: 0.66,
         arrows: 4,
         labelT: 0.55,
         colHexA: 0xf97316,
@@ -2384,9 +2384,9 @@ export class FluidPartVisualizer {
         title: "左シリンダ中央排気腔(+Y)→7-8合流管→20-7ブラストノズル(ø4.2)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[130.0, 34.5, 15.6], [130.0, 27.5, 12.8], [130.0, 21.1, 12.5], [130.0, 0.0, 12.5], [130.0, 0.0, 35.0]],
-        bendRadiusMm: 2.2,
-        radiusMm: 1.16,
+        ptsMm: [[133.2, 36.0, 10.2], [133.2, 36.0, 9.15], [130.0, 28.0, 9.15], [130.0, 25.3, 12.5], [130.0, 0.0, 12.5], [130.0, 0.0, 35.0]],
+        bendRadiusMm: 1.8,
+        radiusMm: 1.08,
         arrows: 6,
         labelT: 0.76,
         colHexA: 0xeab308,
@@ -2404,9 +2404,9 @@ export class FluidPartVisualizer {
         title: "右シリンダ中央排気腔(-Y)→内壁ソケット→7-8排気合流管→20-7",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[130.0, -34.5, 15.6], [130.0, -27.5, 12.8], [130.0, -21.1, 12.5], [130.0, 0.0, 12.5], [130.0, 0.0, 35.0]],
-        bendRadiusMm: 2.2,
-        radiusMm: 1.14,
+        ptsMm: [[133.2, -36.0, 10.2], [133.2, -36.0, 9.15], [130.0, -28.0, 9.15], [130.0, -25.3, 12.5], [130.0, 0.0, 12.5], [130.0, 0.0, 35.0]],
+        bendRadiusMm: 1.8,
+        radiusMm: 1.08,
         arrows: 6,
         labelT: 0.42,
         colHexA: 0xeab308,
@@ -2424,9 +2424,9 @@ export class FluidPartVisualizer {
         title: "右シリンダ前後底ばねポペット二相排液弁(-Y)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[130.8, -30.8, -6.2], [130.8, -30.8, -16.8]],
+        ptsMm: [[133.8, -30.8, -6.2], [133.8, -30.8, -16.8]],
         extraBranchesMm: [
-          [[120.8, -30.8, -6.2], [120.8, -30.8, -16.8]],
+          [[123.8, -30.8, -6.2], [123.8, -30.8, -16.8]],
         ],
         radiusMm: 0.62,
         arrows: 3,
@@ -2446,9 +2446,9 @@ export class FluidPartVisualizer {
         title: "左シリンダ前後底ばねポペット二相排液弁(+Y)",
         zone: "cylinder",
         frame: "loco",
-        ptsMm: [[130.8, 30.8, -6.2], [130.8, 30.8, -16.8]],
+        ptsMm: [[133.8, 30.8, -6.2], [133.8, 30.8, -16.8]],
         extraBranchesMm: [
-          [[120.8, 30.8, -6.2], [120.8, 30.8, -16.8]],
+          [[123.8, 30.8, -6.2], [123.8, 30.8, -16.8]],
         ],
         radiusMm: 0.62,
         arrows: 3,
@@ -2703,11 +2703,11 @@ export class FluidPartVisualizer {
         zone: "cylinder",
         frame: "loco",
         medium: "open_liquid",
-        ptsMm: [[130.8, -30.8, -17.0], [130.8, -31.6, -28.5]],
+        ptsMm: [[133.8, -30.8, -17.0], [133.8, -31.6, -28.5]],
         extraBranchesMm: [
-          [[120.8, -30.8, -17.0], [120.8, -31.6, -28.5]],
-          [[130.8, +30.8, -17.0], [130.8, +31.6, -28.5]],
-          [[120.8, +30.8, -17.0], [120.8, +31.6, -28.5]],
+          [[123.8, -30.8, -17.0], [123.8, -31.6, -28.5]],
+          [[133.8, +30.8, -17.0], [133.8, +31.6, -28.5]],
+          [[123.8, +30.8, -17.0], [123.8, +31.6, -28.5]],
         ],
         bendRadiusMm: 2.0,
         markerScaleMm: 0.78,
@@ -3432,10 +3432,10 @@ export class FluidPartVisualizer {
     // 4. 左右主气缸前后工作腔实时活塞追随与蒸汽膨胀云
     const sL = Math.max(0.0, Math.min(calib.stroke, calib.qFdcL - qPL));
     const sR = Math.max(0.0, Math.min(calib.stroke, calib.qFdcR - qPR));
-    const xHeadWall = 0.1392;
-    const xCrankWall = 0.1128;
-    const xPistL = 0.1260 + 0.5 * calib.stroke - sL;
-    const xPistR = 0.1260 + 0.5 * calib.stroke - sR;
+    const xHeadWall = 0.1450;
+    const xCrankWall = 0.1214;
+    const xPistL = 0.1332 + 0.5 * calib.stroke - sL;
+    const xPistR = 0.1332 + 0.5 * calib.stroke - sR;
 
     this.styleSteamChamber(this.cylHeadMeshes[0], xPistL + 0.0018, xHeadWall, sp.cylLPKgf[0] ?? 0, out.superheatTempC);
     this.styleSteamChamber(this.cylCrankMeshes[0], xCrankWall, xPistL - 0.0018, sp.cylLPKgf[1] ?? 0, out.superheatTempC);
