@@ -2,7 +2,7 @@
   "xml_path": "/home/labahua/workspace/fast-disk/aster-d51-sim/models/d51_track.xml",
   "topology_path": "/home/labahua/workspace/fast-disk/aster-d51-sim/configs/d51_fluid_topology.json",
   "device": "cuda",
-  "elapsed_ms": 5759.1,
+  "elapsed_ms": 5999.4,
   "total_edges": 38,
   "open_edges": 38,
   "neck_free_edges": 38,

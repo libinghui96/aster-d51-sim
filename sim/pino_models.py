@@ -1227,8 +1227,8 @@ class BoilerWickConjugatePINO(nn.Module):
         q_rad_ext_w = (a_ext_m2 * (ins_f * q_rad_ins + (1.0 - ins_f) * q_rad_bare)).to(scalars.dtype)
         q_cond_insul_w = q_conv_ext_w + q_rad_ext_w
 
-        # 锅炉第一性原理热效率 (%): 化学释热 vs 传水/过热净吸收 (扣除外壁传导+对流+辐射热损与排烟损失)
-        q_chem_w = wick_cap_ml_s * 0.789 * 26800.0  # ml/s -> g/s * 26.8 kJ/g = W
+        # 锅炉第一性原理热效率 (%): 2010_JNR_D51-standard.pdf 甲醇 (CH3OH) 化学释热 vs 传水/过热净吸收 (扣除外壁传导+对流+辐射热损与排烟损失)
+        q_chem_w = wick_cap_ml_s * 0.7866 * 19930.0  # ml/s -> g/s * 19.93 kJ/g (Methanol LHV) = W
         eta_comb_flue = (0.44 + 0.18 * torch.sigmoid(raw_v[:, 7:8])) * (0.72 + 0.28 * torch.tanh(draft * 1.3)) * (0.35 + 0.65 * f_wet)
         q_useful_w = F.relu(q_chem_w * eta_comb_flue - q_cond_insul_w)
         has_fire = (q_chem_w / (q_chem_w + 8.0)) * lit_f

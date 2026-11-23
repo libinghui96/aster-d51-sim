@@ -144,8 +144,9 @@
   <div id="scene-toolbar" class="hud-panel">
     <select id="select-scene">
       <option value="d51_full.xml">試運転用コロ (滚轮台悬空)</option>
-      <option value="d51_track.xml">直線枕木軌道 + 8-20B 煤水车</option>
-      <option value="d51_r2m.xml">R2m 环形弯道 + 8-20B 煤水车</option>
+      <option value="d51_track.xml">直線枕木軌道 (240m) + 8-20B 煤水车</option>
+      <option value="d51_r2m.xml">R2m 环形弯道 (12.6m) + 8-20B 煤水车</option>
+      <option value="d51_oval.xml">3D 勾配楕円本線 + ワム貨車2両 (27.7m周回)</option>
     </select>
     <select id="select-cam">
       <option value="normal">标准金属外观</option>
@@ -189,7 +190,8 @@
     <div class="gauge-row"><span>蒸気室 / 過熱蒸気温度</span><span id="txt-steam" class="val-mono">0.00 kgf | 165°C</span></div>
     <div class="gauge-row"><span>銅火室頂板 / シール健全度</span><span id="txt-crown" class="val-mono">156°C | 100%</span></div>
     <div class="gauge-row"><span>煙室負圧 / シリンダ壁温</span><span id="txt-smokebox" class="val-mono">-78 Pa | 132°C</span></div>
-    <div class="gauge-row"><span>動輪回転 / 1:30 換算車速</span><span id="txt-speed" class="val-mono">0 RPM | 0.0 km/h</span></div>
+    <div class="gauge-row"><span>動輪回転 / 対地1:30車速 / 空転</span><span id="txt-speed" class="val-mono">0 RPM | 0.0 km/h | 0.0%</span></div>
+    <div class="gauge-row"><span>実走行距離 / 残航続予測 (GPU)</span><span id="txt-odometer" class="val-mono">0.00m (0.00km) | 残--m</span></div>
     <div class="gauge-row"><span>燃料 / 炭水車水 (戻水・水温)</span><span id="txt-tanks" class="val-mono">130ml | 272ml (25°C)</span></div>
     <div class="gauge-row"><span>左右ピストン推力 / 締切率</span><span id="txt-forces" class="val-mono">L: 0.0N | R: 0.0N | 61%</span></div>
     <div class="gauge-row"><span>6-5 軸動ポンプ負圧 / 煙管撓み</span><span id="txt-pump-elastic" class="val-mono">-0.0kPa (0.0W) | 撓0.00mm</span></div>
@@ -250,9 +252,19 @@
       <span id="val-waterfill" class="val-mono">0%</span>
     </div>
     <div class="ctrl-row">
-      <label>勾配模擬 (Grade)</label>
-      <input id="rng-grade" type="range" min="-5" max="5" step="0.5" value="0" />
+      <label>勾配加算 (Grade)</label>
+      <input id="rng-grade" type="range" min="-4" max="4" step="0.5" value="0" />
       <span id="val-grade" class="val-mono">0.0°</span>
+    </div>
+    <div class="ctrl-row">
+      <label>牽引荷重 (Load)</label>
+      <input id="rng-load" type="range" min="0" max="8" step="0.5" value="0" />
+      <span id="val-load" class="val-mono">0.0kg</span>
+    </div>
+    <div class="ctrl-row">
+      <label>外気温度 (Amb)</label>
+      <input id="rng-amb" type="range" min="0" max="38" step="2" value="25" />
+      <span id="val-amb" class="val-mono">25°C</span>
     </div>
     <div class="btn-row">
       <button id="btn-burner" class="active">23-1 点火</button>

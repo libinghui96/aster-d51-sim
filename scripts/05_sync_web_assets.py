@@ -25,7 +25,7 @@ def main() -> None:
     hashes: dict[str, str] = {}
     manifest: dict = {"xmls": [], "meshes": [], "configs": [], "hashes": hashes, "build_hash": ""}
 
-    for xml_name in ("d51_full.xml", "d51_track.xml", "d51_r2m.xml"):
+    for xml_name in ("d51_full.xml", "d51_track.xml", "d51_r2m.xml", "d51_oval.xml"):
         p = src_models / xml_name
         if p.exists():
             dst = dst_models / xml_name
@@ -53,6 +53,7 @@ def main() -> None:
         "aster_gauge1_prior_knowledge.json",
         "smokebox_lut.json",
         "auto_fireman_policy.json",
+        "d51_range_benchmark.json",
     ):
         cfg_p = Path("configs") / cfg_name
         if cfg_p.exists():

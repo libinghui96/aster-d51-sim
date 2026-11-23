@@ -97,10 +97,10 @@ def voxelize_stl_cuda(
     """在 GPU 上使用 +Z 射线奇偶交叉准则 (Jordan Curve Parity) 将闭合水密 STL 体素化为 (Nx, Ny, Nz) float32 固体掩码。"""
     import hashlib
     mesh_sig = hashlib.blake2b(np.ascontiguousarray(tris_mm, dtype=np.float32).view(np.uint8), digest_size=12).hexdigest()
-    cache_key = (mesh_sig, x_range_mm, y_range_mm, z_range_mm, shape, str(device))
+    cache_key = (mesh_sig, x_range_mm, y_range_mm, z_range_mm, shape)
     cached = _VOXEL_CACHE.get(cache_key)
     if cached is not None:
-        return cached.clone()
+        return cached.to(device=device, dtype=torch.float32)
 
     nx, ny, nz = shape
     xs = torch.linspace(x_range_mm[0], x_range_mm[1], nx, device=device, dtype=torch.float32) + 1.37e-4
@@ -178,9 +178,11 @@ def voxelize_stl_cuda(
             above = (zh[:, None] > zs[None, :]).to(torch.int32)
             counts_all[r0:r1].index_add_(0, hit_r, above)
 
-    out_vox = (counts_all & 1).to(torch.float32).reshape(nx, ny, nz)
-    _VOXEL_CACHE[cache_key] = out_vox
-    return out_vox.clone()
+    out_u8 = (counts_all & 1).to(torch.uint8).reshape(nx, ny, nz)
+    if len(_VOXEL_CACHE) >= 600:
+        _VOXEL_CACHE.pop(next(iter(_VOXEL_CACHE)), None)
+    _VOXEL_CACHE[cache_key] = out_u8.cpu()
+    return out_u8.to(dtype=torch.float32)
 
 
 @torch.no_grad()
@@ -2329,6 +2331,8 @@ class AsterD51Thermo3DGPU:
         accel_x: float = 0.0,
         q_ram: float = 0.0,
         v_hand_ram: float = 0.0,
+        v_ground_ms: Optional[float] = None,
+        accel_lat: float = 0.0,
     ) -> Tuple[float, float, float, ThermoTelemetry]:
         # 若调用过 trigger_hand_pump(strokes) 且外部未直接驱动 j_tender_hp_ram，合成真实手摇泵压水速度冲程 (-0.14 m/s) 供 PINO 求解!
         if abs(v_hand_ram) > 1e-4:
@@ -2403,6 +2407,8 @@ class AsterD51Thermo3DGPU:
             pitch_rad=pitch_rad,
             accel_x=accel_x,
             v_hand_ram=v_hand_eff,
+            v_ground_ms=v_ground_ms,
+            accel_lat=accel_lat,
         )
 
         if abs(ctrl.reverser) > 0.02 and ctrl.regulator > 0.01:

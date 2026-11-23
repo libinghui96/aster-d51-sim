@@ -255,7 +255,7 @@ def add_rail_wheel_colliders(
     m_flg = "0" if use_explicit_inertial else "0.010"
     alpha = "0" if use_explicit_inertial else "1"
     grp = "3" if use_explicit_inertial else "0"
-    tread_fric = "0.46 0.003 0.0001" if is_driving else "0.16 0.002 0.0001"
+    tread_fric = "0.33 0.003 0.0001" if is_driving else "0.14 0.002 0.0001"
     tread_prio = "0" if is_driving else "1"
 
     y_back = 0.02000  # 0.5 * B2B = 20.00 mm (Gauge-1 45mm 轨距标准)
@@ -319,7 +319,7 @@ def add_r2m_circular_track(world: ET.Element, R_center: float, y_gauge_half: flo
                 track_root, "geom", name=f"rail_{tag}_{i:03d}", type="capsule",
                 fromto=f"{x0:.6f} {y0:.6f} {z_rail_axis:.6f}  {x1:.6f} {y1:.6f} {z_rail_axis:.6f}",
                 size=f"{rail_half_w:.6f}",
-                contype="1", conaffinity="2", friction="0.46 0.002 0.0001", rgba="0.70 0.72 0.75 1"
+                contype="1", conaffinity="2", friction="0.33 0.002 0.0001", rgba="0.70 0.72 0.75 1"
             )
         if i % 4 == 0:
             sx, sy = R_center * math.cos(phi_mid), -R_center + R_center * math.sin(phi_mid)
@@ -331,7 +331,69 @@ def add_r2m_circular_track(world: ET.Element, R_center: float, y_gauge_half: flo
             )
 
 
-def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", include_tender: bool = True) -> str:
+def add_oval_grade_track(world: ET.Element, y_gauge_half: float, n_seg: int = 640) -> None:
+    """
+    构建真 3D 闭合坡道大椭圆本线 (2×6.00m 直道 + 2×R2.50m 半圆弯道, 单圈 27.708m,
+    后直道高架最高点 +102mm, 最大实物理纵坡 ±1.50%, 启动段 s0=3.0m 处 Z=Z'=Z''=0 零初始残差)。
+    """
+    import sys as _sys
+    _root = str(Path(__file__).resolve().parent.parent)
+    if _root not in _sys.path:
+        _sys.path.insert(0, _root)
+    from sim.gpu_track_endurance import TrackProfile3D
+
+    prof = TrackProfile3D("oval_grade")
+    L_tot = prof.lap_length_m
+    ds = L_tot / n_seg
+    rail_half_w = 0.0008
+    y_off = y_gauge_half + rail_half_w
+
+    track_root = ET.SubElement(world, "body", name="oval_track_layout", pos="0 0 0")
+    for i in range(n_seg):
+        s0 = i * ds
+        s1 = (i + 1) * ds
+        sm = 0.5 * (s0 + s1)
+        x0, y0, zt0, yaw0, _, _ = prof.eval_s(s0)
+        x1, y1, zt1, yaw1, _, _ = prof.eval_s(s1)
+        xm, ym, ztm, yawm, slopem, _ = prof.eval_s(sm)
+        nx0, ny0 = -math.sin(yaw0), math.cos(yaw0)
+        nx1, ny1 = -math.sin(yaw1), math.cos(yaw1)
+        za0 = zt0 - rail_half_w
+        za1 = zt1 - rail_half_w
+        for tag, sgn in [("outer_L", +1.0), ("inner_R", -1.0)]:
+            rx0, ry0 = x0 + sgn * y_off * nx0, y0 + sgn * y_off * ny0
+            rx1, ry1 = x1 + sgn * y_off * nx1, y1 + sgn * y_off * ny1
+            ET.SubElement(
+                track_root, "geom", name=f"rail_oval_{tag}_{i:03d}", type="capsule",
+                fromto=f"{rx0:.6f} {ry0:.6f} {za0:.6f}  {rx1:.6f} {ry1:.6f} {za1:.6f}",
+                size=f"{rail_half_w:.6f}",
+                contype="1", conaffinity="2", friction="0.33 0.002 0.0001", rgba="0.72 0.74 0.78 1"
+            )
+        if i % 4 == 0:
+            sz = ztm - 0.0034
+            ET.SubElement(
+                track_root, "geom", name=f"sleeper_oval_{i:03d}", type="box",
+                pos=f"{xm:.6f} {ym:.6f} {sz:.6f}", euler=f"0 {-slopem:.6f} {yawm:.6f}",
+                size="0.0045 0.036 0.0006", rgba="0.28 0.20 0.14 1",
+                contype="1", conaffinity="2", friction="0.92 0.012 0.002"
+            )
+        if i % 20 == 0 and ztm > 0.014:
+            pier_h = 0.5 * (ztm - 0.004)
+            ET.SubElement(
+                track_root, "geom", name=f"viaduct_pier_{i:03d}", type="box",
+                pos=f"{xm:.6f} {ym:.6f} {pier_h:.6f}", euler=f"0 0 {yawm:.6f}",
+                size=f"0.018 0.042 {pier_h:.6f}", rgba="0.34 0.36 0.40 1",
+                contype="0", conaffinity="0", mass="0"
+            )
+
+
+def build_mjcf(
+    cfg: Dict,
+    mass_props: Dict[str, Any],
+    mode: str = "roller",
+    include_tender: bool = True,
+    trailing_cars: int = 0,
+) -> str:
     s = 1e-3
     parts_mp = mass_props["parts"]
     rho_sus = mass_props["meta"]["densities_kg_m3"]["stainless_SUS"]
@@ -353,13 +415,13 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     ET.SubElement(mj, "compiler", angle="radian", autolimits="true", meshdir="meshes")
     ET.SubElement(
         mj, "option", timestep="0.0005", integrator="implicitfast",
-        iterations="120", tolerance="1e-12", gravity="0 0 -9.81"
+        iterations="160", ls_iterations="80", tolerance="1e-12", gravity="0 0 -9.81"
     )
 
     default = ET.SubElement(mj, "default")
     ET.SubElement(default, "geom", condim="3", solref="0.0015 1.0", solimp="0.95 0.99 0.0001")
     ET.SubElement(default, "joint", solreflimit="0.002 1.0", solimplimit="0.98 0.995 0.0001")
-    ET.SubElement(default, "equality", solref="0.00023 1.0", solimp="0.99988 0.999988 0.000002")
+    ET.SubElement(default, "equality", solref="0.00020 1.0", solimp="0.99991 0.999991 0.000002")
 
     mesh_dir = Path("models/meshes")
     asset = ET.SubElement(mj, "asset")
@@ -379,9 +441,10 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
 
     world = ET.SubElement(mj, "worldbody")
     ET.SubElement(world, "light", pos="0 -1.5 2.2", dir="0 0.4 -0.9", diffuse="0.92 0.92 0.92")
-    on_rails = mode in ("track", "curve_r2m")
+    on_rails = mode in ("track", "curve_r2m", "oval_grade")
+    ground_half = "12.0" if mode == "oval_grade" else "6.5"
     ET.SubElement(
-        world, "geom", name="ground", type="plane", size="6.5 6.5 0.05",
+        world, "geom", name="ground", type="plane", size=f"{ground_half} {ground_half} 0.05",
         rgba="0.16 0.18 0.20 1",
         contype="1" if on_rails else "0",
         conaffinity="2" if on_rails else "0",
@@ -397,11 +460,11 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             y_r = sgn * (y_gauge_half + rail_half_w)
             ET.SubElement(
                 world, "geom", name=f"rail_{side_tag}", type="box",
-                pos=f"30.0 {y_r:.6f} 0.002", size=f"38.0 {rail_half_w:.6f} 0.002",
-                contype="1", conaffinity="2", friction="0.46 0.002 0.0001", rgba="0.70 0.72 0.75 1"
+                pos=f"116.0 {y_r:.6f} 0.002", size=f"124.0 {rail_half_w:.6f} 0.002",
+                contype="1", conaffinity="2", friction="0.33 0.002 0.0001", rgba="0.70 0.72 0.75 1"
             )
         # 直线轨道真实枕木碰撞体阵列 (脱轨落道后车轮轮缘实时犁击枕木产生剧烈减速与颠簸阻力!)
-        for sl_i, sx_m in enumerate(np.arange(-1.80, 14.20, 0.032)):
+        for sl_i, sx_m in enumerate(np.arange(-1.80, 26.20, 0.032)):
             ET.SubElement(
                 world, "geom", name=f"sleeper_trk_{sl_i:03d}", type="box",
                 pos=f"{sx_m:.6f} 0.000000 0.0006",
@@ -410,6 +473,8 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             )
     elif mode == "curve_r2m":
         add_r2m_circular_track(world, t_cfg["curve_radius_mm"] * s, y_gauge_half, int(t_cfg["curve_segments"]))
+    elif mode == "oval_grade":
+        add_oval_grade_track(world, y_gauge_half)
 
     # ==================== A. 蒸汽机车车架、2-5 配气托架与锅炉上部总成 ====================
     R_curve = t_cfg["curve_radius_mm"] * s
@@ -845,7 +910,7 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
     ET.SubElement(
         lead_arm, "joint", name="j_leading_susp", type="slide", axis="0 0 1",
         springref="-0.0035" if on_rails else "0",
-        limited="true", range="-0.0045 0.0045", stiffness="850", damping="16"
+        limited="true", range="-0.0045 0.00095", stiffness="1150", damping="18"
     )
     if on_rails:
         ET.SubElement(
@@ -1798,6 +1863,128 @@ def build_mjcf(cfg: Dict, mass_props: Dict[str, Any], mode: str = "roller", incl
             ET.SubElement(sensor, "jointpos", name="leading_yaw_rad", joint="j_leading_yaw")
             ET.SubElement(sensor, "jointpos", name="drawbar_yaw_rad", joint="j_drawbar_yaw")
 
+            # ==================== C. 可选真实铰接挂车编组 (1:30 国铁ワム80000形二轴有盖货车) ====================
+            if trailing_cars > 0 and mode != "curve_r2m":
+                z_coupler_world = base_rail_z + r_tdr + 0.010
+                z_tdr_rear_local = z_coupler_world - z_tdr_deck
+                x_tdr_rear_local = -0.102500
+                ET.SubElement(tender, "site", name="s_coupler_rear_0", pos=f"{x_tdr_rear_local:.6f} 0 {z_tdr_rear_local:.6f}")
+
+                prev_body = tender
+                prev_rear_pos_local = (x_tdr_rear_local, 0.0, z_tdr_rear_local)
+                prev_wx = tdr_wx + x_tdr_rear_local
+                L_coupler = 0.034000
+                car_half_len = 0.114000
+                car_pin_front_local = +0.118000
+                car_pin_rear_local = -0.118000
+                car_z_deck = base_rail_z + 2.0 * r_tdr - 0.006
+                z_car_pin_local = z_coupler_world - car_z_deck
+                car_wb_half = 0.072000
+
+                for c_idx in range(1, trailing_cars + 1):
+                    # 2-DOF 真实车钩拉杆铰接在上一节车尾端梁
+                    cdb = ET.SubElement(
+                        prev_body, "body", name=f"fcar_coupler_{c_idx}",
+                        pos=f"{prev_rear_pos_local[0]:.6f} {prev_rear_pos_local[1]:.6f} {prev_rear_pos_local[2]:.6f}"
+                    )
+                    ET.SubElement(cdb, "joint", name=f"j_fcoupler_{c_idx}_yaw", type="hinge", axis="0 0 1", armature="0.0005", damping="0.025")
+                    ET.SubElement(cdb, "joint", name=f"j_fcoupler_{c_idx}_pitch", type="hinge", axis="0 1 0", armature="0.0005", damping="0.025")
+                    ET.SubElement(
+                        cdb, "geom", name=f"fcoupler_vis_{c_idx}", type="box",
+                        pos=f"{-0.5 * L_coupler:.6f} 0 0", size=f"{0.5 * L_coupler:.6f} 0.0028 0.0018",
+                        material="mat_black_iron", density=f"{rho_sus:.1f}", contype="0", conaffinity="0"
+                    )
+                    ET.SubElement(cdb, "site", name=f"s_fcoupler_rear_{c_idx}", pos=f"{-L_coupler:.6f} 0 0")
+
+                    car_wx = prev_wx - L_coupler - car_pin_front_local
+                    fcar = ET.SubElement(
+                        world, "body", name=f"freight_car_{c_idx}",
+                        pos=f"{car_wx:.6f} 0.000000 {car_z_deck:.6f}"
+                    )
+                    ET.SubElement(fcar, "freejoint", name=f"fcar_free_{c_idx}")
+                    m_car_dry = 0.720  # 车体干重 0.72 kg + 2组轮对轴箱 ~0.13 kg = 单车总重 ~0.85 kg
+                    ixx_c = (m_car_dry / 12.0) * (0.084**2 + 0.082**2)
+                    iyy_c = (m_car_dry / 12.0) * (0.228**2 + 0.082**2)
+                    izz_c = (m_car_dry / 12.0) * (0.228**2 + 0.084**2)
+                    ET.SubElement(
+                        fcar, "inertial", pos="0 0 0.032", mass=f"{m_car_dry:.6f}",
+                        diaginertia=f"{ixx_c:.8f} {iyy_c:.8f} {izz_c:.8f}"
+                    )
+                    ET.SubElement(fcar, "site", name=f"s_fcar_front_pin_{c_idx}", pos=f"{car_pin_front_local:.6f} 0 {z_car_pin_local:.6f}")
+                    ET.SubElement(
+                        equality, "connect", name=f"loop_fcar_coupler_{c_idx}",
+                        site1=f"s_fcoupler_rear_{c_idx}", site2=f"s_fcar_front_pin_{c_idx}",
+                        solref="0.00032 1.0", solimp="0.9998 0.99998 0.000003"
+                    )
+                    # 底架黑钢梁 + 国铁とび色2号 (红棕) 瓦楞棚车厢体 + 银灰拱顶
+                    ET.SubElement(
+                        fcar, "geom", name=f"fcar_frame_vis_{c_idx}", type="box",
+                        pos="0 0 0.006", size=f"{car_half_len:.6f} 0.039 0.0045",
+                        material="mat_black_iron", contype="0", conaffinity="0", mass="0"
+                    )
+                    ET.SubElement(
+                        fcar, "geom", name=f"fcar_body_vis_{c_idx}", type="box",
+                        pos="0 0 0.044", size=f"{car_half_len - 0.002:.6f} 0.041 0.034",
+                        rgba="0.38 0.17 0.10 1", contype="0", conaffinity="0", mass="0"
+                    )
+                    ET.SubElement(
+                        fcar, "geom", name=f"fcar_roof_vis_{c_idx}", type="box",
+                        pos="0 0 0.080", size=f"{car_half_len:.6f} 0.042 0.003",
+                        rgba="0.30 0.32 0.35 1", contype="0", conaffinity="0", mass="0"
+                    )
+                    ET.SubElement(
+                        fcar, "geom", name=f"fcar_door_vis_{c_idx}", type="box",
+                        pos="0 0 0.044", size="0.028 0.0422 0.031",
+                        rgba="0.43 0.20 0.12 1", contype="0", conaffinity="0", mass="0"
+                    )
+
+                    z_cwheel_local = (base_rail_z + r_tdr - 0.00035) - car_z_deck
+                    mp_tabL, mp_tabR = parts_mp["tender_axlebox_L"], parts_mp["tender_axlebox_R"]
+                    for a_idx, ax_x in [(1, +car_wb_half), (2, -car_wb_half)]:
+                        cabox = ET.SubElement(fcar, "body", name=f"fcar_{c_idx}_axlebox_{a_idx}", pos=f"{ax_x:.6f} 0 {z_cwheel_local:.6f}")
+                        attach_composite_inertial(
+                            cabox,
+                            [
+                                (mp_tabL["mass_kg"], np.array(mp_tabL["com_m"]), full_to_mat3(mp_tabL["fullinertia"])),
+                                (mp_tabR["mass_kg"], np.array(mp_tabR["com_m"]), full_to_mat3(mp_tabR["fullinertia"])),
+                            ],
+                        )
+                        ET.SubElement(
+                            cabox, "joint", name=f"j_fcar_{c_idx}_susp_{a_idx}", type="slide", axis="0 0 1",
+                            springref="-0.0018", limited="true", range="-0.0025 0.0025", stiffness="840", damping="14"
+                        )
+                        for s_tag in ("L", "R"):
+                            ET.SubElement(
+                                cabox, "geom", name=f"fcar_{c_idx}_abox_vis_{a_idx}_{s_tag}", type="mesh",
+                                mesh=f"m_tender_axlebox_{s_tag}", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
+                            )
+
+                        cws = ET.SubElement(cabox, "body", name=f"fcar_{c_idx}_wheelset_{a_idx}", pos="0 0 0")
+                        ET.SubElement(cws, "joint", name=f"j_fcar_{c_idx}_wheel_{a_idx}", type="hinge", axis="0 1 0", damping="0.000004")
+                        attach_composite_inertial(
+                            cws,
+                            [
+                                (mp_tL["mass_kg"], np.array(mp_tL["com_m"]) + np.array([0.0, +y_tw_off, 0.0]), full_to_mat3(mp_tL["fullinertia"])),
+                                (mp_tR["mass_kg"], np.array(mp_tR["com_m"]) + np.array([0.0, -y_tw_off, 0.0]), full_to_mat3(mp_tR["fullinertia"])),
+                            ],
+                        )
+                        add_rail_wheel_colliders(cws, f"fcar_{c_idx}_{a_idx}", r_tdr, y_gauge_half, use_explicit_inertial=True, is_driving=False)
+                        ET.SubElement(
+                            cws, "geom", name=f"fcar_{c_idx}_axle_vis_{a_idx}", type="cylinder",
+                            fromto="0 -0.0272 0  0 0.0272 0", size="0.0020",
+                            material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
+                        )
+                        for s_tag, sgn in [("L", 1.0), ("R", -1.0)]:
+                            ET.SubElement(
+                                cws, "geom", name=f"fcar_{c_idx}_wvis_{a_idx}_{s_tag}", type="mesh",
+                                mesh=f"m_truck_wheel_{s_tag}", material="mat_black_iron",
+                                pos=f"0 {sgn * y_tw_off:.6f} 0", contype="0", conaffinity="0", mass="0"
+                            )
+
+                    prev_body = fcar
+                    prev_rear_pos_local = (car_pin_rear_local, 0.0, z_car_pin_local)
+                    prev_wx = car_wx + car_pin_rear_local
+
     # [契约硬校验] 严禁任何运动刚体缺少真实材料惯量！
     for body_el in mj.iter("body"):
         has_joint = (body_el.find("joint") is not None) or (body_el.find("freejoint") is not None)
@@ -1818,7 +2005,8 @@ def main():
     parser.add_argument("--config", type=Path, default=Path("configs/d51_kinematics.json"))
     parser.add_argument("--mass-props", type=Path, default=Path("configs/d51_mass_props.json"))
     parser.add_argument("--out", type=Path, default=Path("models/d51_full.xml"))
-    parser.add_argument("--mode", choices=["roller", "track", "curve_r2m"], default="roller")
+    parser.add_argument("--mode", choices=["roller", "track", "curve_r2m", "oval_grade"], default="roller")
+    parser.add_argument("--trailing-cars", type=int, default=-1, help="挂接二轴货车节数 (-1 表示 oval_grade 默认挂 2 节，其余模式 0 节)")
     parser.add_argument("--no-tender", action="store_true")
     args = parser.parse_args()
 
@@ -1827,7 +2015,8 @@ def main():
 
     cfg = json.loads(args.config.read_text(encoding="utf-8"))
     mass_props = json.loads(args.mass_props.read_text(encoding="utf-8"))
-    xml_str = build_mjcf(cfg, mass_props, mode=args.mode, include_tender=not args.no_tender)
+    n_cars = (2 if args.mode == "oval_grade" else 0) if args.trailing_cars < 0 else max(0, args.trailing_cars)
+    xml_str = build_mjcf(cfg, mass_props, mode=args.mode, include_tender=not args.no_tender, trailing_cars=n_cars)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(xml_str, encoding="utf-8")
     print(f"[DONE] 已注入精确材料惯量并生成模型: {args.out} (模式: {args.mode})")

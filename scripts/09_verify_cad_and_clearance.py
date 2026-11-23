@@ -4986,6 +4986,199 @@ def verify_gate_30() -> Tuple[bool, List[str]]:
 
 
 # ==============================================================================
+# Gate 31: Stage 27 第一性原理轮轨跑距、3D 起伏高架椭圆环线 + 2 节货车、甲醇/注油器真值与 RTX 5080 Triton 寄存器续航核门禁
+# ==============================================================================
+
+def verify_gate_31() -> Tuple[bool, List[str]]:
+    import torch
+    from sim.thermo_1d import CabControls
+    from sim.gpu_track_endurance import EnduranceScenario, GPUConsistEnduranceEngine, TrackProfile3D
+
+    ok = True
+    msgs: List[str] = []
+
+    # 31.1 核验 models/d51_oval.xml (27.708m 闭合椭圆 + ±1.50% C^inf 3D 高架坡道 + 2 节二轴ワム货车 = 14 轴) 零残差编译与无脱线运行
+    oval_xml = PROJECT_ROOT / "models" / "d51_oval.xml"
+    if not oval_xml.exists():
+        return False, ["FAIL: models/d51_oval.xml missing"]
+
+    m_ov = mujoco.MjModel.from_xml_path(str(oval_xml))
+    d_ov = mujoco.MjData(m_ov)
+    mujoco.mj_forward(m_ov, d_ov)
+
+    fc1_id = mujoco.mj_name2id(m_ov, mujoco.mjtObj.mjOBJ_BODY, "freight_car_1")
+    fc2_id = mujoco.mj_name2id(m_ov, mujoco.mjtObj.mjOBJ_BODY, "freight_car_2")
+    eq_active = d_ov.efc_pos
+    max_eq_mm = float(np.max(np.abs(eq_active[:12])) * 1000.0) if len(eq_active) >= 12 else 0.0
+    rail_z_max = float(max(
+        (m_ov.geom_pos[g, 2] for g in range(m_ov.ngeom) if (mujoco.mj_id2name(m_ov, mujoco.mjtObj.mjOBJ_GEOM, g) or "").startswith("rail_oval_")),
+        default=0.0,
+    ))
+
+    r_ov = CoSimRunner(oval_xml, preset="hot", use_gpu_3d=False)
+    r_ov.ctrl = CabControls(regulator=0.48, reverser=0.65, bypass_valve=0.35, blower_valve=0.22, burner_lit=True, fuel_valve=1.0, drain_cock=False)
+    alc0 = r_ov.thermo.alcohol_ml + r_ov.thermo.sump_fuel_ml
+    oil0 = r_ov.thermo.lube_oil_ml
+    tel_ov = None
+    peak_p_exh_ov = 0.0
+    for _ in range(12000):  # 6.0s @ dt=0.5ms
+        tel_ov = r_ov.step_once()
+        peak_p_exh_ov = max(peak_p_exh_ov, float(tel_ov.exhaust_backpressure_kgf))
+
+    oval_ok = (
+        fc1_id >= 0
+        and fc2_id >= 0
+        and max_eq_mm <= 0.05
+        and rail_z_max >= 0.100
+        and not tel_ov.derailed
+        and tel_ov.distance_m >= 4.5
+        and abs(tel_ov.scale_distance_km - tel_ov.distance_m * 0.030) <= 0.002
+        and tel_ov.lap_count >= 0.16
+    )
+    if not oval_ok:
+        ok = False
+        msgs.append(
+            f"FAIL: 3D Viaduct Oval + 2 Wamu cars check failed: fc=({fc1_id},{fc2_id}), eq={max_eq_mm:.4f}mm, "
+            f"z_max={rail_z_max:.3f}m, derailed={tel_ov.derailed}, dist={tel_ov.distance_m:.3f}m, laps={tel_ov.lap_count:.3f}"
+        )
+    else:
+        msgs.append(
+            f"PASS: 3D Viaduct Oval (27.71m, crest={rail_z_max*1000:.1f}mm) + 2 articulated JNR Wamu cars (14 axles) verified "
+            f"(6.0s dist={tel_ov.distance_m:.3f}m, scale={tel_ov.scale_distance_km:.3f}km, laps={tel_ov.lap_count:.3f}, derailed=False)"
+        )
+
+    # 31.2 核验零 8.80*v^2 硬编码假阻尼、20-7 乏汽背压、坡道加减速、迎风冷缸与湿轨真打滑
+    cosim_src = (PROJECT_ROOT / "sim" / "run_cosim.py").read_text(encoding="utf-8")
+    main_ts_src = (PROJECT_ROOT / "web" / "src" / "main.ts").read_text(encoding="utf-8")
+    zero_fake_drag = ("8.80 * v_spd" not in cosim_src) and ("8.80 * vSpd" not in main_ts_src) and ("f_davis = 0.22" not in cosim_src)
+
+    def _run_track_case(grade_deg: float = 0.0, amb_c: float = 25.0, wind_ms: float = 0.0, drain: bool = False, reg: float = 0.55, steps: int = 3600):
+        rr = CoSimRunner(PROJECT_ROOT / "models" / "d51_track.xml", preset="hot", use_gpu_3d=False)
+        rr.ctrl = CabControls(
+            regulator=reg, reverser=0.75, bypass_valve=0.35, blower_valve=0.20,
+            burner_lit=True, fuel_valve=1.0, drain_cock=drain,
+            grade_deg=grade_deg, ambient_temp_c=amb_c, headwind_m_s=wind_ms,
+        )
+        pk_slip = 0.0
+        min_mu = 1.0
+        tt = None
+        for _ in range(steps):
+            tt = rr.step_once()
+            pk_slip = max(pk_slip, float(tt.wheel_slip_pct))
+            min_mu = min(min_mu, float(tt.rail_adhesion_mu))
+        return tt, pk_slip, min_mu
+
+    t_up, _, _ = _run_track_case(grade_deg=+2.2, amb_c=25.0, steps=3200)
+    t_dn, _, _ = _run_track_case(grade_deg=-2.2, amb_c=25.0, steps=3200)
+    t_cold_w, _, _ = _run_track_case(grade_deg=0.0, amb_c=0.0, wind_ms=2.5, reg=0.20, steps=3200)
+    t_warm_w, _, _ = _run_track_case(grade_deg=0.0, amb_c=32.0, wind_ms=0.0, reg=0.20, steps=3200)
+    _, pk_wet_slip, min_wet_mu = _run_track_case(grade_deg=+1.5, drain=True, reg=1.0, steps=2200)
+
+    phys_ok = (
+        zero_fake_drag
+        and peak_p_exh_ov >= 0.04
+        and float(t_dn.distance_m) > float(t_up.distance_m) * 1.08
+        and float(t_cold_w.cyl_wall_temp_c) < float(t_warm_w.cyl_wall_temp_c) - 0.35
+        and pk_wet_slip >= 8.0
+        and min_wet_mu <= 0.20
+    )
+    if not phys_ok:
+        ok = False
+        msgs.append(
+            f"FAIL: First-principles track/thermo physics check failed: zero_8.80={zero_fake_drag}, "
+            f"P_exh_pk={peak_p_exh_ov:.3f}kgf, d_dn={t_dn.distance_m:.3f} vs d_up={t_up.distance_m:.3f}m, "
+            f"T_cyl(0C={t_cold_w.cyl_wall_temp_c:.2f} vs 32C={t_warm_w.cyl_wall_temp_c:.2f}), wet_slip={pk_wet_slip:.1f}% (mu={min_wet_mu:.3f})"
+        )
+    else:
+        msgs.append(
+            f"PASS: Zero hardcoded 8.80*v^2 drag, 20-7 chuff backpressure (peak {peak_p_exh_ov:.3f} kgf/cm²), "
+            f"grade gravity (down {t_dn.distance_m:.2f}m > up {t_up.distance_m:.2f}m), wind-chill cooling, and wet-rail slip ({pk_wet_slip:.1f}%, mu={min_wet_mu:.3f}) verified"
+        )
+
+    # 31.3 核验工业甲醇 (CH3OH, 19.93 MJ/kg) ~20min 续航与 4-2 Roscoe 注油器 ~60min 续航及 Python/TS 同构
+    alc_min_130 = (130.0 / max(1e-8, (alc0 - (r_ov.thermo.alcohol_ml + r_ov.thermo.sump_fuel_ml)) / 6.0)) / 60.0
+    oil_min_80 = (2.56 / max(1e-8, (oil0 - r_ov.thermo.lube_oil_ml) / 6.0)) / 60.0
+    ts_th_src = (PROJECT_ROOT / "web" / "src" / "thermo1d.ts").read_text(encoding="utf-8")
+    consumables_ok = (
+        18.0 <= alc_min_130 <= 24.5
+        and 42.0 <= oil_min_80 <= 78.0
+        and "19.93e6" in ts_th_src
+        and "3.80e-6" in ts_th_src
+    )
+    if not consumables_ok:
+        ok = False
+        msgs.append(
+            f"FAIL: Methanol / Roscoe lubricator truth rate failed: alc_130ml={alc_min_130:.2f}min (expect 18..24.5), "
+            f"oil_80pct={oil_min_80:.2f}min (expect 42..78), TS sync={'19.93e6' in ts_th_src}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Methanol CH3OH (19.93 MJ/kg, 130ml -> {alc_min_130:.1f} min) & 4-2 Roscoe lubricator "
+            f"(80% 2.56ml -> {oil_min_80:.1f} min, 100% -> {oil_min_80/0.8:.1f} min) verified with Python+TS parity"
+        )
+
+    # 31.4 核验 RTX 5080 原生 @triton.jit 寄存器驻留核 (零 @torch.jit.script NNC 死锁)、CPU FP64 回退与 3D MuJoCo 跑距对账 (<8%)
+    gpu_src = (PROJECT_ROOT / "sim" / "gpu_track_endurance.py").read_text(encoding="utf-8")
+    no_torchscript_nnc = ("def _advance_chunk_jit" not in gpu_src) and ("_rollout_chunk_triton_kernel" in gpu_src)
+
+    sc_par = EnduranceScenario("parity6s", track_mode="oval_grade", preset="hot", ai_driver=False, regulator=0.48, reverser=0.65, bypass_valve=0.35, blower_valve=0.22, trailing_cars=2)
+    eng_cpu = GPUConsistEnduranceEngine(device=torch.device("cpu"))
+    res_cpu = eng_cpu.simulate_batch([sc_par], max_sim_s=6.0, dt=0.0025)["results"][0]
+    err_cpu_vs_mj = 100.0 * abs(float(res_cpu["distance_m"]) - float(tel_ov.distance_m)) / max(0.1, float(tel_ov.distance_m))
+
+    if torch.cuda.is_available():
+        eng_gpu = GPUConsistEnduranceEngine(device=torch.device("cuda"))
+        rep_gpu = eng_gpu.simulate_batch([sc_par], max_sim_s=6.0, dt=0.0025)
+        res_gpu = rep_gpu["results"][0]
+        err_gpu_vs_mj = 100.0 * abs(float(res_gpu["distance_m"]) - float(tel_ov.distance_m)) / max(0.1, float(tel_ov.distance_m))
+        err_gpu_vs_cpu = 100.0 * abs(float(res_gpu["distance_m"]) - float(res_cpu["distance_m"])) / max(0.1, float(res_cpu["distance_m"]))
+        live_pred = eng_gpu.predict_live_remaining_range("oval_grade", {"alcohol_ml": 90.0, "tender_water_ml": 210.0, "M_water_kg": 0.20}, {"ai_driver": True}, n_ensemble=16)
+        gpu_fast_ok = ("Triton Register Kernel" in rep_gpu["device"]) and (live_pred["p10_m"] <= live_pred["p50_m"] <= live_pred["p90_m"]) and (live_pred["p50_m"] > 200.0)
+    else:
+        err_gpu_vs_mj = err_cpu_vs_mj
+        err_gpu_vs_cpu = 0.0
+        gpu_fast_ok = True
+
+    bench_path = PROJECT_ROOT / "configs" / "d51_range_benchmark.json"
+    bench_ok = False
+    if bench_path.exists():
+        bdata = json.loads(bench_path.read_text(encoding="utf-8"))
+        bmap = {r["name"]: r for r in bdata.get("scenarios", [])}
+        mc = bdata.get("monte_carlo_130ml_cold_oval_2cars", {})
+        bench_ok = (
+            len(bmap) >= 10
+            and bmap["01_hot_straight_light_economy"]["distance_m"] > bmap["03_hot_oval_grade_2cars_economy"]["distance_m"] > bmap["04_hot_oval_grade_4cars_heavy"]["distance_m"]
+            and bmap["08_2010spec_200ml_hot_oval_light"]["distance_m"] > bmap["02_hot_oval_grade_light_economy"]["distance_m"] * 1.30
+            and bmap["09_winter_5C_headwind_oval_2cars"]["distance_m"] < bmap["03_hot_oval_grade_2cars_economy"]["distance_m"]
+            and 18.0 <= bmap["03_hot_oval_grade_2cars_economy"]["duration_min"] <= 23.0
+            and float(mc.get("effective_speedup_x", 0.0)) >= 1000.0
+        )
+
+    triton_ok = (
+        no_torchscript_nnc
+        and err_cpu_vs_mj <= 8.0
+        and err_gpu_vs_mj <= 8.0
+        and err_gpu_vs_cpu <= 2.0
+        and gpu_fast_ok
+        and bench_ok
+    )
+    if not triton_ok:
+        ok = False
+        msgs.append(
+            f"FAIL: Triton GPU endurance & parity check failed: no_nnc={no_torchscript_nnc}, "
+            f"err_gpu_mj={err_gpu_vs_mj:.2f}%, err_cpu_mj={err_cpu_vs_mj:.2f}%, err_gpu_cpu={err_gpu_vs_cpu:.2f}%, "
+            f"gpu_fast={gpu_fast_ok}, bench_ok={bench_ok}"
+        )
+    else:
+        msgs.append(
+            f"PASS: Triton GPU Register Kernel + CPU FP64 fallback + range benchmark verified "
+            f"(3D MuJoCo parity err={err_gpu_vs_mj:.2f}% <= 8%, GPU-CPU diff={err_gpu_vs_cpu:.2f}%, zero TorchScript NNC)"
+        )
+
+    return ok, msgs
+
+
+# ==============================================================================
 # 主入口
 # ==============================================================================
 
@@ -5177,11 +5370,18 @@ def main() -> int:
         print(f"  - {m}")
     all_ok &= g30_ok
 
+    hw_guard.cooldown_if_needed()
+    g31_ok, g31_msgs = verify_gate_31()
+    print(f"\n[Gate 31] Stage 27 First-Principles Track Range, 3D Viaduct Oval + 2 Cars, Methanol/Roscoe Truth & Triton GPU Kernel -> {'PASS' if g31_ok else 'FAIL'}")
+    for m in g31_msgs:
+        print(f"  - {m}")
+    all_ok &= g31_ok
+
     snap = hw_guard.read_metrics()
     print(f"\n[Thermal/Power Guard] Post-run telemetry: CPU={snap['cpu_c']:.1f}°C | GPU={snap['gpu_c']:.1f}°C | GPU_Power={snap['gpu_w']:.1f}W")
     print("=" * 88)
     if all_ok:
-        print(" [ALL GATES 1-30 PASSED] STAGE 26 (1:1 BLUEPRINT WALSCHAERTS LINKAGE + 1-9 CROSS-PORT PLATE + CONSTANT LEAD) VERIFIED 100%")
+        print(" [ALL GATES 1-31 PASSED] STAGE 27 (FIRST-PRINCIPLES TRACK RANGE + 3D VIADUCT OVAL + TRITON GPU ENDURANCE) VERIFIED 100%")
         print("=" * 88)
         return 0
     else:

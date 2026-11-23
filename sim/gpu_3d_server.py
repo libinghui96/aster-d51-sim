@@ -143,6 +143,7 @@ SCENE_XML_MAP = {
     "roller": PROJECT_ROOT / "models" / "d51_full.xml",
     "track": PROJECT_ROOT / "models" / "d51_track.xml",
     "curve": PROJECT_ROOT / "models" / "d51_r2m.xml",
+    "oval": PROJECT_ROOT / "models" / "d51_oval.xml",
 }
 
 mimetypes.add_type("application/wasm", ".wasm")
@@ -192,6 +193,10 @@ def pack_frame_payload(
             "domeLidOpen": bool(getattr(runner.ctrl, "dome_lid_open", False)),
             "coalCoverOpen": bool(getattr(runner.ctrl, "coal_cover_open", False)),
             "gradeDeg": round(runner.ctrl.grade_deg, 2),
+            "ambientTempC": round(float(getattr(runner.ctrl, "ambient_temp_c", 25.0)), 1),
+            "headwindMS": round(float(getattr(runner.ctrl, "headwind_m_s", 0.0)), 2),
+            "trailingLoadKg": round(float(getattr(runner.ctrl, "trailing_load_kg", 0.0)), 2),
+            "tankSpec2010": bool(getattr(runner.ctrl, "tank_spec_2010", False)),
             "thermalWarp": round(runner.ctrl.thermal_warp, 1),
         },
         "tel": {
@@ -321,6 +326,20 @@ def pack_frame_payload(
             "fPump": round(float(getattr(runner, "last_f_pump", 0.0)), 3),
             "wheelRpm": round(tel.wheel_rpm, 1),
             "scaleSpeedKmh": round(tel.scale_speed_kmh, 2),
+            "groundSpeedMS": round(float(getattr(tel, "ground_speed_ms", 0.0)), 4),
+            "groundSpeedKmh": round(float(getattr(tel, "ground_speed_kmh", tel.scale_speed_kmh)), 2),
+            "wheelSlipPct": round(float(getattr(tel, "wheel_slip_pct", 0.0)), 2),
+            "railAdhesionMu": round(float(getattr(tel, "rail_adhesion_mu", 0.26)), 3),
+            "exhaustBackpressureKgf": round(float(getattr(tel, "exhaust_backpressure_kgf", 0.0)), 4),
+            "trainResistanceN": round(float(getattr(tel, "train_resistance_n", 0.0)), 3),
+            "distanceM": round(float(getattr(tel, "distance_m", 0.0)), 3),
+            "scaleDistanceKm": round(float(getattr(tel, "scale_distance_km", 0.0)), 4),
+            "lapCount": round(float(getattr(tel, "lap_count", 0.0)), 3),
+            "predictedRangeM": round(float(getattr(tel, "predicted_range_m", 0.0)), 1),
+            "predictedRangeP10M": round(float(getattr(tel, "predicted_range_p10_m", 0.0)), 1),
+            "predictedRangeP90M": round(float(getattr(tel, "predicted_range_p90_m", 0.0)), 1),
+            "predictedTimeMin": round(float(getattr(tel, "predicted_time_min", 0.0)), 1),
+            "rangeLimitingFactor": str(getattr(tel, "range_limiting_factor", "NOMINAL")),
         },
         "spatial": {
             "gpuActive": bool(sp.gpu_active),
@@ -515,6 +534,14 @@ class GPU3DRealtimeBridge:
                 c.coal_cover_open = bool(cd["coalCoverOpen"])
             if "gradeDeg" in cd:
                 c.grade_deg = float(cd["gradeDeg"])
+            if "ambientTempC" in cd:
+                c.ambient_temp_c = float(cd["ambientTempC"])
+            if "headwindMS" in cd:
+                c.headwind_m_s = float(cd["headwindMS"])
+            if "trailingLoadKg" in cd:
+                c.trailing_load_kg = float(cd["trailingLoadKg"])
+            if "tankSpec2010" in cd:
+                c.tank_spec_2010 = bool(cd["tankSpec2010"])
             if "thermalWarp" in cd:
                 c.thermal_warp = float(cd["thermalWarp"])
         elif mtype == "action":
@@ -532,6 +559,7 @@ class GPU3DRealtimeBridge:
                 self.runner._handpump_vis_timer = 0.0
                 self.runner.derailed = False
                 self.runner.derail_reason = ""
+                self.runner.reset_odometer()
             elif act == "toggleGpuMonitor":
                 en = bool(msg.get("enabled", not self.runner.enable_gpu_monitor))
                 self.runner.set_gpu_monitor_enabled(en)
@@ -642,6 +670,22 @@ class GPU3DRealtimeBridge:
                     mujoco.mj_resetData(self.runner.model, self.runner.data)
                     mujoco.mj_forward(self.runner.model, self.runner.data)
 
+                if (frame_idx == 2 or frame_idx % 60 == 0) and not getattr(self, "_range_job_busy", False):
+                    self._range_job_busy = True
+
+                    async def _bg_range() -> None:
+                        try:
+                            await asyncio.to_thread(
+                                self.runner.update_gpu_range_prediction,
+                                self.ai_mode != "off",
+                                24,
+                            )
+                        except Exception:
+                            pass
+                        finally:
+                            self._range_job_busy = False
+
+                    asyncio.create_task(_bg_range())
                 self.last_tel = tel
                 if self.ai_mode == "human":
                     self.human_agent.update(
@@ -742,7 +786,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Aster D51 RTX 5080 真 3D 多相热流 HTTP + WebSocket 一体化服务")
     parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--scene", choices=["roller", "track", "curve"], default="roller")
+    parser.add_argument("--scene", choices=["roller", "track", "curve", "oval"], default="roller")
     parser.add_argument("--preset", choices=["cold", "hot"], default="hot")
     parser.add_argument("--fps", type=float, default=30.0)
     parser.add_argument("--gpu-monitor", action="store_true", help="默认开启实时 GPU SM/VRAM/温度/功耗监控遥测")

@@ -233,7 +233,15 @@ class HardwareThermalPowerGuard:
         )
 
     def cooldown_if_needed(self, max_wait_s: float = 1.5) -> float:
-        """若检测到温度或瞬时功耗超标，同步 GPU 并短暂休眠降温，返回累计休眠秒数。"""
+        """回收游离 GPU 显存块；若检测到温度或瞬时功耗超标，同步 GPU 并短暂休眠降温，返回累计休眠秒数。"""
+        try:
+            import gc
+            import torch
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
         waited = 0.0
         while waited < max_wait_s:
             m = self.read_metrics()

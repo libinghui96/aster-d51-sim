@@ -31,6 +31,10 @@ export interface CabControls {
   coalCoverOpen: boolean;
   thermalWarp: number;
   gradeDeg: number;
+  ambientTempC?: number;
+  headwindMS?: number;
+  trailingLoadKg?: number;
+  tankSpec2010?: boolean;
 }
 
 export interface CylinderCalibration {
@@ -239,6 +243,20 @@ export interface StepOutput {
   lubricatorOilPct: number;
   wheelRpm: number;
   scaleSpeedKmh: number;
+  groundSpeedMS?: number;
+  groundSpeedKmh?: number;
+  wheelSlipPct?: number;
+  railAdhesionMu?: number;
+  exhaustBackpressureKgf?: number;
+  trainResistanceN?: number;
+  distanceM?: number;
+  scaleDistanceKm?: number;
+  lapCount?: number;
+  predictedRangeM?: number;
+  predictedRangeP10M?: number;
+  predictedRangeP90M?: number;
+  predictedTimeMin?: number;
+  rangeLimitingFactor?: string;
   safetyValveOpen: boolean;
   dryFireAlarm: boolean;
   flashSteamSpike: boolean;
@@ -339,14 +357,17 @@ export class AsterD51Thermo1D {
   M_waterKg = 0.21;
   P_boiler = P_ATM;
   P_steamChest = P_ATM;
+  P_exhaust = P_ATM;
   T_superheatC = 25.0;
   T_shWallC = 25.0;
   safetyValveOpen = false;
 
+  alcoholCapMl = 130.0;
   alcoholMl = 130.0;
   sumpFuelMl = 0.0;
-  readonly tenderWaterCapMl = 340.0;
+  tenderWaterCapMl = 340.0;
   tenderWaterMl = 272.0; // Manual p.39: 8分目 (80% of 340ml)
+  private tankSpec2010Applied = false;
   T_tenderWaterC = 25.0;
   simTime = 0.0;
   readonly lubeTankCapMl = 3.2;
@@ -397,12 +418,16 @@ export class AsterD51Thermo1D {
     this.M_waterKg = 0.21;
     this.P_boiler = P_ATM;
     this.P_steamChest = P_ATM;
+    this.P_exhaust = P_ATM;
     this.T_superheatC = 25.0;
     this.T_shWallC = 25.0;
     this.safetyValveOpen = false;
+    this.alcoholCapMl = 130.0;
     this.alcoholMl = 130.0;
     this.sumpFuelMl = 0.0;
+    this.tenderWaterCapMl = 340.0;
     this.tenderWaterMl = 272.0;
+    this.tankSpec2010Applied = false;
     this.T_tenderWaterC = 25.0;
     this.simTime = 0.0;
     this.lubeCondensateMl = 0.2 * this.lubeTankCapMl;
@@ -511,11 +536,11 @@ export class AsterD51Thermo1D {
     const exhChokeC = !drainOpen && volWC > 0.48 * this.V_clear ? 0.14 : 1.0;
 
     const mInH = orificeMassFlow(this.P_steamChest, pPair[0], tShK, aAdmH);
-    const mOutH = orificeMassFlow(pPair[0], P_ATM, tShK, aExhH * exhChokeH);
+    const mOutH = orificeMassFlow(pPair[0], this.P_exhaust, tShK, aExhH * exhChokeH);
     const mDrnH = orificeMassFlow(pPair[0], P_ATM, tShK, aDrain);
 
     const mInC = orificeMassFlow(this.P_steamChest, pPair[1], tShK, aAdmC);
-    const mOutC = orificeMassFlow(pPair[1], P_ATM, tShK, aExhC * exhChokeC);
+    const mOutC = orificeMassFlow(pPair[1], this.P_exhaust, tShK, aExhC * exhChokeC);
     const mDrnC = orificeMassFlow(pPair[1], P_ATM, tShK, aDrain);
 
     const mBlow =
@@ -611,10 +636,32 @@ export class AsterD51Thermo1D {
     vVL = 0.0,
     vVR = 0.0,
     pitchRad = 0.0,
-    accelX = 0.0
+    accelX = 0.0,
+    vGroundMS?: number
   ): StepOutput {
     const dtTh = dt * Math.max(1.0, ctrl.thermalWarp);
+    const tAmbC = ctrl.ambientTempC ?? 25.0;
+    const vWindMS = ctrl.headwindMS ?? 0.0;
+    const vWheelRimMS = omega3 * (0.5 * 0.0438);
+    const vGndSigned = vGroundMS === undefined ? vWheelRimMS : vGroundMS;
+    const vAirRelMS = Math.abs(vGndSigned + vWindMS);
     this.simTime += dt;
+
+    const want2010 = !!ctrl.tankSpec2010;
+    if (want2010 !== this.tankSpec2010Applied) {
+      if (want2010) {
+        this.alcoholMl = Math.min(200.0, this.alcoholMl * (200.0 / Math.max(1.0, this.alcoholCapMl)));
+        this.alcoholCapMl = 200.0;
+        this.tenderWaterMl = Math.min(400.0, this.tenderWaterMl * (400.0 / Math.max(1.0, this.tenderWaterCapMl)));
+        this.tenderWaterCapMl = 400.0;
+      } else {
+        this.alcoholMl = Math.min(130.0, this.alcoholMl * (130.0 / Math.max(1.0, this.alcoholCapMl)));
+        this.alcoholCapMl = 130.0;
+        this.tenderWaterMl = Math.min(340.0, this.tenderWaterMl * (340.0 / Math.max(1.0, this.tenderWaterCapMl)));
+        this.tenderWaterCapMl = 340.0;
+      }
+      this.tankSpec2010Applied = want2010;
+    }
 
     let mariotteBubbling = false;
     let mariotteFloodAlarm = false;
@@ -628,7 +675,7 @@ export class AsterD51Thermo1D {
           this.sumpFuelMl += flood;
         }
       } else if (this.sumpFuelMl < 3.5) {
-        const refill = Math.min(this.alcoholMl, 0.45 * ctrl.fuelValve * dtTh, 3.5 - this.sumpFuelMl);
+        const refill = Math.min(this.alcoholMl, 0.52 * ctrl.fuelValve * dtTh, 3.5 - this.sumpFuelMl);
         this.alcoholMl -= refill;
         this.sumpFuelMl += refill;
         mariotteBubbling = refill > 1e-6;
@@ -639,7 +686,11 @@ export class AsterD51Thermo1D {
     const aReg = 3.2e-6 * Math.pow(ctrl.regulator, 1.35);
     const tBoilK = this.T_boilerC + 273.15;
     const hasSteam = (this.M_waterKg > 1.0e-4 || this.P_boiler > P_ATM + 1500.0) && this.P_boiler > P_ATM;
-    const mdotReg = hasSteam ? orificeMassFlow(this.P_boiler, this.P_steamChest, tBoilK, aReg) : 0.0;
+    const mdotRegEst = hasSteam ? orificeMassFlow(this.P_boiler, this.P_steamChest, tBoilK, aReg) : 0.0;
+    const rhoShUp = Math.max(0.5, this.P_boiler / (R_STEAM * Math.max(295.0, tBoilK)));
+    const uShTube = mdotRegEst / Math.max(1e-9, 2.0 * Math.PI * Math.pow(0.0011, 2) * rhoShUp);
+    const dpShFriction = 0.036 * (0.504 / 0.0022) * 0.5 * rhoShUp * uShTube * uShTube;
+    const mdotReg = hasSteam ? orificeMassFlow(Math.max(P_ATM, this.P_boiler - dpShFriction), this.P_steamChest, tBoilK, aReg) : 0.0;
 
     const areasL = this.valveAreas(qVL, this.calib.qValveCenterL);
     const areasR = this.valveAreas(qVR, this.calib.qValveCenterR);
@@ -671,8 +722,11 @@ export class AsterD51Thermo1D {
       );
       const dpSc = ((R_STEAM * (this.T_superheatC + 273.15)) / 2.8e-5) * (mdotReg + mRelTot - inTot - mdotGlandLeak);
       this.P_steamChest = Math.min(Math.max(this.P_boiler, P_ATM + 35000.0), Math.max(P_ATM, this.P_steamChest + dpSc * dtSub));
+      const mdotBlastSub = orificeMassFlow(this.P_exhaust, P_ATM, Math.max(295.0, this.T_cylWallC + 273.15), 3.80e-6, 0.72);
+      const dpExh = ((R_STEAM * Math.max(295.0, this.T_cylWallC + 273.15)) / 2.8e-6) * (exhL + exhR - mdotBlastSub);
+      this.P_exhaust = Math.max(P_ATM, Math.min(P_ATM + 2.5 * PA_PER_KGF_CM2, this.P_exhaust + dpExh * dtSub));
       mdotIn += inTot / nSub;
-      mdotExh += (exhL + exhR) / nSub;
+      mdotExh += mdotBlastSub / nSub;
       mdotDrn += (drnL + drnR) / nSub;
       mdotCondTot += (cgL + cgR) / nSub;
       fHydroLAcc += fhL / nSub;
@@ -683,20 +737,28 @@ export class AsterD51Thermo1D {
     this.slideValveLiftMm = Math.max(maxVliftStep, this.slideValveLiftMm * Math.exp(-dt / 0.025));
     this.condensateKg = this.M_condL[0] + this.M_condL[1] + this.M_condR[0] + this.M_condR[1];
 
+    const hCylExt = 6.8 + 15.5 * Math.sqrt(vAirRelMS + 0.05);
+    const qCylExtLossW =
+      0.0096 *
+      (hCylExt * (this.T_cylWallC - tAmbC) +
+        0.85 * 5.670374e-8 * (Math.pow(this.T_cylWallC + 273.15, 4) - Math.pow(tAmbC + 273.15, 4)));
     if (mdotIn > 1e-6 || mdotCondTot > 1e-7) {
       const qLatCyl = Math.min(920.0, mdotCondTot * 2.1e6);
       const qConvCyl = Math.max(0.0, (this.T_superheatC - this.T_cylWallC) * 2.2);
-      this.T_cylWallC = Math.min(this.T_superheatC, this.T_cylWallC + ((qLatCyl + qConvCyl) / 48.0) * dtTh);
+      this.T_cylWallC = Math.max(
+        Math.min(-10.0, tAmbC),
+        Math.min(this.T_superheatC, this.T_cylWallC + ((qLatCyl + qConvCyl - qCylExtLossW) / 48.0) * dtTh)
+      );
     } else {
-      this.T_cylWallC += (25.0 - this.T_cylWallC) * 0.002 * dtTh;
+      this.T_cylWallC = Math.max(Math.min(-10.0, tAmbC), this.T_cylWallC - (qCylExtLossW / 48.0) * dtTh);
     }
 
-    // 4-2 卧式蒸汽置换式注油器: 蒸汽受前车架冷气流冷却凝结沉水，等体积顶出蒸汽油汇入 13-4/7-9 给汽三通
+    // 4-2 卧式 Roscoe 置换式注油器: 18.5cm² 前车架黄铜罐串联内壁油膜热阻 + 迎风对流 + 车架导热桥冷凝沉水 (~60 min / 3.2 ml)
     if (this.P_steamChest > P_ATM + 2500.0 && this.lubeCondensateMl < this.lubeTankCapMl) {
       const tSatLubeC = satTempC(this.P_steamChest);
-      const airCool = 1.0 + 0.022 * Math.min(40.0, Math.abs(omega3));
-      const pulse = 0.35 + 0.65 * Math.min(1.0, mdotIn / 1.5e-4);
-      const qLubeW = 0.0115 * airCool * pulse * Math.max(0.0, tSatLubeC - 25.0);
+      const hLubExt = 8.5 + 14.0 * Math.sqrt(vAirRelMS + 0.04);
+      const pulse = 0.38 + 0.62 * Math.min(1.0, mdotIn / 1.4e-4);
+      const qLubeW = (0.34 * hLubExt * 0.00185 + 0.015) * pulse * Math.max(0.0, tSatLubeC - tAmbC - 4.0);
       const mdotLubeCond = qLubeW / latentHeatJKg(tSatLubeC);
       const dvDispMl = (mdotLubeCond / 985.0) * 1e6 * dtTh;
       this.lubeCondensateMl = Math.min(this.lubeTankCapMl, this.lubeCondensateMl + dvDispMl);
@@ -713,8 +775,10 @@ export class AsterD51Thermo1D {
     const waterDrag = !ctrl.drainCock
       ? 115.0 * Math.min(1.0, Math.max(0.0, this.condensateKg - 0.00045) / 0.00085)
       : 0.8;
+    const muCylFilm = 0.42e-3 * Math.exp(1180.0 / Math.max(125.0, this.T_cylWallC + 115.0));
+    const cCouette = Math.min(12.5, (muCylFilm * 1.15e-4) / 0.85e-6);
     const calcForce = (p: number[], v: number, fHydro: number) =>
-      (p[1] - P_ATM) * this.A_crank - (p[0] - P_ATM) * this.A_head - lube * (1.35 * Math.tanh(v * 80.0) + waterDrag * v) + fHydro;
+      (p[1] - P_ATM) * this.A_crank - (p[0] - P_ATM) * this.A_head - lube * (1.45 * Math.tanh(v * 80.0) + (cCouette + waterDrag) * v) + fHydro;
 
     const forceL = calcForce(this.P_cylL, vPL, fHydroLAcc);
     const forceR = calcForce(this.P_cylR, vPR, fHydroRAcc);
@@ -796,14 +860,16 @@ export class AsterD51Thermo1D {
       const baseNatDraft = dryNoDraft ? 0.24 : 0.58;
       const usedMl = Math.min(
         this.sumpFuelMl,
-        0.106 * (baseNatDraft + (1.0 - baseNatDraft) * draftEff) * wickHeadFactor * floodMult * dtTh
+        0.126 * (baseNatDraft + (1.0 - baseNatDraft) * draftEff) * wickHeadFactor * floodMult * dtTh
       );
       this.sumpFuelMl -= usedMl;
       wickCapillaryMlS = usedMl / dtTh;
-      qChemTotW = 26.8e6 * (wickCapillaryMlS * 789e-6);
+      // 2010_JNR_D51-standard.pdf p.3: 工业甲醇 (Methyl alcohol, CH3OH, LHV = 19.93 MJ/kg, rho = 786.6 kg/m³)
+      qChemTotW = 19.93e6 * (wickCapillaryMlS * 786.6e-6);
       const effPenalty = floodMult > 1.05 ? 0.80 : 1.0;
-      const etaWithRad = Math.max(0.18, etaBoilEff);
-      qComb = etaWithRad * effPenalty * qChemTotW;
+      const linerBoost = 1.0 + 0.16 * Math.max(0.0, Math.min(1.0, (this.T_fireboxLinerC - 320.0) / 280.0));
+      const etaWithRad = Math.max(0.24, 1.32 * etaBoilEff * linerBoost);
+      qComb = Math.min(0.58 * qChemTotW, etaWithRad * effPenalty * qChemTotW);
     }
 
     // 17-5 双 U 四程过热器 (上排 2 根 ø11.5mm 烟管内 504mm/47.5cm² SUS304 管壁对流热平衡)
@@ -1009,7 +1075,13 @@ export class AsterD51Thermo1D {
 
     const rpm = (omega3 / (2.0 * Math.PI)) * 60.0;
     // 2010_JNR_D51-standard.pdf & aster-manual.pdf p.6: JNR D51 on Gauge-1 is 1:30 scale!
-    const speedKmh = Math.abs(omega3) * (0.5 * 0.0438) * 30.0 * 3.6;
+    const wheelSpeedKmh = Math.abs(vWheelRimMS) * 30.0 * 3.6;
+    const groundSpeedKmh = Math.abs(vGndSigned) * 30.0 * 3.6;
+    const speedKmh = vGroundMS === undefined ? wheelSpeedKmh : groundSpeedKmh;
+    const wheelSlipPct =
+      vGroundMS !== undefined && Math.abs(vWheelRimMS) > 0.04
+        ? (100.0 * Math.max(0.0, Math.abs(vWheelRimMS) - Math.abs(vGndSigned))) / Math.max(0.04, Math.abs(vWheelRimMS))
+        : 0.0;
     const teIdealN = (0.30 * Math.max(0.0, this.P_boiler - P_ATM) * 0.015 * 0.015 * this.calib.stroke) / 0.0438;
     const adhesionFactor = teIdealN > 0.05 ? teIdealN / 40.5 : 0.256;
     const dryAlarm = (crownSubmergedMm <= 0.5 && ctrl.burnerLit) || this.T_crownC >= 240.0;
@@ -1025,9 +1097,9 @@ export class AsterD51Thermo1D {
 
     // 外界大气 -> 炉栅一次风 & 12-1 蝴蝶炉门二次风 -> 火室负压 -> 5 烟管 NTU 沿程温降 -> 烟室混合排烟
     const litActive = ctrl.burnerLit && this.sumpFuelMl > 1e-4;
-    const mdotAlcGS = litActive ? wickCapillaryMlS * 0.789 : 0.0;
+    const mdotAlcGS = litActive ? wickCapillaryMlS * 0.7866 : 0.0;
     const doorOpen = Math.max(0.0, Math.min(1.0, ctrl.fireboxDoor));
-    const vModelMS = Math.abs(omega3) * (0.5 * 0.0438);
+    const vModelMS = vAirRelMS;
     const dpRamPa = 0.5 * 1.184 * vModelMS * vModelMS;
     const dpBuoyPa = litActive ? 0.52 : 0.04 * Math.max(0.0, (this.T_boilerC - 25.0) / 125.0);
     const gGrateCond = 2.10e-4;
@@ -1047,9 +1119,9 @@ export class AsterD51Thermo1D {
     const grateAirGS = fireboxVacuumPa >= 0.0 ? gGrateCond * Math.sqrt(fireboxVacuumPa) * 1000.0 : 0.06;
     const fireholeAirGS = fireboxVacuumPa >= 0.0 ? gDoorCond * Math.sqrt(fireboxVacuumPa) * 1000.0 : 0.02;
     const totalAirGS = Math.max(0.05, grateAirGS + fireholeAirGS);
-    const flameZoneAirGS = Math.max(0.04, 0.62 * grateAirGS + 0.35 * fireholeAirGS);
+    const flameZoneAirGS = Math.max(0.04, 0.56 * grateAirGS + 0.32 * fireholeAirGS);
     const flueGasGS = grateAirGS + fireholeAirGS + mdotAlcGS;
-    const airFuelPhi = litActive ? Math.max(0.45, Math.min(1.85, (8.98 * mdotAlcGS) / flameZoneAirGS)) : 0.0;
+    const airFuelPhi = litActive ? Math.max(0.45, Math.min(1.85, (6.45 * mdotAlcGS) / flameZoneAirGS)) : 0.0;
 
     const tFlameBase = litActive
       ? Math.max(
@@ -1389,6 +1461,10 @@ export class AsterD51Thermo1D {
       lubricatorOilPct: this.lubricatorOilPct,
       wheelRpm: rpm,
       scaleSpeedKmh: speedKmh,
+      groundSpeedMS: Math.abs(vGndSigned),
+      groundSpeedKmh,
+      wheelSlipPct,
+      exhaustBackpressureKgf: Math.max(0.0, (this.P_exhaust - P_ATM) / PA_PER_KGF_CM2),
       safetyValveOpen: this.safetyValveOpen,
       dryFireAlarm: dryAlarm,
       flashSteamSpike: flashSpike,

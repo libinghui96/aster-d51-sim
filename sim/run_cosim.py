@@ -16,7 +16,7 @@ import math
 from pathlib import Path
 import sys
 import time
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import mujoco
 import numpy as np
@@ -28,6 +28,12 @@ from sim.human_engineer_agent import HumanEngineerAgent
 from sim.hw_guard import HardwareThermalPowerGuard, apply_cpu_thread_and_nice_caps
 from sim.ideal_oracle_controller import IdealOracleController
 from sim.thermo_1d import AsterD51Thermo1D, CabControls, CylinderCalibration, ThermoTelemetry
+from sim.gpu_track_endurance import (
+    GPUConsistEnduranceEngine,
+    TrackProfile3D,
+    compute_physical_train_resistance_n,
+    compute_rail_adhesion_mu,
+)
 
 apply_cpu_thread_and_nice_caps(max_threads=6, nice_delta=2)
 
@@ -167,7 +173,8 @@ def render_dashboard(
         f"  蒸気室 / 銅火室 : {tel.steam_chest_kgf:4.2f} kgf/cm²  |  T_boil: {tel.boiler_temp_c:5.1f}°C  |  T_crown: {tel.crown_temp_c:5.1f}°C  |  T_sh: {tel.superheat_temp_c:5.1f}°C (x={tel.steam_dryness_dome:.2f}->{tel.steam_dryness_chest:.2f})",
         f"  燃料アルコール  : {tel.alcohol_ml:5.1f} / 130 ml |  炭水車水槽: {tel.tender_water_ml:5.1f}/340 ml ({tel.tender_water_temp_c:4.1f}°C, 戻水:{tel.return_water_ml_s:4.2f}ml/s) | シール:{tel.seal_health*100:3.0f}%",
         f"  シリンダ・煙室  : 壁温 {tel.cyl_wall_temp_c:5.1f}°C | 凝結水 {tel.condensate_g:4.2f}g | 煙室負圧 {tel.smokebox_vacuum_pa:4.0f}Pa | F_L={tel.force_L:+5.1f}N F_R={tel.force_R:+5.1f}N",
-        f"  走行・給水収支  : 動輪 {tel.wheel_rpm:+6.1f} RPM ({tel.scale_speed_kmh:5.1f} km/h) | 蒸発 {tel.steam_gen_g_s:4.2f} g/s | 給水 {tel.feedwater_g_s:4.2f} g/s",
+        f"  走行・給水収支  : 動輪 {tel.wheel_rpm:+6.1f} RPM (対地 {tel.ground_speed_kmh:5.1f} km/h | 空転 {tel.wheel_slip_pct:4.1f}%) | 蒸発 {tel.steam_gen_g_s:4.2f} g/s | 給水 {tel.feedwater_g_s:4.2f} g/s",
+        f"  実走行距離・航続: {tel.distance_m:7.2f} m (1:30換算 {tel.scale_distance_km:5.3f} km | {tel.lap_count:4.2f} 周) | 背圧+{tel.exhaust_backpressure_kgf:4.2f}kgf | 予測残 {tel.predicted_range_m:5.0f}m [{tel.range_limiting_factor}]",
     ]
     if ai_status:
         lines.append(f"  [AI 運転状態]   : {ai_status}")
@@ -272,9 +279,47 @@ class CoSimRunner:
         j_dc_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "j_drain_cock")
         self.qvel_drain = int(self.model.jnt_dofadr[j_dc_id]) if j_dc_id >= 0 else -1
         self.loco_bid = self.model.body("loco_frame").id
+        self.tender_bid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "tender_body")
         self.is_roller_mode = self.model.jnt_type[0] != mujoco.mjtJoint.mjJNT_FREE
         self.is_curve_r2m = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "r2m_track_layout") >= 0
+        self.is_oval_grade = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "oval_track_layout") >= 0
+        self.track_mode = (
+            "roller"
+            if self.is_roller_mode
+            else ("oval_grade" if self.is_oval_grade else ("curve_r2m" if self.is_curve_r2m else "track"))
+        )
+        self.track_profile = TrackProfile3D(self.track_mode if not self.is_roller_mode else "track")
         self._prev_fwd_vel = 0.0
+        self.distance_m: float = 0.0
+        self.lap_count: float = 0.0
+        self._prev_loco_xy: Optional[Tuple[float, float, float]] = None
+        self._range_engine: Optional[GPUConsistEnduranceEngine] = None
+        self._live_range_cache: Dict[str, Any] = {
+            "p10_m": 0.0,
+            "p50_m": 0.0,
+            "p90_m": 0.0,
+            "p50_min": 0.0,
+            "limiting_factor": "NOMINAL",
+        }
+
+        # 缓存机车、煤水车与铰接挂车干重/基准惯量及自由关节地址 (用于实时水/甲醇消耗变质量与坡道切向重力回写)
+        self._loco_base_mass = float(self.model.body_mass[self.loco_bid])
+        self._loco_dry_mass = max(1.5, self._loco_base_mass - 0.210)
+        self._loco_base_inertia = self.model.body_inertia[self.loco_bid].copy()
+        self._tender_base_mass = float(self.model.body_mass[self.tender_bid]) if self.tender_bid >= 0 else 0.0
+        self._tender_dry_mass = max(0.6, self._tender_base_mass - 0.375) if self.tender_bid >= 0 else 0.0
+        self._tender_base_inertia = self.model.body_inertia[self.tender_bid].copy() if self.tender_bid >= 0 else None
+        j_tfree = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "tender_free")
+        self._tender_dof0 = int(self.model.jnt_dofadr[j_tfree]) if j_tfree >= 0 else -1
+
+        self._fcar_specs: List[Tuple[int, int, float, np.ndarray]] = []
+        for c_idx in range(1, 12):
+            cbid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"freight_car_{c_idx}")
+            cjid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, f"fcar_free_{c_idx}")
+            if cbid >= 0 and cjid >= 0:
+                self._fcar_specs.append(
+                    (int(cbid), int(self.model.jnt_dofadr[cjid]), float(self.model.body_mass[cbid]), self.model.body_inertia[cbid].copy())
+                )
 
         # 缓存全编组 10 轴垂向板簧/螺旋簧弹性悬挂关节与轮对刚体 (用于板簧实时挠度与真实轮轨脱线落枕物理判定)
         self._susp_qpos_addrs: List[int] = []
@@ -315,15 +360,27 @@ class CoSimRunner:
             wbid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, wb_name)
             if wbid >= 0:
                 self._wheelset_specs.append((int(wbid), wb_name, r_nom))
+        for c_idx in range(1, 12):
+            for a_idx in (1, 2):
+                wb_c = f"fcar_{c_idx}_wheelset_{a_idx}"
+                wbid_c = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, wb_c)
+                if wbid_c >= 0:
+                    self._wheelset_specs.append((int(wbid_c), wb_c, 0.0130))
 
         self._offrail_geom_ids: set[int] = set()
         self._wheel_geom_ids: set[int] = set()
+        self._drv_tread_geom_ids: List[int] = []
+        self._rail_geom_ids: List[int] = []
         for gid in range(self.model.ngeom):
             gname = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, gid) or ""
             if gname == "ground" or gname.startswith("sleeper_"):
                 self._offrail_geom_ids.add(gid)
+            elif gname.startswith("rail_"):
+                self._rail_geom_ids.append(gid)
             elif "_tread_" in gname or "_flange_" in gname or "_throat_" in gname:
                 self._wheel_geom_ids.add(gid)
+                if gname.startswith("drv_") and "_tread_" in gname:
+                    self._drv_tread_geom_ids.append(gid)
         self._derail_consec_steps = 0
 
         # P3 + Stage 18: 缓存驾驶室、6-5 止回球、双突跳安全阀与煤水车全部 19 个独立可动操纵件/仪表/阀瓣关节地址
@@ -509,12 +566,10 @@ class CoSimRunner:
                 raw_offrail = True
                 worst_reason = f"{wname} 数値発散保護"
                 break
-            if self.is_curve_r2m:
-                lat_err_m = math.hypot(wx, wy + 2.000) - 2.000
-            else:
-                lat_err_m = wy
-            drop_m = (0.004 + r_nom) - wz
-            if abs(lat_err_m) > 0.0048 or drop_m > 0.0015:
+            proj = self.track_profile.project_xy(wx, wy)
+            lat_err_m = proj.lat_err_m
+            drop_m = (proj.z_rail_top_m + r_nom) - wz
+            if abs(lat_err_m) > 0.0048 or drop_m > 0.0018:
                 raw_offrail = True
                 worst_reason = f"{wname} (横偏 {lat_err_m*1000.0:+.1f}mm, 沈下 {drop_m*1000.0:+.1f}mm)"
                 break
@@ -533,6 +588,52 @@ class CoSimRunner:
             self.derail_reason = ""
         return self.derailed, self.derail_reason
 
+    def reset_odometer(self) -> None:
+        self.distance_m = 0.0
+        self.lap_count = 0.0
+        self._prev_loco_xy = None
+
+    def update_gpu_range_prediction(self, ai_driver: bool = False, n_ensemble: int = 24) -> Dict[str, Any]:
+        """在 RTX 5080 上从当前实时状态并行投射未来续航区间 (异步/低频调用, <12ms)"""
+        if self._range_engine is None:
+            self._range_engine = GPUConsistEnduranceEngine()
+        core = self.thermo.core1d if hasattr(self.thermo, "core1d") else self.thermo
+        lx, ly = float(self.data.xpos[self.loco_bid, 0]), float(self.data.xpos[self.loco_bid, 1])
+        proj = self.track_profile.project_xy(lx, ly)
+        vg_now = math.hypot(float(self.data.qvel[0]), float(self.data.qvel[1])) if not self.is_roller_mode else abs(float(self.data.sensordata[self.s_w3])) * 0.0219
+        live_st = {
+            "T_boiler_c": float(core.T_boiler_c),
+            "P_boiler_pa": float(core.P_boiler),
+            "M_water_kg": float(core.M_water_kg),
+            "tender_water_ml": float(core.tender_water_ml),
+            "alcohol_ml": float(core.alcohol_ml + core.sump_fuel_ml),
+            "lube_oil_ml": float(core.lube_oil_ml),
+            "T_cyl_wall_c": float(core.T_cyl_wall_c),
+            "v_ground_ms": vg_now,
+            "s_track_m": proj.s_m,
+        }
+        ctrl_st = {
+            "tank_spec_2010": bool(getattr(self.ctrl, "tank_spec_2010", False)),
+            "ai_driver": ai_driver,
+            "regulator": float(self.ctrl.regulator),
+            "reverser": float(self.ctrl.reverser),
+            "bypass_valve": float(self.ctrl.bypass_valve),
+            "blower_valve": float(self.ctrl.blower_valve),
+            "trailing_cars": len(self._fcar_specs),
+            "trailing_load_kg": float(getattr(self.ctrl, "trailing_load_kg", 0.0)),
+            "ambient_temp_c": float(getattr(self.ctrl, "ambient_temp_c", 25.0)),
+            "headwind_m_s": float(getattr(self.ctrl, "headwind_m_s", 0.0)),
+            "grade_deg": float(self.ctrl.grade_deg),
+        }
+        t_mode = "oval_grade" if self.is_roller_mode else self.track_mode
+        self._live_range_cache = self._range_engine.predict_live_remaining_range(
+            track_mode=t_mode,
+            live_state=live_st,
+            ctrl_state=ctrl_st,
+            n_ensemble=n_ensemble,
+        )
+        return self._live_range_cache
+
     def step_once(self) -> ThermoTelemetry:
         sd = self.data.sensordata
         dt = float(self.model.opt.timestep)
@@ -548,15 +649,23 @@ class CoSimRunner:
         if self.use_gpu_3d and hasattr(self.thermo, "last_susp_z_m"):
             self.thermo.last_susp_z_m = susp_z_m
 
-        # 提取车体上坡俯仰角与纵向加速度 (用于 O4-1 坡道假水位与顶板浸没判定)
+        # 提取车体真实 3D 俯仰角、对地切向速度、纵向加速度与弯道离心横向加速度
         pitch_rad = 0.0
         accel_x = 0.0
+        accel_lat = 0.0
+        v_ground_arg: Optional[float] = None
         if not self.is_roller_mode:
-            r20 = float(self.data.xmat[self.loco_bid, 6])
-            pitch_rad = math.asin(max(-0.35, min(0.35, r20)))
-            fwd_vel = omega_3 * 0.0219
+            rot_loco = self.data.xmat[self.loco_bid].reshape(3, 3)
+            # MuJoCo xmat 第 0 列为车架 +X 前向单位向量; 上坡时 +X 的 Z 分量 rot_loco[2, 0] > 0 -> pitch_rad > 0!
+            pitch_rad = math.asin(max(-0.35, min(0.35, float(rot_loco[2, 0]))))
+            e_fwd = rot_loco[:, 0]
+            v_world = self.data.qvel[0:3]
+            fwd_vel = float(np.dot(v_world, e_fwd))
+            v_ground_arg = fwd_vel
             accel_x = (fwd_vel - self._prev_fwd_vel) / max(1e-6, dt)
             self._prev_fwd_vel = fwd_vel
+            yaw_rate = float(self.data.qvel[5])
+            accel_lat = fwd_vel * yaw_rate
 
         step_kwargs = dict(
             dt=dt,
@@ -575,6 +684,8 @@ class CoSimRunner:
             pitch_rad=pitch_rad,
             accel_x=accel_x,
             v_hand_ram=self._last_v_hand_ram,
+            v_ground_ms=v_ground_arg,
+            accel_lat=accel_lat,
         )
         if self.use_gpu_3d:
             step_kwargs["q_ram"] = float(self.data.qpos[self.qpos_pump])
@@ -613,12 +724,65 @@ class CoSimRunner:
         if self.is_roller_mode:
             self.data.qfrc_applied[self.qvel_w3] = -0.0022 * omega_3 - 0.00012 * omega_3 * abs(omega_3)
         else:
-            # 轨道模式: 整车耦合运行阻力 (Davis 滚动滞回 + 全车气动风阻施加于车体平动自由度，杜绝单刹主动轮导致导轮/煤水车轮速失配!)
+            # 轨道模式: 1) 水/甲醇消耗与挂车载重实时变质量回写; 2) Polach 钢轨水油膜动态黏着摩擦;
+            #          3) 第一性原理赫兹滚动+轴承+钝体风阻+附加坡道切向重力 (严禁硬编码 8.80*v^2!)
+            core_th = self.thermo.core1d if hasattr(self.thermo, "core1d") else self.thermo
+            m_loco_cur = self._loco_dry_mass + float(core_th.M_water_kg)
+            self.model.body_mass[self.loco_bid] = m_loco_cur
+            self.model.body_inertia[self.loco_bid] = self._loco_base_inertia * (m_loco_cur / max(0.5, self._loco_base_mass))
+
+            extra_load_kg = max(0.0, float(getattr(self.ctrl, "trailing_load_kg", 0.0)))
+            m_tdr_cur = 0.0
+            if self.tender_bid >= 0 and self._tender_base_inertia is not None:
+                fluid_kg = (float(core_th.tender_water_ml) * 0.997 + float(core_th.alcohol_ml + core_th.sump_fuel_ml) * 0.787) * 1e-3
+                add_tdr_load = extra_load_kg if not self._fcar_specs else 0.0
+                m_tdr_cur = self._tender_dry_mass + fluid_kg + add_tdr_load
+                self.model.body_mass[self.tender_bid] = m_tdr_cur
+                self.model.body_inertia[self.tender_bid] = self._tender_base_inertia * (m_tdr_cur / max(0.5, self._tender_base_mass))
+
+            m_fcars_tot = 0.0
+            if self._fcar_specs:
+                per_car_load = extra_load_kg / len(self._fcar_specs)
+                for cbid, _, dry_cm, base_ci in self._fcar_specs:
+                    mc = dry_cm + per_car_load
+                    self.model.body_mass[cbid] = mc
+                    self.model.body_inertia[cbid] = base_ci * (mc / max(0.2, dry_cm))
+                    m_fcars_tot += mc
+            total_consist_kg = m_loco_cur + m_tdr_cur + m_fcars_tot + 2.15  # 含 10~14 组轮对轴箱连杆刚体总质量
+
             is_der, der_msg = self._evaluate_wheel_rail_derailment()
             tel.derailed = is_der
             tel.derail_reason = der_msg
             vx, vy = float(self.data.qvel[0]), float(self.data.qvel[1])
             v_spd = math.hypot(vx, vy)
+            v_fwd_now = float(v_ground_arg or 0.0)
+
+            v_slip_now = omega_3 * 0.0219 - v_fwd_now
+            mu_rail = compute_rail_adhesion_mu(
+                v_slip_ms=v_slip_now,
+                drain_cock_open=bool(self.ctrl.drain_cock),
+                exhaust_gs=float(tel.exhaust_g_s),
+                lubricator_oil_pct=float(tel.lubricator_oil_pct),
+            )
+            for gid in self._drv_tread_geom_ids:
+                self.model.geom_friction[gid, 0] = mu_rail
+            for gid in self._rail_geom_ids:
+                self.model.geom_friction[gid, 0] = mu_rail
+            tel.rail_adhesion_mu = round(mu_rail, 3)
+
+            cur_xyz = (float(self.data.xpos[self.loco_bid, 0]), float(self.data.xpos[self.loco_bid, 1]), float(self.data.xpos[self.loco_bid, 2]))
+            if self._prev_loco_xy is not None and not is_der:
+                ds_3d = math.sqrt(
+                    (cur_xyz[0] - self._prev_loco_xy[0]) ** 2
+                    + (cur_xyz[1] - self._prev_loco_xy[1]) ** 2
+                    + (cur_xyz[2] - self._prev_loco_xy[2]) ** 2
+                )
+                if ds_3d < 0.25:
+                    self.distance_m += ds_3d
+            self._prev_loco_xy = cur_xyz
+            if self.track_profile.is_closed:
+                self.lap_count = self.distance_m / self.track_profile.lap_length_m
+
             if is_der:
                 if v_spd > 1e-5:
                     f_plow = min(48.0, 26.0 + 65.0 * v_spd)
@@ -628,15 +792,58 @@ class CoSimRunner:
                     self.data.qfrc_applied[0] = 0.0
                     self.data.qfrc_applied[1] = 0.0
                 self.data.qfrc_applied[self.qvel_w3] = -0.35 * omega_3 - 0.08 * math.tanh(omega_3 * 4.0)
+                tel.train_resistance_n = round(26.0 + 65.0 * v_spd, 3)
             else:
+                cur_curv_abs = abs(self.track_profile.project_xy(cur_xyz[0], cur_xyz[1]).curvature_inv_m)
+                f_res = compute_physical_train_resistance_n(
+                    v_ground_ms=v_fwd_now,
+                    total_mass_kg=total_consist_kg,
+                    ambient_temp_c=float(getattr(self.ctrl, "ambient_temp_c", 25.0)),
+                    headwind_m_s=float(getattr(self.ctrl, "headwind_m_s", 0.0)),
+                    n_trailing_cars=len(self._fcar_specs),
+                    include_curve_flange_1d=cur_curv_abs,
+                )
+                sin_extra_grade = math.sin(math.radians(max(-15.0, min(15.0, float(self.ctrl.grade_deg)))))
+                e_fwd_xy = self.data.xmat[self.loco_bid].reshape(3, 3)[:, 0]
+                ex_n = math.hypot(float(e_fwd_xy[0]), float(e_fwd_xy[1]))
+                tx_u = float(e_fwd_xy[0]) / max(1e-6, ex_n)
+                ty_u = float(e_fwd_xy[1]) / max(1e-6, ex_n)
+
+                # 将车架+轮对附加坡道重力分量与第一性原理运行阻力共同施加于平动自由度
+                m_loco_plus_wheels = m_loco_cur + 1.55 + (0.0 if self.tender_bid >= 0 else extra_load_kg)
+                fx_tot = -m_loco_plus_wheels * 9.81 * sin_extra_grade * tx_u
+                fy_tot = -m_loco_plus_wheels * 9.81 * sin_extra_grade * ty_u
                 if v_spd > 1e-5:
-                    f_davis = 0.22 + 2.20 * v_spd + 8.80 * v_spd * v_spd
-                    self.data.qfrc_applied[0] = -f_davis * (vx / v_spd)
-                    self.data.qfrc_applied[1] = -f_davis * (vy / v_spd)
-                else:
-                    self.data.qfrc_applied[0] = 0.0
-                    self.data.qfrc_applied[1] = 0.0
-                self.data.qfrc_applied[self.qvel_w3] = -0.0024 * omega_3 - 0.00016 * omega_3 * abs(omega_3)
+                    fx_tot -= f_res * (vx / v_spd)
+                    fy_tot -= f_res * (vy / v_spd)
+                self.data.qfrc_applied[0] = fx_tot
+                self.data.qfrc_applied[1] = fy_tot
+
+                if self._tender_dof0 >= 0 and self.tender_bid >= 0:
+                    et = self.data.xmat[self.tender_bid].reshape(3, 3)[:, 0]
+                    et_n = max(1e-6, math.hypot(float(et[0]), float(et[1])))
+                    m_tdr_tot = m_tdr_cur + 0.34
+                    self.data.qfrc_applied[self._tender_dof0] = -m_tdr_tot * 9.81 * sin_extra_grade * (float(et[0]) / et_n)
+                    self.data.qfrc_applied[self._tender_dof0 + 1] = -m_tdr_tot * 9.81 * sin_extra_grade * (float(et[1]) / et_n)
+
+                for cbid, cdof0, _, _ in self._fcar_specs:
+                    ec = self.data.xmat[cbid].reshape(3, 3)[:, 0]
+                    ec_n = max(1e-6, math.hypot(float(ec[0]), float(ec[1])))
+                    mc_tot = float(self.model.body_mass[cbid]) + 0.13
+                    self.data.qfrc_applied[cdof0] = -mc_tot * 9.81 * sin_extra_grade * (float(ec[0]) / ec_n)
+                    self.data.qfrc_applied[cdof0 + 1] = -mc_tot * 9.81 * sin_extra_grade * (float(ec[1]) / ec_n)
+
+                self.data.qfrc_applied[self.qvel_w3] = -0.0031 * omega_3 - 0.00018 * omega_3 * abs(omega_3)
+                tel.train_resistance_n = round(f_res + total_consist_kg * 9.81 * sin_extra_grade, 3)
+
+        tel.distance_m = round(self.distance_m, 3)
+        tel.scale_distance_km = round(self.distance_m * 30.0 / 1000.0, 4)
+        tel.lap_count = round(self.lap_count, 3)
+        tel.predicted_range_m = float(self._live_range_cache.get("p50_m", 0.0))
+        tel.predicted_range_p10_m = float(self._live_range_cache.get("p10_m", 0.0))
+        tel.predicted_range_p90_m = float(self._live_range_cache.get("p90_m", 0.0))
+        tel.predicted_time_min = float(self._live_range_cache.get("p50_min", 0.0))
+        tel.range_limiting_factor = str(self._live_range_cache.get("limiting_factor", "NOMINAL"))
 
         if not self.use_gpu_3d:
             tel.spring_deflect_mm = [round(abs(z) * 1000.0, 3) for z in susp_z_m]

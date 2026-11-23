@@ -1,11 +1,11 @@
 <?xml version="1.0" ?>
 <mujoco model="aster_d51_consist">
   <compiler angle="radian" autolimits="true" meshdir="meshes"/>
-  <option timestep="0.0005" integrator="implicitfast" iterations="120" tolerance="1e-12" gravity="0 0 -9.81"/>
+  <option timestep="0.0005" integrator="implicitfast" iterations="160" ls_iterations="80" tolerance="1e-12" gravity="0 0 -9.81"/>
   <default>
     <geom condim="3" solref="0.0015 1.0" solimp="0.95 0.99 0.0001"/>
     <joint solreflimit="0.002 1.0" solimplimit="0.98 0.995 0.0001"/>
-    <equality solref="0.00023 1.0" solimp="0.99988 0.999988 0.000002"/>
+    <equality solref="0.00020 1.0" solimp="0.99991 0.999991 0.000002"/>
   </default>
   <asset>
     <mesh name="m_driving_wheel_L" file="driving_wheel_L.stl" scale="0.001 0.001 0.001"/>
@@ -130,8 +130,8 @@
   <worldbody>
     <light pos="0 -1.5 2.2" dir="0 0.4 -0.9" diffuse="0.92 0.92 0.92"/>
     <geom name="ground" type="plane" size="6.5 6.5 0.05" rgba="0.16 0.18 0.20 1" contype="1" conaffinity="2" friction="0.88 0.010 0.002"/>
-    <geom name="rail_L" type="box" pos="30.0 0.023300 0.002" size="38.0 0.000800 0.002" contype="1" conaffinity="2" friction="0.46 0.002 0.0001" rgba="0.70 0.72 0.75 1"/>
-    <geom name="rail_R" type="box" pos="30.0 -0.023300 0.002" size="38.0 0.000800 0.002" contype="1" conaffinity="2" friction="0.46 0.002 0.0001" rgba="0.70 0.72 0.75 1"/>
+    <geom name="rail_L" type="box" pos="116.0 0.023300 0.002" size="124.0 0.000800 0.002" contype="1" conaffinity="2" friction="0.33 0.002 0.0001" rgba="0.70 0.72 0.75 1"/>
+    <geom name="rail_R" type="box" pos="116.0 -0.023300 0.002" size="124.0 0.000800 0.002" contype="1" conaffinity="2" friction="0.33 0.002 0.0001" rgba="0.70 0.72 0.75 1"/>
     <geom name="sleeper_trk_000" type="box" pos="-1.800000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
     <geom name="sleeper_trk_001" type="box" pos="-1.768000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
     <geom name="sleeper_trk_002" type="box" pos="-1.736000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
@@ -632,6 +632,381 @@
     <geom name="sleeper_trk_497" type="box" pos="14.104000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
     <geom name="sleeper_trk_498" type="box" pos="14.136000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
     <geom name="sleeper_trk_499" type="box" pos="14.168000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_500" type="box" pos="14.200000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_501" type="box" pos="14.232000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_502" type="box" pos="14.264000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_503" type="box" pos="14.296000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_504" type="box" pos="14.328000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_505" type="box" pos="14.360000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_506" type="box" pos="14.392000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_507" type="box" pos="14.424000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_508" type="box" pos="14.456000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_509" type="box" pos="14.488000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_510" type="box" pos="14.520000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_511" type="box" pos="14.552000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_512" type="box" pos="14.584000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_513" type="box" pos="14.616000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_514" type="box" pos="14.648000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_515" type="box" pos="14.680000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_516" type="box" pos="14.712000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_517" type="box" pos="14.744000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_518" type="box" pos="14.776000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_519" type="box" pos="14.808000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_520" type="box" pos="14.840000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_521" type="box" pos="14.872000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_522" type="box" pos="14.904000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_523" type="box" pos="14.936000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_524" type="box" pos="14.968000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_525" type="box" pos="15.000000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_526" type="box" pos="15.032000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_527" type="box" pos="15.064000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_528" type="box" pos="15.096000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_529" type="box" pos="15.128000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_530" type="box" pos="15.160000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_531" type="box" pos="15.192000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_532" type="box" pos="15.224000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_533" type="box" pos="15.256000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_534" type="box" pos="15.288000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_535" type="box" pos="15.320000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_536" type="box" pos="15.352000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_537" type="box" pos="15.384000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_538" type="box" pos="15.416000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_539" type="box" pos="15.448000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_540" type="box" pos="15.480000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_541" type="box" pos="15.512000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_542" type="box" pos="15.544000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_543" type="box" pos="15.576000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_544" type="box" pos="15.608000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_545" type="box" pos="15.640000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_546" type="box" pos="15.672000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_547" type="box" pos="15.704000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_548" type="box" pos="15.736000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_549" type="box" pos="15.768000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_550" type="box" pos="15.800000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_551" type="box" pos="15.832000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_552" type="box" pos="15.864000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_553" type="box" pos="15.896000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_554" type="box" pos="15.928000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_555" type="box" pos="15.960000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_556" type="box" pos="15.992000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_557" type="box" pos="16.024000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_558" type="box" pos="16.056000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_559" type="box" pos="16.088000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_560" type="box" pos="16.120000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_561" type="box" pos="16.152000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_562" type="box" pos="16.184000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_563" type="box" pos="16.216000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_564" type="box" pos="16.248000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_565" type="box" pos="16.280000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_566" type="box" pos="16.312000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_567" type="box" pos="16.344000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_568" type="box" pos="16.376000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_569" type="box" pos="16.408000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_570" type="box" pos="16.440000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_571" type="box" pos="16.472000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_572" type="box" pos="16.504000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_573" type="box" pos="16.536000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_574" type="box" pos="16.568000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_575" type="box" pos="16.600000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_576" type="box" pos="16.632000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_577" type="box" pos="16.664000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_578" type="box" pos="16.696000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_579" type="box" pos="16.728000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_580" type="box" pos="16.760000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_581" type="box" pos="16.792000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_582" type="box" pos="16.824000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_583" type="box" pos="16.856000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_584" type="box" pos="16.888000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_585" type="box" pos="16.920000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_586" type="box" pos="16.952000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_587" type="box" pos="16.984000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_588" type="box" pos="17.016000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_589" type="box" pos="17.048000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_590" type="box" pos="17.080000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_591" type="box" pos="17.112000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_592" type="box" pos="17.144000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_593" type="box" pos="17.176000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_594" type="box" pos="17.208000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_595" type="box" pos="17.240000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_596" type="box" pos="17.272000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_597" type="box" pos="17.304000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_598" type="box" pos="17.336000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_599" type="box" pos="17.368000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_600" type="box" pos="17.400000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_601" type="box" pos="17.432000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_602" type="box" pos="17.464000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_603" type="box" pos="17.496000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_604" type="box" pos="17.528000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_605" type="box" pos="17.560000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_606" type="box" pos="17.592000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_607" type="box" pos="17.624000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_608" type="box" pos="17.656000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_609" type="box" pos="17.688000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_610" type="box" pos="17.720000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_611" type="box" pos="17.752000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_612" type="box" pos="17.784000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_613" type="box" pos="17.816000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_614" type="box" pos="17.848000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_615" type="box" pos="17.880000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_616" type="box" pos="17.912000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_617" type="box" pos="17.944000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_618" type="box" pos="17.976000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_619" type="box" pos="18.008000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_620" type="box" pos="18.040000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_621" type="box" pos="18.072000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_622" type="box" pos="18.104000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_623" type="box" pos="18.136000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_624" type="box" pos="18.168000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_625" type="box" pos="18.200000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_626" type="box" pos="18.232000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_627" type="box" pos="18.264000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_628" type="box" pos="18.296000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_629" type="box" pos="18.328000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_630" type="box" pos="18.360000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_631" type="box" pos="18.392000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_632" type="box" pos="18.424000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_633" type="box" pos="18.456000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_634" type="box" pos="18.488000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_635" type="box" pos="18.520000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_636" type="box" pos="18.552000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_637" type="box" pos="18.584000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_638" type="box" pos="18.616000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_639" type="box" pos="18.648000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_640" type="box" pos="18.680000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_641" type="box" pos="18.712000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_642" type="box" pos="18.744000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_643" type="box" pos="18.776000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_644" type="box" pos="18.808000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_645" type="box" pos="18.840000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_646" type="box" pos="18.872000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_647" type="box" pos="18.904000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_648" type="box" pos="18.936000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_649" type="box" pos="18.968000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_650" type="box" pos="19.000000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_651" type="box" pos="19.032000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_652" type="box" pos="19.064000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_653" type="box" pos="19.096000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_654" type="box" pos="19.128000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_655" type="box" pos="19.160000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_656" type="box" pos="19.192000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_657" type="box" pos="19.224000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_658" type="box" pos="19.256000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_659" type="box" pos="19.288000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_660" type="box" pos="19.320000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_661" type="box" pos="19.352000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_662" type="box" pos="19.384000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_663" type="box" pos="19.416000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_664" type="box" pos="19.448000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_665" type="box" pos="19.480000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_666" type="box" pos="19.512000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_667" type="box" pos="19.544000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_668" type="box" pos="19.576000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_669" type="box" pos="19.608000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_670" type="box" pos="19.640000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_671" type="box" pos="19.672000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_672" type="box" pos="19.704000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_673" type="box" pos="19.736000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_674" type="box" pos="19.768000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_675" type="box" pos="19.800000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_676" type="box" pos="19.832000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_677" type="box" pos="19.864000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_678" type="box" pos="19.896000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_679" type="box" pos="19.928000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_680" type="box" pos="19.960000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_681" type="box" pos="19.992000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_682" type="box" pos="20.024000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_683" type="box" pos="20.056000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_684" type="box" pos="20.088000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_685" type="box" pos="20.120000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_686" type="box" pos="20.152000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_687" type="box" pos="20.184000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_688" type="box" pos="20.216000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_689" type="box" pos="20.248000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_690" type="box" pos="20.280000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_691" type="box" pos="20.312000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_692" type="box" pos="20.344000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_693" type="box" pos="20.376000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_694" type="box" pos="20.408000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_695" type="box" pos="20.440000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_696" type="box" pos="20.472000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_697" type="box" pos="20.504000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_698" type="box" pos="20.536000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_699" type="box" pos="20.568000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_700" type="box" pos="20.600000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_701" type="box" pos="20.632000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_702" type="box" pos="20.664000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_703" type="box" pos="20.696000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_704" type="box" pos="20.728000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_705" type="box" pos="20.760000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_706" type="box" pos="20.792000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_707" type="box" pos="20.824000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_708" type="box" pos="20.856000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_709" type="box" pos="20.888000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_710" type="box" pos="20.920000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_711" type="box" pos="20.952000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_712" type="box" pos="20.984000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_713" type="box" pos="21.016000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_714" type="box" pos="21.048000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_715" type="box" pos="21.080000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_716" type="box" pos="21.112000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_717" type="box" pos="21.144000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_718" type="box" pos="21.176000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_719" type="box" pos="21.208000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_720" type="box" pos="21.240000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_721" type="box" pos="21.272000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_722" type="box" pos="21.304000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_723" type="box" pos="21.336000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_724" type="box" pos="21.368000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_725" type="box" pos="21.400000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_726" type="box" pos="21.432000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_727" type="box" pos="21.464000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_728" type="box" pos="21.496000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_729" type="box" pos="21.528000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_730" type="box" pos="21.560000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_731" type="box" pos="21.592000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_732" type="box" pos="21.624000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_733" type="box" pos="21.656000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_734" type="box" pos="21.688000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_735" type="box" pos="21.720000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_736" type="box" pos="21.752000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_737" type="box" pos="21.784000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_738" type="box" pos="21.816000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_739" type="box" pos="21.848000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_740" type="box" pos="21.880000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_741" type="box" pos="21.912000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_742" type="box" pos="21.944000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_743" type="box" pos="21.976000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_744" type="box" pos="22.008000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_745" type="box" pos="22.040000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_746" type="box" pos="22.072000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_747" type="box" pos="22.104000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_748" type="box" pos="22.136000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_749" type="box" pos="22.168000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_750" type="box" pos="22.200000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_751" type="box" pos="22.232000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_752" type="box" pos="22.264000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_753" type="box" pos="22.296000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_754" type="box" pos="22.328000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_755" type="box" pos="22.360000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_756" type="box" pos="22.392000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_757" type="box" pos="22.424000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_758" type="box" pos="22.456000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_759" type="box" pos="22.488000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_760" type="box" pos="22.520000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_761" type="box" pos="22.552000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_762" type="box" pos="22.584000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_763" type="box" pos="22.616000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_764" type="box" pos="22.648000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_765" type="box" pos="22.680000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_766" type="box" pos="22.712000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_767" type="box" pos="22.744000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_768" type="box" pos="22.776000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_769" type="box" pos="22.808000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_770" type="box" pos="22.840000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_771" type="box" pos="22.872000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_772" type="box" pos="22.904000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_773" type="box" pos="22.936000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_774" type="box" pos="22.968000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_775" type="box" pos="23.000000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_776" type="box" pos="23.032000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_777" type="box" pos="23.064000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_778" type="box" pos="23.096000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_779" type="box" pos="23.128000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_780" type="box" pos="23.160000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_781" type="box" pos="23.192000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_782" type="box" pos="23.224000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_783" type="box" pos="23.256000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_784" type="box" pos="23.288000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_785" type="box" pos="23.320000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_786" type="box" pos="23.352000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_787" type="box" pos="23.384000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_788" type="box" pos="23.416000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_789" type="box" pos="23.448000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_790" type="box" pos="23.480000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_791" type="box" pos="23.512000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_792" type="box" pos="23.544000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_793" type="box" pos="23.576000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_794" type="box" pos="23.608000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_795" type="box" pos="23.640000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_796" type="box" pos="23.672000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_797" type="box" pos="23.704000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_798" type="box" pos="23.736000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_799" type="box" pos="23.768000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_800" type="box" pos="23.800000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_801" type="box" pos="23.832000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_802" type="box" pos="23.864000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_803" type="box" pos="23.896000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_804" type="box" pos="23.928000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_805" type="box" pos="23.960000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_806" type="box" pos="23.992000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_807" type="box" pos="24.024000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_808" type="box" pos="24.056000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_809" type="box" pos="24.088000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_810" type="box" pos="24.120000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_811" type="box" pos="24.152000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_812" type="box" pos="24.184000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_813" type="box" pos="24.216000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_814" type="box" pos="24.248000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_815" type="box" pos="24.280000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_816" type="box" pos="24.312000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_817" type="box" pos="24.344000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_818" type="box" pos="24.376000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_819" type="box" pos="24.408000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_820" type="box" pos="24.440000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_821" type="box" pos="24.472000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_822" type="box" pos="24.504000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_823" type="box" pos="24.536000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_824" type="box" pos="24.568000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_825" type="box" pos="24.600000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_826" type="box" pos="24.632000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_827" type="box" pos="24.664000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_828" type="box" pos="24.696000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_829" type="box" pos="24.728000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_830" type="box" pos="24.760000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_831" type="box" pos="24.792000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_832" type="box" pos="24.824000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_833" type="box" pos="24.856000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_834" type="box" pos="24.888000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_835" type="box" pos="24.920000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_836" type="box" pos="24.952000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_837" type="box" pos="24.984000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_838" type="box" pos="25.016000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_839" type="box" pos="25.048000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_840" type="box" pos="25.080000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_841" type="box" pos="25.112000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_842" type="box" pos="25.144000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_843" type="box" pos="25.176000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_844" type="box" pos="25.208000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_845" type="box" pos="25.240000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_846" type="box" pos="25.272000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_847" type="box" pos="25.304000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_848" type="box" pos="25.336000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_849" type="box" pos="25.368000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_850" type="box" pos="25.400000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_851" type="box" pos="25.432000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_852" type="box" pos="25.464000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_853" type="box" pos="25.496000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_854" type="box" pos="25.528000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_855" type="box" pos="25.560000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_856" type="box" pos="25.592000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_857" type="box" pos="25.624000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_858" type="box" pos="25.656000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_859" type="box" pos="25.688000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_860" type="box" pos="25.720000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_861" type="box" pos="25.752000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_862" type="box" pos="25.784000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_863" type="box" pos="25.816000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_864" type="box" pos="25.848000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_865" type="box" pos="25.880000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_866" type="box" pos="25.912000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_867" type="box" pos="25.944000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_868" type="box" pos="25.976000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_869" type="box" pos="26.008000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_870" type="box" pos="26.040000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_871" type="box" pos="26.072000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_872" type="box" pos="26.104000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_873" type="box" pos="26.136000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
+    <geom name="sleeper_trk_874" type="box" pos="26.168000 0.000000 0.0006" size="0.0045 0.036 0.0006" rgba="0.28 0.20 0.14 1" contype="1" conaffinity="2" friction="0.92 0.012 0.002"/>
     <body name="loco_frame" pos="0.000000 0.000000 0.026100">
       <freejoint name="loco_free"/>
       <inertial pos="0.031309 0.000067 0.037607" mass="3.480482" fullinertia="3.672856497e-03 3.409419276e-02 3.310919643e-02 1.875953105e-05 2.075440915e-03 7.930482914e-06"/>
@@ -678,12 +1053,12 @@
           <joint name="j_wheel_1" type="hinge" axis="0 1 0" damping="0.0010"/>
           <inertial pos="-0.000460 -0.000000 0.000460" mass="0.075844" fullinertia="4.556984779e-05 1.745413362e-05 4.556984779e-05 7.932107547e-07 -1.603081488e-08 7.932107547e-07"/>
           <geom type="cylinder" fromto="0 -0.022500 0  0 0.022500 0" size="0.0028" rgba="0.3 0.3 0.3 1" mass="0" contype="0" conaffinity="0"/>
-          <geom name="drv_1_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-          <geom name="drv_1_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_1_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_1_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="drv_1_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="drv_1_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
-          <geom name="drv_1_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-          <geom name="drv_1_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_1_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_1_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="drv_1_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="drv_1_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
           <geom name="wheel_vis_1_L" type="mesh" mesh="m_driving_wheel_L" material="mat_black_iron" pos="0 0.023300 0" contype="0" conaffinity="0" mass="0"/>
@@ -702,12 +1077,12 @@
           <joint name="j_wheel_2" type="hinge" axis="0 1 0" damping="0.0010"/>
           <inertial pos="-0.000460 -0.000000 0.000460" mass="0.075844" fullinertia="4.556984779e-05 1.745413362e-05 4.556984779e-05 7.932107547e-07 -1.603081488e-08 7.932107547e-07"/>
           <geom type="cylinder" fromto="0 -0.022500 0  0 0.022500 0" size="0.0028" rgba="0.3 0.3 0.3 1" mass="0" contype="0" conaffinity="0"/>
-          <geom name="drv_2_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-          <geom name="drv_2_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_2_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_2_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="drv_2_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="drv_2_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
-          <geom name="drv_2_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-          <geom name="drv_2_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_2_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_2_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="drv_2_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="drv_2_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
           <geom name="wheel_vis_2_L" type="mesh" mesh="m_driving_wheel_L" material="mat_black_iron" pos="0 0.023300 0" contype="0" conaffinity="0" mass="0"/>
@@ -726,12 +1101,12 @@
           <joint name="j_wheel_3" type="hinge" axis="0 1 0" damping="0.0010"/>
           <inertial pos="-0.000298 -0.000000 0.000362" mass="0.085730" fullinertia="5.322235407e-05 1.904531996e-05 5.322601305e-05 6.605526556e-07 -9.242024465e-09 4.657335951e-07"/>
           <geom type="cylinder" fromto="0 -0.022500 0  0 0.022500 0" size="0.0028" rgba="0.3 0.3 0.3 1" mass="0" contype="0" conaffinity="0"/>
-          <geom name="drv_3_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-          <geom name="drv_3_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_3_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_3_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="drv_3_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="drv_3_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
-          <geom name="drv_3_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-          <geom name="drv_3_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_3_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_3_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="drv_3_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="drv_3_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
           <geom name="wheel_vis_3_L" type="mesh" mesh="m_main_driving_wheel_L" material="mat_black_iron" pos="0 0.023300 0" contype="0" conaffinity="0" mass="0"/>
@@ -853,12 +1228,12 @@
           <joint name="j_wheel_4" type="hinge" axis="0 1 0" damping="0.0010"/>
           <inertial pos="-0.000460 -0.000000 0.000460" mass="0.075844" fullinertia="4.556984779e-05 1.745413362e-05 4.556984779e-05 7.932107547e-07 -1.603081488e-08 7.932107547e-07"/>
           <geom type="cylinder" fromto="0 -0.022500 0  0 0.022500 0" size="0.0028" rgba="0.3 0.3 0.3 1" mass="0" contype="0" conaffinity="0"/>
-          <geom name="drv_4_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-          <geom name="drv_4_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_4_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_4_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="drv_4_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="drv_4_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
-          <geom name="drv_4_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-          <geom name="drv_4_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.46 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="drv_4_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.021980" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="drv_4_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.021860" contype="2" conaffinity="1" priority="0" friction="0.33 0.003 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="drv_4_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.022420" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="drv_4_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.023020" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
           <geom name="wheel_vis_4_L" type="mesh" mesh="m_driving_wheel_L" material="mat_black_iron" pos="0 0.023300 0" contype="0" conaffinity="0" mass="0"/>
@@ -900,19 +1275,19 @@
       <body name="leading_truck_arm" pos="0.112000 0 -0.008500">
         <joint name="j_leading_yaw" type="hinge" axis="0 0 1" limited="true" range="-0.30 0.30" stiffness="0.22" damping="0.16"/>
         <inertial pos="0.027559 -0.000000 0.000360" mass="0.027819" fullinertia="2.367136122e-06 2.714557793e-05 2.931262241e-05 3.116230938e-16 1.291106838e-08 5.620503977e-17"/>
-        <joint name="j_leading_susp" type="slide" axis="0 0 1" springref="-0.0035" limited="true" range="-0.0045 0.0045" stiffness="850" damping="16"/>
+        <joint name="j_leading_susp" type="slide" axis="0 0 1" springref="-0.0035" limited="true" range="-0.0045 0.00095" stiffness="1150" damping="18"/>
         <joint name="j_leading_roll" type="hinge" axis="1 0 0" limited="true" range="-0.065 0.065" armature="0.0006" stiffness="0.35" damping="0.04"/>
         <joint name="j_leading_lat" type="slide" axis="0 1 0" limited="true" range="-0.002000 0.002000" armature="0.002" stiffness="420" damping="8.0"/>
         <geom name="lead_frame_vis" type="mesh" mesh="m_leading_truck_frame" material="mat_black_iron" pos="0.056000 0 0" contype="0" conaffinity="0" mass="0"/>
         <body name="leading_wheelset" pos="0.056000 0 0">
           <joint name="j_leading_spin" type="hinge" axis="0 1 0" damping="0.000004"/>
           <inertial pos="-0.000000 -0.000000 -0.000000" mass="0.012374" fullinertia="7.177224181e-06 1.484371856e-06 7.177224181e-06 1.252833312e-19 4.883267352e-20 7.421535502e-21"/>
-          <geom name="lead_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-          <geom name="lead_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="lead_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="lead_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="lead_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="lead_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
-          <geom name="lead_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-          <geom name="lead_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="lead_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="lead_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="lead_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="lead_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
           <geom name="lead_axle_rod_vis" type="cylinder" fromto="0 -0.0245 0  0 0.0245 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
@@ -928,12 +1303,12 @@
         <body name="trailing_wheelset" pos="-0.054000 0 0">
           <joint name="j_trailing_spin" type="hinge" axis="0 1 0" damping="0.000004"/>
           <inertial pos="-0.000000 -0.000000 -0.000000" mass="0.012374" fullinertia="7.177224181e-06 1.484371856e-06 7.177224181e-06 1.252833312e-19 4.883267352e-20 7.421535502e-21"/>
-          <geom name="trail_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-          <geom name="trail_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="trail_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="trail_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="trail_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="trail_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
-          <geom name="trail_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-          <geom name="trail_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+          <geom name="trail_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+          <geom name="trail_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
           <geom name="trail_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
           <geom name="trail_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
           <geom name="trail_axle_rod_vis" type="cylinder" fromto="0 -0.0325 0  0 0.0325 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
@@ -1222,12 +1597,12 @@
           <body name="tender_wheelset_1" pos="0 0 0">
             <joint name="j_twheel_1" type="hinge" axis="0 1 0" damping="0.000004"/>
             <inertial pos="-0.000000 -0.000000 -0.000000" mass="0.012374" fullinertia="7.177224181e-06 1.484371856e-06 7.177224181e-06 1.252833312e-19 4.883267352e-20 7.421535502e-21"/>
-            <geom name="tdr_1_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-            <geom name="tdr_1_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_1_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_1_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
             <geom name="tdr_1_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
             <geom name="tdr_1_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
-            <geom name="tdr_1_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-            <geom name="tdr_1_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_1_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_1_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
             <geom name="tdr_1_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
             <geom name="tdr_1_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
             <geom name="tdr_axle_rod_vis_1" type="cylinder" fromto="0 -0.0272 0  0 0.0272 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
@@ -1243,12 +1618,12 @@
           <body name="tender_wheelset_2" pos="0 0 0">
             <joint name="j_twheel_2" type="hinge" axis="0 1 0" damping="0.000004"/>
             <inertial pos="-0.000000 -0.000000 -0.000000" mass="0.012374" fullinertia="7.177224181e-06 1.484371856e-06 7.177224181e-06 1.252833312e-19 4.883267352e-20 7.421535502e-21"/>
-            <geom name="tdr_2_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-            <geom name="tdr_2_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_2_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_2_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
             <geom name="tdr_2_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
             <geom name="tdr_2_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
-            <geom name="tdr_2_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-            <geom name="tdr_2_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_2_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_2_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
             <geom name="tdr_2_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
             <geom name="tdr_2_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
             <geom name="tdr_axle_rod_vis_2" type="cylinder" fromto="0 -0.0272 0  0 0.0272 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
@@ -1271,12 +1646,12 @@
           <body name="tender_wheelset_3" pos="0 0 0">
             <joint name="j_twheel_3" type="hinge" axis="0 1 0" damping="0.000004"/>
             <inertial pos="-0.000000 -0.000000 -0.000000" mass="0.012374" fullinertia="7.177224181e-06 1.484371856e-06 7.177224181e-06 1.252833312e-19 4.883267352e-20 7.421535502e-21"/>
-            <geom name="tdr_3_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-            <geom name="tdr_3_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_3_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_3_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
             <geom name="tdr_3_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
             <geom name="tdr_3_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
-            <geom name="tdr_3_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-            <geom name="tdr_3_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_3_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_3_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
             <geom name="tdr_3_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
             <geom name="tdr_3_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
             <geom name="tdr_axle_rod_vis_3" type="cylinder" fromto="0 -0.0272 0  0 0.0272 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>
@@ -1292,12 +1667,12 @@
           <body name="tender_wheelset_4" pos="0 0 0">
             <joint name="j_twheel_4" type="hinge" axis="0 1 0" damping="0.000004"/>
             <inertial pos="-0.000000 -0.000000 -0.000000" mass="0.012374" fullinertia="7.177224181e-06 1.484371856e-06 7.177224181e-06 1.252833312e-19 4.883267352e-20 7.421535502e-21"/>
-            <geom name="tdr_4_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-            <geom name="tdr_4_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_4_tread_in_L" type="cylinder" fromto="0 0.021950 0  0 0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_4_tread_out_L" type="cylinder" fromto="0 0.023350 0  0 0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
             <geom name="tdr_4_throat_L" type="cylinder" fromto="0 0.021250 0  0 0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
             <geom name="tdr_4_flange_L" type="cylinder" fromto="0 0.020000 0  0 0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
-            <geom name="tdr_4_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
-            <geom name="tdr_4_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.16 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
+            <geom name="tdr_4_tread_in_R" type="cylinder" fromto="0 -0.021950 0  0 -0.023350 0" size="0.013480" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.18 0.18 0.20 0" group="3" mass="0"/>
+            <geom name="tdr_4_tread_out_R" type="cylinder" fromto="0 -0.023350 0  0 -0.024600 0" size="0.013360" contype="2" conaffinity="1" priority="1" friction="0.14 0.002 0.0001" rgba="0.16 0.16 0.18 0" group="3" mass="0"/>
             <geom name="tdr_4_throat_R" type="cylinder" fromto="0 -0.021250 0  0 -0.022050 0" size="0.013920" contype="2" conaffinity="1" priority="1" friction="0.12 0.0015 0.0001" rgba="0.22 0.22 0.25 0" group="3" mass="0"/>
             <geom name="tdr_4_flange_R" type="cylinder" fromto="0 -0.020000 0  0 -0.021350 0" size="0.014920" contype="2" conaffinity="1" priority="1" friction="0.08 0.001 0.0001" rgba="0.25 0.25 0.28 0" group="3" mass="0"/>
             <geom name="tdr_axle_rod_vis_4" type="cylinder" fromto="0 -0.0272 0  0 0.0272 0" size="0.0020" material="mat_machined_steel" contype="0" conaffinity="0" mass="0"/>

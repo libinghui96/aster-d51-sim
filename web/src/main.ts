@@ -265,6 +265,10 @@ async function main() {
     coalCoverOpen: false,
     thermalWarp: 1.0,
     gradeDeg: 0.0,
+    ambientTempC: 25.0,
+    headwindMS: 0.0,
+    trailingLoadKg: 0.0,
+    tankSpec2010: false,
   };
   let aiMode: AiDriverMode = "off";
   let aiStatusText = "";
@@ -273,10 +277,23 @@ async function main() {
   let isRollerMode = true;
   let currentXmlFile = "d51_full.xml";
   let gpuMonitorEnabled = false;
+  let locoDryMass = 3.88;
   let tenderDryMass = 1.15;
+  let tenderDof0 = -1;
+  let fcarSpecs: Array<{ bid: number; dof0: number; dryMass: number }> = [];
+  let drvTreadGeomIds: number[] = [];
+  let railGeomIds: number[] = [];
+  let wasmDistanceM = 0.0;
+  let wasmPrevPos: [number, number, number] | null = null;
   let prevFwdVel = 0.0;
   const wsSceneKey = () =>
-    currentXmlFile === "d51_full.xml" ? "roller" : currentXmlFile === "d51_track.xml" ? "track" : "curve";
+    currentXmlFile === "d51_full.xml"
+      ? "roller"
+      : currentXmlFile === "d51_track.xml"
+        ? "track"
+        : currentXmlFile === "d51_oval.xml"
+          ? "oval"
+          : "curve";
 
   // -------------------------------------------------------------------------
   // 本地 NVIDIA RTX 5080 (571万体素真 3D 求解器) WebSocket 自动发现与热桥接
@@ -507,9 +524,31 @@ async function main() {
       }
     }
 
-    if (idxMap.tenderBody >= 0) {
-      tenderDryMass = Math.max(0.6, model.body_mass[idxMap.tenderBody] - 0.250);
+    if (idxMap.locoBody >= 0) {
+      locoDryMass = Math.max(1.5, model.body_mass[idxMap.locoBody] - 0.210);
     }
+    if (idxMap.tenderBody >= 0) {
+      tenderDryMass = Math.max(0.6, model.body_mass[idxMap.tenderBody] - 0.375);
+    }
+    const jTfree = objId(mujoco.mjtObj.mjOBJ_JOINT, "tender_free");
+    tenderDof0 = jTfree >= 0 ? model.jnt_dofadr[jTfree] : -1;
+    fcarSpecs = [];
+    for (let cIdx = 1; cIdx <= 8; cIdx++) {
+      const cbid = objId(mujoco.mjtObj.mjOBJ_BODY, `freight_car_${cIdx}`);
+      const cjid = objId(mujoco.mjtObj.mjOBJ_JOINT, `fcar_free_${cIdx}`);
+      if (cbid >= 0 && cjid >= 0) {
+        fcarSpecs.push({ bid: cbid, dof0: model.jnt_dofadr[cjid], dryMass: model.body_mass[cbid] });
+      }
+    }
+    drvTreadGeomIds = [];
+    railGeomIds = [];
+    for (let g = 0; g < model.ngeom; g++) {
+      const gn = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM.value ?? mujoco.mjtObj.mjOBJ_GEOM, g) || "";
+      if (gn.startsWith("rail_")) railGeomIds.push(g);
+      else if (gn.startsWith("drv_") && gn.includes("_tread_")) drvTreadGeomIds.push(g);
+    }
+    wasmDistanceM = 0.0;
+    wasmPrevPos = null;
 
     const savedDisable = model.opt.disableflags;
     const bitVal = (b: any) => (typeof b === "number" ? b : b.value);
@@ -830,6 +869,8 @@ async function main() {
   const elFuel = document.getElementById("rng-fuel") as HTMLInputElement;
   const elWaterFill = document.getElementById("rng-waterfill") as HTMLInputElement;
   const elGrade = document.getElementById("rng-grade") as HTMLInputElement;
+  const elLoad = document.getElementById("rng-load") as HTMLInputElement | null;
+  const elAmb = document.getElementById("rng-amb") as HTMLInputElement | null;
   const selAiMode = document.getElementById("sel-ai-mode") as HTMLSelectElement;
   const elAiStatus = document.getElementById("txt-ai-status")!;
   const btnBurner = document.getElementById("btn-burner")!;
@@ -863,6 +904,16 @@ async function main() {
     document.getElementById("val-waterfill")!.textContent = `${Math.round(ctrl.waterFillValve * 100)}%`;
     elGrade.value = ctrl.gradeDeg.toFixed(1);
     document.getElementById("val-grade")!.textContent = `${ctrl.gradeDeg >= 0 ? "+" : ""}${ctrl.gradeDeg.toFixed(1)}°`;
+    if (elLoad) {
+      const ld = ctrl.trailingLoadKg ?? 0.0;
+      elLoad.value = ld.toFixed(1);
+      document.getElementById("val-load")!.textContent = `${ld.toFixed(1)}kg`;
+    }
+    if (elAmb) {
+      const amb = ctrl.ambientTempC ?? 25.0;
+      elAmb.value = amb.toFixed(0);
+      document.getElementById("val-amb")!.textContent = `${amb.toFixed(0)}°C`;
+    }
 
     btnBurner.classList.toggle("active", ctrl.burnerLit);
     btnFan.classList.toggle("active", ctrl.chimneyFan);
@@ -921,6 +972,12 @@ async function main() {
   bindRange("rng-fuel", "val-fuel", (v) => `${Math.round(v * 100)}%`, (v) => (ctrl.fuelValve = v));
   bindRange("rng-waterfill", "val-waterfill", (v) => `${Math.round(v * 100)}%`, (v) => (ctrl.waterFillValve = v), false);
   bindRange("rng-grade", "val-grade", (v) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}°`, (v) => (ctrl.gradeDeg = v), false);
+  if (elLoad) {
+    bindRange("rng-load", "val-load", (v) => `${v.toFixed(1)}kg`, (v) => (ctrl.trailingLoadKg = v), false);
+  }
+  if (elAmb) {
+    bindRange("rng-amb", "val-amb", (v) => `${v.toFixed(0)}°C`, (v) => (ctrl.ambientTempC = v), false);
+  }
 
   btnBurner.addEventListener("click", () => {
     if (aiMode !== "off") setAiModeLocal("off", false);
@@ -1530,6 +1587,20 @@ async function main() {
       lubricatorOilPct: t.lubricatorOilPct,
       wheelRpm: t.wheelRpm,
       scaleSpeedKmh: t.scaleSpeedKmh,
+      groundSpeedMS: t.groundSpeedMS ?? 0.0,
+      groundSpeedKmh: t.groundSpeedKmh ?? t.scaleSpeedKmh,
+      wheelSlipPct: t.wheelSlipPct ?? 0.0,
+      railAdhesionMu: t.railAdhesionMu ?? 0.26,
+      exhaustBackpressureKgf: t.exhaustBackpressureKgf ?? 0.0,
+      trainResistanceN: t.trainResistanceN ?? 0.0,
+      distanceM: t.distanceM ?? 0.0,
+      scaleDistanceKm: t.scaleDistanceKm ?? 0.0,
+      lapCount: t.lapCount ?? 0.0,
+      predictedRangeM: t.predictedRangeM ?? 0.0,
+      predictedRangeP10M: t.predictedRangeP10M ?? 0.0,
+      predictedRangeP90M: t.predictedRangeP90M ?? 0.0,
+      predictedTimeMin: t.predictedTimeMin ?? 0.0,
+      rangeLimitingFactor: t.rangeLimitingFactor ?? "NOMINAL",
       safetyValveOpen: t.safetyValveOpen,
       dryFireAlarm: t.dryFireAlarm,
       flashSteamSpike: t.flashSteamSpike,
@@ -1584,12 +1655,15 @@ async function main() {
 
         let pitchRad = 0.0;
         let accelX = 0.0;
+        let vFwdGnd: number | undefined = undefined;
         if (!isRollerMode && lb >= 0) {
+          const eFx = data.xmat[9 * lb + 0];
+          const eFy = data.xmat[9 * lb + 3];
           const r20 = Math.max(-0.35, Math.min(0.35, data.xmat[9 * lb + 6]));
           pitchRad = Math.asin(r20);
-          const fwdVel = w3 * 0.0219;
-          accelX = (fwdVel - prevFwdVel) / Math.max(1e-6, dt);
-          prevFwdVel = fwdVel;
+          vFwdGnd = data.qvel[0] * eFx + data.qvel[1] * eFy + data.qvel[2] * r20;
+          accelX = (vFwdGnd - prevFwdVel) / Math.max(1e-6, dt);
+          prevFwdVel = vFwdGnd;
         }
 
         out = thermo.step(
@@ -1597,7 +1671,7 @@ async function main() {
           sd[idxMap.sPL], sd[idxMap.sVL], sd[idxMap.sValL],
           sd[idxMap.sPR], sd[idxMap.sVR], sd[idxMap.sValR],
           w3, sd[idxMap.sPump], ctrl,
-          vVL, vVR, pitchRad, accelX
+          vVL, vVR, pitchRad, accelX, vFwdGnd
         );
         data.ctrl[idxMap.actFL] = out.forceL;
         data.ctrl[idxMap.actFR] = out.forceR;
@@ -1611,21 +1685,87 @@ async function main() {
         if (isRollerMode) {
           data.qfrc_applied[idxMap.qvelW3] = -0.0022 * w3 - 0.00012 * w3 * Math.abs(w3);
         } else {
+          const mLocoCur = locoDryMass + (out.boilerWaterMl ?? 210.0) * 1e-3;
+          model.body_mass[lb] = mLocoCur;
+          const extraLoadKg = Math.max(0.0, ctrl.trailingLoadKg ?? 0.0);
+          let mTdrCur = 0.0;
+          if (tb >= 0) {
+            mTdrCur = tenderDryMass + (out.tenderWaterMl * 0.997 + out.alcoholMl * 0.787) * 1e-3 + (fcarSpecs.length === 0 ? extraLoadKg : 0.0);
+            model.body_mass[tb] = mTdrCur;
+          }
+          let mCarsTot = 0.0;
+          if (fcarSpecs.length > 0) {
+            const perCar = extraLoadKg / fcarSpecs.length;
+            for (const fc of fcarSpecs) {
+              const mc = fc.dryMass + perCar;
+              model.body_mass[fc.bid] = mc;
+              mCarsTot += mc;
+            }
+          }
+          const totalConsistKg = mLocoCur + mTdrCur + mCarsTot + 2.15;
+
           const vx = data.qvel[0];
           const vy = data.qvel[1];
           const vSpd = Math.hypot(vx, vy);
+          const vSlip = w3 * 0.0219 - (vFwdGnd ?? 0.0);
+          const wetPen = (ctrl.drainCock ? 0.50 : 0.0) + Math.min(0.08, 0.03 * (out.exhaustGS ?? 0.0));
+          const muRail = Math.max(0.11, Math.min(0.33, 0.33 * (1.0 - Math.min(0.54, wetPen)) * (0.72 + 0.28 * Math.exp(-Math.abs(vSlip) / 0.32))));
+          for (const gid of drvTreadGeomIds) model.geom_friction[3 * gid] = muRail;
+          for (const gid of railGeomIds) model.geom_friction[3 * gid] = muRail;
+
+          const px = data.xpos[3 * lb], py = data.xpos[3 * lb + 1], pz = data.xpos[3 * lb + 2];
+          // 第一性原理整车运行阻力 + 弯道轮对弦差阻力 + 勾配加算切向重力 (严禁硬编码 8.80*v^2!)
+          const tAmb = ctrl.ambientTempC ?? 25.0;
+          const brgVisc = Math.exp(920.0 * (1.0 / Math.max(255.0, tAmb + 273.15) - 1.0 / 298.15));
+          const fRoll = (0.0028 + 0.00009 * fcarSpecs.length) * (totalConsistKg * 9.81) * Math.tanh(vSpd / 0.006);
+          const fJournal = 0.048 * (totalConsistKg / 6.0) * brgVisc * vSpd;
+          const rhoAir = 101325.0 / (287.05 * Math.max(250.0, tAmb + 273.15));
+          const fAero = 0.5 * rhoAir * (0.82 + 0.16 * fcarSpecs.length) * 0.0112 * vSpd * vSpd;
+          const curvAbs = currentXmlFile === "d51_r2m.xml" ? 0.50 : (currentXmlFile === "d51_oval.xml" && Math.abs(px) > 3.0 ? 0.40 : 0.0);
+          const fCurve = (0.0096 * curvAbs) * (totalConsistKg * 9.81) * Math.tanh(vSpd / 0.008);
+          const fRes = fRoll + fJournal + fAero + fCurve;
+
+          const sinGrade = Math.sin((Math.max(-15.0, Math.min(15.0, ctrl.gradeDeg)) * Math.PI) / 180.0);
+          const ex0 = data.xmat[9 * lb + 0], ey0 = data.xmat[9 * lb + 3];
+          const en0 = Math.max(1e-6, Math.hypot(ex0, ey0));
+          let fxL = -(mLocoCur + 1.55) * 9.81 * sinGrade * (ex0 / en0);
+          let fyL = -(mLocoCur + 1.55) * 9.81 * sinGrade * (ey0 / en0);
           if (vSpd > 1e-5) {
-            const fDavis = 0.22 + 2.20 * vSpd + 8.80 * vSpd * vSpd;
-            data.qfrc_applied[0] = -fDavis * (vx / vSpd);
-            data.qfrc_applied[1] = -fDavis * (vy / vSpd);
-          } else {
-            data.qfrc_applied[0] = 0.0;
-            data.qfrc_applied[1] = 0.0;
+            fxL -= fRes * (vx / vSpd);
+            fyL -= fRes * (vy / vSpd);
           }
-          data.qfrc_applied[idxMap.qvelW3] = -0.0024 * w3 - 0.00016 * w3 * Math.abs(w3);
-          if (tb >= 0) {
-            model.body_mass[tb] = tenderDryMass + (out.tenderWaterMl + out.alcoholMl * 0.789) * 1e-3;
+          data.qfrc_applied[0] = fxL;
+          data.qfrc_applied[1] = fyL;
+          if (tenderDof0 >= 0 && tb >= 0) {
+            const tx0 = data.xmat[9 * tb + 0], ty0 = data.xmat[9 * tb + 3];
+            const tn0 = Math.max(1e-6, Math.hypot(tx0, ty0));
+            data.qfrc_applied[tenderDof0] = -(mTdrCur + 0.34) * 9.81 * sinGrade * (tx0 / tn0);
+            data.qfrc_applied[tenderDof0 + 1] = -(mTdrCur + 0.34) * 9.81 * sinGrade * (ty0 / tn0);
           }
+          for (const fc of fcarSpecs) {
+            const cx0 = data.xmat[9 * fc.bid + 0], cy0 = data.xmat[9 * fc.bid + 3];
+            const cn0 = Math.max(1e-6, Math.hypot(cx0, cy0));
+            const mcTot = model.body_mass[fc.bid] + 0.13;
+            data.qfrc_applied[fc.dof0] = -mcTot * 9.81 * sinGrade * (cx0 / cn0);
+            data.qfrc_applied[fc.dof0 + 1] = -mcTot * 9.81 * sinGrade * (cy0 / cn0);
+          }
+          data.qfrc_applied[idxMap.qvelW3] = -0.0031 * w3 - 0.00018 * w3 * Math.abs(w3);
+          if (wasmPrevPos) {
+            const ds = Math.hypot(px - wasmPrevPos[0], py - wasmPrevPos[1], pz - wasmPrevPos[2]);
+            if (ds < 0.25) wasmDistanceM += ds;
+          }
+          wasmPrevPos = [px, py, pz];
+          const lapLen = currentXmlFile === "d51_oval.xml" ? 27.708 : currentXmlFile === "d51_r2m.xml" ? 12.566 : 0.0;
+          out.distanceM = wasmDistanceM;
+          out.scaleDistanceKm = (wasmDistanceM * 30.0) / 1000.0;
+          out.lapCount = lapLen > 0 ? wasmDistanceM / lapLen : 0.0;
+          const remFuelS = out.alcoholMl / Math.max(0.035, out.wickCapillaryMlS || 0.105);
+          const remWaterS = (out.tenderWaterMl + Math.max(0.0, (out.boilerWaterMl ?? 210.0) - 95.0)) / Math.max(0.08, out.steamGenGS || 0.24);
+          const remS = Math.min(remFuelS, remWaterS);
+          const vEst = Math.max(0.45, Math.abs(vFwdGnd ?? 0.65));
+          out.predictedRangeM = remS * vEst * 0.88;
+          out.predictedTimeMin = remS / 60.0;
+          out.rangeLimitingFactor = remFuelS <= remWaterS ? "FUEL_DEPLETED" : "WATER_DEPLETED";
         }
         syncWasmVisualJoints(dt, out.pgBourdonKgf ?? out.boilerPressureKgf);
         mujoco.mj_step(model, data);
@@ -1826,7 +1966,29 @@ async function main() {
       const tiltShow = out.flameTiltDeg ?? sp.flameTiltDeg ?? 0.0;
       document.getElementById("txt-smokebox")!.textContent =
         `煙-${out.smokeboxVacuumPa.toFixed(0)}/火${fbVacShow >= 0 ? "-" : "+"}${Math.abs(fbVacShow).toFixed(0)}Pa | 炎傾${tiltShow.toFixed(0)}°`;
-      document.getElementById("txt-speed")!.textContent = `${out.wheelRpm.toFixed(0)} RPM | ${out.scaleSpeedKmh.toFixed(1)} km/h`;
+      const gSpdShow = out.groundSpeedKmh ?? out.scaleSpeedKmh;
+      const slipShow = out.wheelSlipPct ?? 0.0;
+      const spdEl = document.getElementById("txt-speed")!;
+      spdEl.textContent = `${out.wheelRpm.toFixed(0)} RPM | ${gSpdShow.toFixed(1)} km/h | 空転${slipShow.toFixed(1)}%`;
+      spdEl.classList.toggle("val-hot", slipShow >= 12.0);
+
+      const odoEl = document.getElementById("txt-odometer");
+      if (odoEl) {
+        const dM = out.distanceM ?? 0.0;
+        const sKm = out.scaleDistanceKm ?? (dM * 30.0) / 1000.0;
+        const laps = out.lapCount ?? 0.0;
+        const pRem = out.predictedRangeM ?? 0.0;
+        const p10 = out.predictedRangeP10M ?? 0.0;
+        const p90 = out.predictedRangeP90M ?? 0.0;
+        const lapStr = laps > 0.01 ? `/${laps.toFixed(1)}周` : "";
+        const remStr =
+          p10 > 1.0 && p90 > p10
+            ? `残${pRem.toFixed(0)}m [${p10.toFixed(0)}..${p90.toFixed(0)}]`
+            : pRem > 1.0
+              ? `残${pRem.toFixed(0)}m`
+              : "残--m";
+        odoEl.textContent = `${dM.toFixed(2)}m (${sKm.toFixed(2)}km${lapStr}) | ${remStr}`;
+      }
 
       const flowTags: string[] = [];
       if ((out.waterFillMlS ?? 0) > 0.05) flowTags.push(`注+${out.waterFillMlS.toFixed(1)}`);

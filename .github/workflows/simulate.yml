@@ -53,7 +53,7 @@ jobs:
           cp -r web/dist/. site/
           touch site/.nojekyll
 
-      - name: Check models are in sync with generator & run Gates 1-26 verification
+      - name: Check models are in sync with generator & run Gates 1-31 verification
         run: |
           python scripts/03_generate_mjcf.py --mode roller --out /tmp/d51_regen.xml
           diff -q /tmp/d51_regen.xml models/d51_full.xml
@@ -61,6 +61,8 @@ jobs:
           diff -q /tmp/d51_track_regen.xml models/d51_track.xml
           python scripts/03_generate_mjcf.py --mode curve_r2m --out /tmp/d51_r2m_regen.xml
           diff -q /tmp/d51_r2m_regen.xml models/d51_r2m.xml
+          python scripts/03_generate_mjcf.py --mode oval_grade --trailing-cars 2 --out /tmp/d51_oval_regen.xml
+          diff -q /tmp/d51_oval_regen.xml models/d51_oval.xml
           python scripts/09_verify_cad_and_clearance.py
 
       - name: Headless test-run demo (telemetry plot)
