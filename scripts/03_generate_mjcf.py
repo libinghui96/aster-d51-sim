@@ -421,7 +421,7 @@ def build_mjcf(
     default = ET.SubElement(mj, "default")
     ET.SubElement(default, "geom", condim="3", solref="0.0015 1.0", solimp="0.95 0.99 0.0001")
     ET.SubElement(default, "joint", solreflimit="0.002 1.0", solimplimit="0.98 0.995 0.0001")
-    ET.SubElement(default, "equality", solref="0.00020 1.0", solimp="0.99991 0.999991 0.000002")
+    ET.SubElement(default, "equality", solref="0.00015 1.0", solimp="0.99995 0.999995 0.000001")
 
     mesh_dir = Path("models/meshes")
     asset = ET.SubElement(mj, "asset")
@@ -1077,7 +1077,8 @@ def build_mjcf(
     )
     ET.SubElement(
         equality, "joint", name="couple_reach_rod",
-        joint1="j_reach_rod", joint2="j_reverser", polycoef="0 0.007 0 -0.001167 0"
+        joint1="j_reach_rod", joint2="j_reverser", polycoef="0 0.007 0 -0.001167 0",
+        solref="0.002 1", solimp="0.99 0.999 0.0001"
     )
 
     # Tier 3: 8-6 -> 8-5 -> 7-1~3 -> 7-5 -> 1-19 -> 1-18 -> 1-16 八级气缸排液阀完整联动机构 (跟随 cylinder_center_x 精确对齐!)
@@ -1105,7 +1106,8 @@ def build_mjcf(
     )
     ET.SubElement(
         equality, "joint", name="couple_drain_rod",
-        joint1="j_drain_pull", joint2="j_drain_cock", polycoef="0 -0.0118 0 0.001967 0"
+        joint1="j_drain_pull", joint2="j_drain_cock", polycoef="0 -0.0118 0 0.001967 0",
+        solref="0.002 1", solimp="0.99 0.999 0.0001"
     )
 
     # P3-CAB: 驾驶室原厂全真值可动操纵阀件、Z=+44.0mm 窗高双柄螺旋逆转机滑块、右地板上立式排液手柄 8-7 与砂箱铰接盖 29-12 (イラスト 8, 11, 12, 13, 17, 21, 29)
@@ -1244,11 +1246,12 @@ def build_mjcf(
     )
     ET.SubElement(
         drn_lev, "geom", name="cab_drain_lever_vis", type="mesh",
-        mesh="m_cab_drain_lever", material="mat_black_iron", contype="0", conaffinity="0", mass="0"
+        mesh="m_cab_drain_lever", material="mat_brass", contype="0", conaffinity="0", mass="0"
     )
     ET.SubElement(
         equality, "joint", name="couple_cab_drain",
-        joint1="j_cab_drain", joint2="j_drain_cock", polycoef="0 -0.0118 0 0.001967 0"
+        joint1="j_cab_drain", joint2="j_drain_cock", polycoef="0 -0.0118 0 0.001967 0",
+        solref="0.002 1", solimp="0.99 0.999 0.0001"
     )
 
     # 29-12 + 29-13 カマボコ砂箱前部钢丝铰接可掀顶盖 (前铰于 (+62.4, 0.0, +91.85mm), Manual p.36 Step 29 & イラスト 29)
@@ -1307,13 +1310,13 @@ def build_mjcf(
         y_pts = y_cyl + sgn * pts_y_off_m
         ET.SubElement(
             frame, "geom", name=f"piston_tail_sheath_vis_{tag}", type="mesh",
-            mesh=f"m_piston_tail_sheath_{tag}", material="mat_black_iron",
+            mesh=f"m_piston_tail_sheath_{tag}", material="mat_machined_steel",
             pos=f"{rc_cfg['cylinder_center_x']*s:.6f} {y_pts:.6f} {rc_cfg['cylinder_center_z']*s:.6f}",
             mass="0", contype="0", conaffinity="0"
         )
         ET.SubElement(
             frame, "geom", name=f"valve_spindle_sheath_vis_{tag}", type="mesh",
-            mesh=f"m_valve_spindle_sheath_{tag}", material="mat_black_iron",
+            mesh=f"m_valve_spindle_sheath_{tag}", material="mat_machined_steel",
             pos=f"{rc_cfg['cylinder_center_x']*s:.6f} {y_cyl:.6f} {rc_cfg['cylinder_center_z']*s:.6f}",
             mass="0", contype="0", conaffinity="0"
         )
@@ -1345,11 +1348,11 @@ def build_mjcf(
             # 还原耦合连杆铜套 ±0.08mm 真实径向油膜旷量 (释放相邻动轴垂向悬挂差 ΔZ 引起的 ΔZ²/(2L)≈0.025mm 几何弦长伸长!)
             ET.SubElement(
                 bush, "joint", name=f"j_coup_xplay_{target_idx}_{tag}", type="slide", axis="1 0 0",
-                limited="true", range="-0.00008 0.00008", stiffness="800", damping="0.30"
+                limited="true", range="-0.00011 0.00011", armature="0.008", stiffness="580", damping="3.20"
             )
             ET.SubElement(
                 bush, "joint", name=f"j_coup_lat_{target_idx}_{tag}", type="slide", axis="0 1 0",
-                limited="true", range="-0.0016 0.0016", damping="0.25"
+                limited="true", range="-0.0020 0.0020", armature="0.008", damping="1.20"
             )
             ET.SubElement(
                 bush, "geom", type="cylinder", fromto="0 -0.001 0  0 0.001 0", size="0.002",
@@ -1421,7 +1424,7 @@ def build_mjcf(
         )
         ET.SubElement(
             piston_body, "geom", name=f"piston_ch_vis_{tag}", type="mesh",
-            mesh=f"m_piston_crosshead_{tag}", material="mat_brass", contype="0", conaffinity="0", mass="0"
+            mesh=f"m_piston_crosshead_{tag}", material="mat_machined_steel", contype="0", conaffinity="0", mass="0"
         )
         ET.SubElement(piston_body, "site", name=f"s_crosshead_pin_{tag}", pos="0 0 0")
         ET.SubElement(
@@ -1857,7 +1860,7 @@ def build_mjcf(
         if on_rails:
             ET.SubElement(
                 equality, "connect", name="loop_tender_drawbar", site1="s_drawbar_rear", site2="s_tender_front_pin",
-                solref="0.00028 1.0", solimp="0.99985 0.999985 0.000002"
+                solref="0.00020 1.0", solimp="0.99993 0.999993 0.000001"
             )
             ET.SubElement(sensor, "framepos", name="loco_world_pos", objtype="body", objname="loco_frame")
             ET.SubElement(sensor, "jointpos", name="leading_yaw_rad", joint="j_leading_yaw")

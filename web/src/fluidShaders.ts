@@ -664,7 +664,10 @@ export class FluidPartVisualizer {
   private cylHeadMeshes: [THREE.Mesh, THREE.Mesh];
   private cylCrankMeshes: [THREE.Mesh, THREE.Mesh];
   private cylCondMeshes: [THREE.Mesh, THREE.Mesh];
-  private portGlowMeshes: [THREE.Mesh, THREE.Mesh, THREE.Mesh, THREE.Mesh];
+  private portGlowMeshes: THREE.Mesh[];
+  private valveMirrorGroups: [THREE.Group, THREE.Group];
+  private valveDCavityGroups: [THREE.Group, THREE.Group];
+  private valveDArchMats: [THREE.MeshBasicMaterial, THREE.MeshBasicMaterial];
 
   private lubeCoreMat: THREE.ShaderMaterial;
   private lubeCoreMesh: THREE.Mesh;
@@ -1369,28 +1372,92 @@ export class FluidPartVisualizer {
     };
     this.cylCondMeshes = [makeCondensateMesh(+0.0325), makeCondensateMesh(-0.0325)];
 
-    const makePortGlow = (xPos: number, yPos: number): THREE.Mesh => {
-      const g = new THREE.BoxGeometry(0.0022, 0.0056, 0.0036);
+    const makePortGlow = (xPos: number, yPos: number, xWidthM: number): THREE.Mesh => {
+      const g = new THREE.BoxGeometry(xWidthM, 0.0052, 0.0022);
       const m = new THREE.MeshBasicMaterial({
         color: 0xffaa44,
         transparent: true,
         opacity: 0.0,
+        depthTest: false,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
       });
       const mesh = new THREE.Mesh(g, m);
-      mesh.position.set(xPos, yPos, 0.0108);
-      mesh.renderOrder = 4;
+      mesh.position.set(xPos, yPos, 0.0102);
+      mesh.renderOrder = 6;
       mesh.visible = false;
       this.root.add(mesh);
       return mesh;
     };
     this.portGlowMeshes = [
-      makePortGlow(0.1292, +0.0360), // L Head port (1-9 Cross-Port Rear mirror slot -> Head chamber)
-      makePortGlow(0.1372, +0.0360), // L Crank port (1-9 Cross-Port Front mirror slot -> Crank chamber)
-      makePortGlow(0.1292, -0.0360), // R Head port
-      makePortGlow(0.1372, -0.0360), // R Crank port
+      makePortGlow(0.1292, +0.0360, 0.0015), // 0: L Rear port (後蒸気口 -> Crosses to Front Head-End)
+      makePortGlow(0.1332, +0.0360, 0.0025), // 1: L Center port (中央排気口 -> 7-8 Blast)
+      makePortGlow(0.1372, +0.0360, 0.0015), // 2: L Front port (前蒸気口 -> Crosses to Rear Crank-End)
+      makePortGlow(0.1292, -0.0360, 0.0015), // 3: R Rear port (後蒸気口 -> Crosses to Front Head-End)
+      makePortGlow(0.1332, -0.0360, 0.0025), // 4: R Center port (中央排気口 -> 7-8 Blast)
+      makePortGlow(0.1372, -0.0360, 0.0015), // 5: R Front port (前蒸気口 -> Crosses to Rear Crank-End)
     ];
+
+    // 1-9 三气口研磨阀镜台精密线框 (後蒸気口 X=129.2 / 中央排気口 X=133.2 / 前蒸気口 X=137.2, Z=+10.80mm)
+    // + 随 j_valve_L/R 实时往复滑移的 1-6 外进气 D 型滑阀密封底靴与排気凹み (5.50×5.40×2.50mm 拱腔)!
+    const makeRectFrameLine = (cx: number, cy: number, cz: number, wx: number, wy: number, hex: number, opacity = 0.92): THREE.LineLoop => {
+      const hx = 0.5 * wx, hy = 0.5 * wy;
+      const pts = [
+        new THREE.Vector3(cx - hx, cy - hy, cz),
+        new THREE.Vector3(cx + hx, cy - hy, cz),
+        new THREE.Vector3(cx + hx, cy + hy, cz),
+        new THREE.Vector3(cx - hx, cy + hy, cz),
+      ];
+      const lg = new THREE.BufferGeometry().setFromPoints(pts);
+      const lm = new THREE.LineBasicMaterial({ color: hex, transparent: true, opacity, depthTest: false, depthWrite: false });
+      const loop = new THREE.LineLoop(lg, lm);
+      loop.renderOrder = 8;
+      return loop;
+    };
+    const makeMirrorOverlayGroup = (yCenter: number): THREE.Group => {
+      const grp = new THREE.Group();
+      // 1-9 凸台外框 (12.6 × 6.8 mm @ Z=+10.80mm) + 三气口精密高亮边沿框
+      grp.add(makeRectFrameLine(0.1332, yCenter, 0.01080, 0.0126, 0.0068, 0x94a3b8, 0.65));
+      grp.add(makeRectFrameLine(0.1292, yCenter, 0.01082, 0.0015, 0.0052, 0xfb923c, 0.96)); // 後蒸気口 SP_R
+      grp.add(makeRectFrameLine(0.1332, yCenter, 0.01082, 0.0025, 0.0052, 0x38bdf8, 0.98)); // 中央排気口 EP
+      grp.add(makeRectFrameLine(0.1372, yCenter, 0.01082, 0.0015, 0.0052, 0xfb923c, 0.96)); // 前蒸気口 SP_F
+      grp.visible = false;
+      this.root.add(grp);
+      return grp;
+    };
+    this.valveMirrorGroups = [makeMirrorOverlayGroup(+0.0360), makeMirrorOverlayGroup(-0.0360)];
+
+    const makeMovingDValveGroup = (yCenter: number): [THREE.Group, THREE.MeshBasicMaterial] => {
+      const grp = new THREE.Group();
+      grp.position.set(0.1332, yCenter, 0.01084);
+      // 1-6 外周密封底面 (11.0 × 8.2 mm: 两端各留 0.75mm 外进汽余面 Steam Lap!)
+      grp.add(makeRectFrameLine(0.0, 0.0, 0.0, 0.0110, 0.0082, 0xfef08a, 0.88));
+      // 1-6 内部 D 型排气拱腔 (5.50 × 5.40 × 2.45 mm: 实时连通任一气缸口 <-> 中央排汽口!)
+      const archGeom = new THREE.CylinderGeometry(0.00275, 0.00275, 0.0054, 18, 1, false, 0, Math.PI);
+      // CylinderGeometry axis is Y (length 5.4mm along cylinder Y!), theta=0..PI arches into +Z when rotated around Y by -PI/2:
+      archGeom.rotateZ(Math.PI * 0.5);
+      archGeom.rotateX(Math.PI * 0.5);
+      archGeom.scale(1.0, 1.0, 0.89); // peak height = 2.45mm -> Z_local = +0.00245m
+      const archMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.30,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+      });
+      const archMesh = new THREE.Mesh(archGeom, archMat);
+      archMesh.renderOrder = 7;
+      grp.add(archMesh);
+      grp.add(makeRectFrameLine(0.0, 0.0, 0.00003, 0.0055, 0.0054, 0x7dd3fc, 0.94));
+      grp.visible = false;
+      this.root.add(grp);
+      return [grp, archMat];
+    };
+    const [dGrpL, dMatL] = makeMovingDValveGroup(+0.0360);
+    const [dGrpR, dMatR] = makeMovingDValveGroup(-0.0360);
+    this.valveDCavityGroups = [dGrpL, dGrpR];
+    this.valveDArchMats = [dMatL, dMatR];
 
     // 4-2 前车架卧式置换注油器油水分层内芯 + 内部银焊竖直溢流立管 (Roscoe Standpipe: X=+0.1462, Y=0, Z∈[-0.0006,+0.0109])
     this.lubeCoreMat = new THREE.ShaderMaterial({
@@ -2627,6 +2694,171 @@ export class FluidPartVisualizer {
           unit: "g/s",
         }),
       },
+      // === 1-7外进气蒸汽室绕 1-6 滑阀外缘进汽 & 经 1-6 内部 D 型凹腔桥接中央排汽口的精确配气流迹 (8 路) ===
+      {
+        id: "gas_chest_adm_rear_L",
+        partNo: "1-7→1-6外縁→左後弁口(給気)",
+        title: "左1-7蒸気室→1-6後外縁開放→1-9後蒸気口(X=129.2)→交叉前気室ピストン推力",
+        zone: "cylinder",
+        frame: "loco",
+        medium: "open_gas",
+        ptsMm: [[134.2, +36.0, 16.6], [126.8, +36.0, 15.6], [127.0, +36.0, 12.1], [129.2, +36.0, 10.7]],
+        extraBranchesMm: [
+          [[143.2, +32.5, 5.2], [141.6, +32.5, 0.5], [136.2, +32.5, 0.0]],
+        ],
+        bendRadiusMm: 1.5,
+        markerScaleMm: 0.72,
+        labelT: 0.45,
+        evalFlow: (out, sp) => {
+          const pv = sp.valvePortOpenL[0] ?? 0;
+          const rate = pv > 0.02 && out.steamChestKgf > 0.015 ? pv * (0.35 + 0.45 * Math.min(1.0, out.steamChestKgf)) : 0.0;
+          return { signedRate: rate, fill: rate > 0.008 ? 0.95 : 0.0, unit: "給気" };
+        },
+      },
+      {
+        id: "gas_chest_adm_front_L",
+        partNo: "1-7→1-6外縁→左前弁口(給気)",
+        title: "左1-7蒸気室→1-6前外縁開放→1-9前蒸気口(X=137.2)→交叉後気室ピストン推力",
+        zone: "cylinder",
+        frame: "loco",
+        medium: "open_gas",
+        ptsMm: [[134.2, +36.0, 16.6], [139.6, +36.0, 15.6], [139.4, +36.0, 12.1], [137.2, +36.0, 10.7]],
+        extraBranchesMm: [
+          [[125.0, +32.5, 5.2], [126.6, +32.5, 0.5], [131.8, +32.5, 0.0]],
+        ],
+        bendRadiusMm: 1.5,
+        markerScaleMm: 0.72,
+        labelT: 0.45,
+        evalFlow: (out, sp) => {
+          const pv = sp.valvePortOpenL[1] ?? 0;
+          const rate = pv > 0.02 && out.steamChestKgf > 0.015 ? pv * (0.35 + 0.45 * Math.min(1.0, out.steamChestKgf)) : 0.0;
+          return { signedRate: rate, fill: rate > 0.008 ? 0.95 : 0.0, unit: "給気" };
+        },
+      },
+      {
+        id: "gas_dvalve_exh_rear_L",
+        partNo: "左後弁口→1-6排気凹み→中央排気口",
+        title: "左1-9後蒸気口(X=129.2)→1-6スライド弁D型排気凹腔ブリッジ→中央排気口(X=133.2)→7-8",
+        zone: "cylinder",
+        frame: "loco",
+        medium: "open_gas",
+        ptsMm: [[129.2, +36.0, 10.7], [130.3, +36.0, 12.5], [132.1, +36.0, 12.5], [133.2, +36.0, 10.3]],
+        extraBranchesMm: [
+          [[136.2, +32.5, 0.0], [141.6, +32.5, 0.5], [143.2, +32.5, 5.2]],
+        ],
+        bendRadiusMm: 1.1,
+        markerScaleMm: 0.70,
+        labelT: 0.50,
+        evalFlow: (out, sp) => {
+          const pv = sp.valvePortOpenL[0] ?? 0;
+          const sweepDrive = Math.min(0.85, Math.abs(out.wheelRpm) * 0.012) + (sp.cylLPKgf[0] ?? 0.0) * 0.65;
+          const rate = pv < -0.02 ? (-pv) * Math.max(0.18, sweepDrive) : 0.0;
+          return { signedRate: rate, fill: rate > 0.008 ? 0.95 : 0.0, unit: "D腔排気" };
+        },
+      },
+      {
+        id: "gas_dvalve_exh_front_L",
+        partNo: "左前弁口→1-6排気凹み→中央排気口",
+        title: "左1-9前蒸気口(X=137.2)→1-6スライド弁D型排気凹腔ブリッジ→中央排気口(X=133.2)→7-8",
+        zone: "cylinder",
+        frame: "loco",
+        medium: "open_gas",
+        ptsMm: [[137.2, +36.0, 10.7], [136.1, +36.0, 12.5], [134.3, +36.0, 12.5], [133.2, +36.0, 10.3]],
+        extraBranchesMm: [
+          [[131.8, +32.5, 0.0], [126.6, +32.5, 0.5], [125.0, +32.5, 5.2]],
+        ],
+        bendRadiusMm: 1.1,
+        markerScaleMm: 0.70,
+        labelT: 0.50,
+        evalFlow: (out, sp) => {
+          const pv = sp.valvePortOpenL[1] ?? 0;
+          const sweepDrive = Math.min(0.85, Math.abs(out.wheelRpm) * 0.012) + (sp.cylLPKgf[1] ?? 0.0) * 0.65;
+          const rate = pv < -0.02 ? (-pv) * Math.max(0.18, sweepDrive) : 0.0;
+          return { signedRate: rate, fill: rate > 0.008 ? 0.95 : 0.0, unit: "D腔排気" };
+        },
+      },
+      {
+        id: "gas_chest_adm_rear_R",
+        partNo: "1-7→1-6外縁→右後弁口(給気)",
+        title: "右1-7蒸気室→1-6後外縁開放→1-9後蒸気口(X=129.2)→交叉前気室ピストン推力",
+        zone: "cylinder",
+        frame: "loco",
+        medium: "open_gas",
+        ptsMm: [[134.2, -36.0, 16.6], [126.8, -36.0, 15.6], [127.0, -36.0, 12.1], [129.2, -36.0, 10.7]],
+        extraBranchesMm: [
+          [[143.2, -32.5, 5.2], [141.6, -32.5, 0.5], [136.2, -32.5, 0.0]],
+        ],
+        bendRadiusMm: 1.5,
+        markerScaleMm: 0.72,
+        labelT: 0.45,
+        evalFlow: (out, sp) => {
+          const pv = sp.valvePortOpenR[0] ?? 0;
+          const rate = pv > 0.02 && out.steamChestKgf > 0.015 ? pv * (0.35 + 0.45 * Math.min(1.0, out.steamChestKgf)) : 0.0;
+          return { signedRate: rate, fill: rate > 0.008 ? 0.95 : 0.0, unit: "給気" };
+        },
+      },
+      {
+        id: "gas_chest_adm_front_R",
+        partNo: "1-7→1-6外縁→右前弁口(給気)",
+        title: "右1-7蒸気室→1-6前外縁開放→1-9前蒸気口(X=137.2)→交叉後気室ピストン推力",
+        zone: "cylinder",
+        frame: "loco",
+        medium: "open_gas",
+        ptsMm: [[134.2, -36.0, 16.6], [139.6, -36.0, 15.6], [139.4, -36.0, 12.1], [137.2, -36.0, 10.7]],
+        extraBranchesMm: [
+          [[125.0, -32.5, 5.2], [126.6, -32.5, 0.5], [131.8, -32.5, 0.0]],
+        ],
+        bendRadiusMm: 1.5,
+        markerScaleMm: 0.72,
+        labelT: 0.45,
+        evalFlow: (out, sp) => {
+          const pv = sp.valvePortOpenR[1] ?? 0;
+          const rate = pv > 0.02 && out.steamChestKgf > 0.015 ? pv * (0.35 + 0.45 * Math.min(1.0, out.steamChestKgf)) : 0.0;
+          return { signedRate: rate, fill: rate > 0.008 ? 0.95 : 0.0, unit: "給気" };
+        },
+      },
+      {
+        id: "gas_dvalve_exh_rear_R",
+        partNo: "右後弁口→1-6排気凹み→中央排気口",
+        title: "右1-9後蒸気口(X=129.2)→1-6スライド弁D型排気凹腔ブリッジ→中央排気口(X=133.2)→7-8",
+        zone: "cylinder",
+        frame: "loco",
+        medium: "open_gas",
+        ptsMm: [[129.2, -36.0, 10.7], [130.3, -36.0, 12.5], [132.1, -36.0, 12.5], [133.2, -36.0, 10.3]],
+        extraBranchesMm: [
+          [[136.2, -32.5, 0.0], [141.6, -32.5, 0.5], [143.2, -32.5, 5.2]],
+        ],
+        bendRadiusMm: 1.1,
+        markerScaleMm: 0.70,
+        labelT: 0.50,
+        evalFlow: (out, sp) => {
+          const pv = sp.valvePortOpenR[0] ?? 0;
+          const sweepDrive = Math.min(0.85, Math.abs(out.wheelRpm) * 0.012) + (sp.cylRPKgf[0] ?? 0.0) * 0.65;
+          const rate = pv < -0.02 ? (-pv) * Math.max(0.18, sweepDrive) : 0.0;
+          return { signedRate: rate, fill: rate > 0.008 ? 0.95 : 0.0, unit: "D腔排気" };
+        },
+      },
+      {
+        id: "gas_dvalve_exh_front_R",
+        partNo: "右前弁口→1-6排気凹み→中央排気口",
+        title: "右1-9前蒸気口(X=137.2)→1-6スライド弁D型排気凹腔ブリッジ→中央排気口(X=133.2)→7-8",
+        zone: "cylinder",
+        frame: "loco",
+        medium: "open_gas",
+        ptsMm: [[137.2, -36.0, 10.7], [136.1, -36.0, 12.5], [134.3, -36.0, 12.5], [133.2, -36.0, 10.3]],
+        extraBranchesMm: [
+          [[131.8, -32.5, 0.0], [126.6, -32.5, 0.5], [125.0, -32.5, 5.2]],
+        ],
+        bendRadiusMm: 1.1,
+        markerScaleMm: 0.70,
+        labelT: 0.50,
+        evalFlow: (out, sp) => {
+          const pv = sp.valvePortOpenR[1] ?? 0;
+          const sweepDrive = Math.min(0.85, Math.abs(out.wheelRpm) * 0.012) + (sp.cylRPKgf[1] ?? 0.0) * 0.65;
+          const rate = pv < -0.02 ? (-pv) * Math.max(0.18, sweepDrive) : 0.0;
+          return { signedRate: rate, fill: rate > 0.008 ? 0.95 : 0.0, unit: "D腔排気" };
+        },
+      },
       // === 管外自由液体流向 (落水/加水/放水/排液: 无管壁珠链虚线 + 圆润水滴珠💧) ===
       {
         id: "liq_ext_31_14_return",
@@ -2824,6 +3056,16 @@ export class FluidPartVisualizer {
             return [tBoil, tBoil - 14.0, Math.max(88.0, tBoil - 34.0), Math.max(68.0, tBoil - 56.0)];
           case "gas_ext_11_8_whistle":
             return [Math.max(96.0, tTurret - 14.0), 86.0, 68.0, 52.0];
+          case "gas_chest_adm_rear_L":
+          case "gas_chest_adm_front_L":
+          case "gas_chest_adm_rear_R":
+          case "gas_chest_adm_front_R":
+            return [tChest, tChest - 0.5, tChest - 1.2, Math.max(tExh, 0.85 * tChest + 0.15 * out.cylWallTempC)];
+          case "gas_dvalve_exh_rear_L":
+          case "gas_dvalve_exh_front_L":
+          case "gas_dvalve_exh_rear_R":
+          case "gas_dvalve_exh_front_R":
+            return [tExh + 3.0, tExh + 1.5, tExh + 0.5, tExh];
           case "liq_ext_31_14_return":
             return [tTdr + 1.5, tTdr + 1.0, tTdr + 0.5, tTdr];
           case "liq_ext_35_1_fill":
@@ -3191,7 +3433,9 @@ export class FluidPartVisualizer {
     burnerLit: boolean,
     tenderMatrix?: THREE.Matrix4 | null,
     showFlowArrows = false,
-    showPipeLabels = false
+    showPipeLabels = false,
+    qVL?: number,
+    qVR?: number
   ): void {
     this.elapsed += dt;
     const sp = out.spatial;
@@ -3336,8 +3580,47 @@ export class FluidPartVisualizer {
     this.tenderWaterMesh.visible = xray && hasTdr && out.tenderWaterMl > 1.0;
     this.tenderAlcoholMesh.visible = xray && hasTdr && out.alcoholMl > 0.5;
     this.mariotteBubblePoints.visible = xray && hasTdr && (out.mariotteBubbling || out.mariotteFloodAlarm);
-    for (const m of [...this.cylHeadMeshes, ...this.cylCrankMeshes, ...this.cylCondMeshes, ...this.portGlowMeshes]) {
+    for (const m of [...this.cylHeadMeshes, ...this.cylCrankMeshes, ...this.cylCondMeshes]) {
       m.visible = xray;
+    }
+    const valveStructVis = xray || showFlowArrows;
+    for (const pm of this.portGlowMeshes) {
+      pm.visible = valveStructVis;
+    }
+    for (let sIdx = 0; sIdx < 2; sIdx++) {
+      this.valveMirrorGroups[sIdx].visible = valveStructVis;
+      this.valveDCavityGroups[sIdx].visible = valveStructVis;
+    }
+    if (valveStructVis) {
+      const dxL = qVL !== undefined ? Math.max(-0.0048, Math.min(0.0048, qVL - calib.qValveCenterL)) : 0.0;
+      const dxR = qVR !== undefined ? Math.max(-0.0048, Math.min(0.0048, qVR - calib.qValveCenterR)) : 0.0;
+      this.valveDCavityGroups[0].position.x = 0.1332 + dxL;
+      this.valveDCavityGroups[1].position.x = 0.1332 + dxR;
+      const exhL = Math.max(0.0, -(sp.valvePortOpenL[0] ?? 0), -(sp.valvePortOpenL[1] ?? 0));
+      const exhR = Math.max(0.0, -(sp.valvePortOpenR[0] ?? 0), -(sp.valvePortOpenR[1] ?? 0));
+      const tExhCol = Math.max(94.0, Math.min(118.0, 0.78 * out.cylWallTempC + 10.0));
+      temperatureToThermalColor(tExhCol, this.valveDArchMats[0].color);
+      temperatureToThermalColor(tExhCol, this.valveDArchMats[1].color);
+      this.valveDArchMats[0].opacity = 0.22 + 0.42 * Math.min(1.0, exhL);
+      this.valveDArchMats[1].opacity = 0.22 + 0.42 * Math.min(1.0, exhR);
+
+      const pvL0 = sp.valvePortOpenL[0] ?? 0;
+      const pvL1 = sp.valvePortOpenL[1] ?? 0;
+      const pvR0 = sp.valvePortOpenR[0] ?? 0;
+      const pvR1 = sp.valvePortOpenR[1] ?? 0;
+      const sixPortVals = [pvL0, -Math.max(0.0, -pvL0, -pvL1), pvL1, pvR0, -Math.max(0.0, -pvR0, -pvR1), pvR1];
+      sixPortVals.forEach((pv, k) => {
+        const pm = this.portGlowMeshes[k].material as THREE.MeshBasicMaterial;
+        if (pv > 0.01) {
+          temperatureToThermalColor(out.superheatTempC, pm.color);
+          pm.opacity = Math.min(0.86, 0.16 + pv * (0.30 + 0.52 * Math.min(1.0, out.steamChestKgf / 3.0)));
+        } else if (pv < -0.01) {
+          temperatureToThermalColor(tExhCol, pm.color);
+          pm.opacity = Math.min(0.76, 0.16 + (-pv) * 0.56);
+        } else {
+          pm.opacity = 0.08;
+        }
+      });
     }
 
     const pipesVisible = xray || showFlowArrows;
@@ -3451,22 +3734,7 @@ export class FluidPartVisualizer {
       cMat.opacity = condRatio > 0.03 ? 0.22 + 0.65 * condRatio : 0.0;
     }
 
-    const portVals = [
-      sp.valvePortOpenL[0] ?? 0,
-      sp.valvePortOpenL[1] ?? 0,
-      sp.valvePortOpenR[0] ?? 0,
-      sp.valvePortOpenR[1] ?? 0,
-    ];
-    portVals.forEach((pv, k) => {
-      const pm = this.portGlowMeshes[k].material as THREE.MeshBasicMaterial;
-      if (pv >= 0) {
-        temperatureToThermalColor(out.superheatTempC, pm.color);
-        pm.opacity = Math.min(0.82, pv * (0.25 + 0.55 * Math.min(1.0, out.steamChestKgf / 3.0)));
-      } else {
-        temperatureToThermalColor(Math.max(28.0, Math.min(112.0, 0.78 * out.cylWallTempC + 8.0)), pm.color);
-        pm.opacity = Math.min(0.68, -pv * 0.58);
-      }
-    });
+    // (6-port 1-9 mirror glow & moving 1-6 D-arch already updated above for both X-Ray & Flow-Arrows modes)
 
     // 5. 4-2 卧式置换注油器油水分层与统一温标色更新 (底水稍凉于顶层受蒸汽直接加热的浮油)
     const tOilNow = out.lubeOilTempC ?? Math.max(28.0, 0.62 * out.cylWallTempC);

@@ -1891,7 +1891,9 @@ async function main() {
         ctrl.burnerLit,
         hasTender ? tenderMat4 : null,
         flowDirEnabled,
-        pipeLabelsEnabled
+        pipeLabelsEnabled,
+        sd[idxMap.sValL],
+        sd[idxMap.sValR]
       );
 
       const hotRatio = Math.max(0.0, Math.min(1.0, (out.crownTempC - 240.0) / 300.0));

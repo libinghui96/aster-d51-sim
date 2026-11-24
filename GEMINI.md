@@ -53,7 +53,7 @@
 - 重新构建全车 CAD 网格与材料惯量库：`python scripts/02_build_cad_meshes.py`
 - 重新编译全车 MJCF（滚轮台 / 240m 直线轨道 / R2m 弯道 / 3D 高架坡道椭圆环线+2节货车）：`python scripts/03_generate_mjcf.py --mode roller` （或 `--mode track --out models/d51_track.xml` / `--mode curve_r2m --out models/d51_r2m.xml` / `--mode oval_grade --trailing-cars 2 --out models/d51_oval.xml`）
 - 运行全车 38 路流体网表与 8 腔室隔离 GPU 三维体素 Fluid-LVS 验证：`python -m sim.fluid_topology_lvs --xml models/d51_track.xml --topology configs/d51_fluid_topology.json --out configs/d51_fluid_lvs_report.json`
-- 运行五层系统架构、CAD 拓扑完整性、Fluid-LVS、10/14轴滚动、Type-"C" 锅炉、汽笛声学、华氏交叉气道配气与第一性原理轨道跑距门禁（Gates 1–31）：`python scripts/09_verify_cad_and_clearance.py`
+- 运行五层系统架构、CAD 拓扑完整性、Fluid-LVS、10/14轴滚动、Type-"C" 锅炉、汽笛声学、华氏交叉气道配气、第一性原理轨道跑距与全车零缺口/三气口流向门禁（Gates 1–32）：`python scripts/09_verify_cad_and_clearance.py`
 - RTX 5080 原生 `@triton.jit` 寄存器驻留核全工况轨道跑距与 128 样本蒙特卡洛续航基准评测：`python scripts/13_gpu_range_endurance.py`
 - R2m vs R3m 先导支点过弯脱线分析：`python scripts/04_analyze_r2m_derailment.py`
 - RTX 5080 烟室 3D CFD 标定查找表生成：`python scripts/06_gpu_smokebox_cfd.py`
